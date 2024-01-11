@@ -1,0 +1,23 @@
+version: '3.8'
+services:
+  portainer:
+    image: 'portainer/portainer-ce:latest'
+    container_name: portainer
+    restart: always
+    ports:
+      - '8000:8000'
+      - '9443:9443'
+    volumes:
+      - /srv/portainer:/data
+	  - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - proxy
+      - portainer
+
+networks:
+  proxy:
+    name: "Proxy"
+    driver: bridge
+  portainer:
+    name: "Portainer Network"
+    driver: bridge
