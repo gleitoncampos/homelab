@@ -1,6 +1,6 @@
 services:
   stirling-pdf:
-    image: frooodle/s-pdf:0.44.3.fat
+    image: ghcr.io/stirling-tools/stirling-pdf:0.44.3.fat
     #ports:
     #  - '8080:8080'
     volumes:
