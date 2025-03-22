@@ -1,0 +1,49 @@
+services:
+  #postgres:
+  #  image: postgres:17.4-bookworm
+  #  environment:
+  ##    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD} #Define in Portainer
+  #    POSTGRES_USER: vikunja
+  #    PGDATA: /var/lib/postgresql/data/vikunja
+  ##  volumes:
+  # #   - /srv/containers/vikunja/pgdata:/var/lib/postgresql/data
+  #  networks:
+  #    - vikunja
+  #  deploy:
+  #    placement:
+  #      constraints: [node.role == manager]
+  vikunja:
+    image: vikunja/vikunja:0.24.6
+    environment:
+      VIKUNJA_SERVICE_PUBLICURL: https://${FQDN}
+      VIKUNJA_DATABASE_PATH: /app/vikunja/db/vikunja.db
+      #VIKUNJA_DATABASE_HOST: tasks.vikunja_postgres
+      #VIKUNJA_DATABASE_PASSWORD: ${POSTGRES_PASSWORD} #Same as above
+      VIKUNJA_DATABASE_TYPE: sqlite
+      #VIKUNJA_DATABASE_USER: vikunja
+      #VIKUNJA_DATABASE_DATABASE: vikunja
+      VIKUNJA_SERVICE_JWTSECRET: ${JWTSECRET} #Create a JWT secret with 32 characters and define in Portainer
+    volumes:
+      - /srv/containers/vikunja/data:/app/vikunja/files
+      - /srv/containers/vikunja/db:/app/vikunja/db
+    #ports:
+    #  - 3456:3456
+    networks:
+      - traefik_public
+      #- vikunja
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.vikunja.rule=Host(\"${FQDN}\")"
+        - "traefik.http.routers.vikunja.entrypoints=websecure"
+        - "traefik.http.services.vikunja.loadbalancer.server.port=3456"
+        - "traefik.http.routers.vikunja.service=vikunja"
+        - "traefik.http.routers.vikunja.tls.certresolver=cloudflare"
+networks:
+  traefik_public:
+    external: true
+  #vikunja:
+  #  driver: overlay
+  #  name: vikunja
