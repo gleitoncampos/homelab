@@ -5,6 +5,8 @@ services:
         #ports:
         #    - 80:80
         image: organizr/organizr
+        environment:
+          - TZ=America/Sao_Paulo 
         deploy:
           placement:
             constraints: [node.role == manager]
