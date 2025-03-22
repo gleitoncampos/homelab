@@ -3,7 +3,7 @@ services:
     image: postgres:17.4-bookworm
     #user: 65534:65534
     environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD} #Define in Portainer
       POSTGRES_USER: vikunja
       PGDATA: /var/lib/postgresql/data/vikunja
     volumes:
@@ -18,11 +18,11 @@ services:
     environment:
       VIKUNJA_SERVICE_PUBLICURL: https://vikunja.gleiton.info
       VIKUNJA_DATABASE_HOST: tasks.vikunja_postgres
-      VIKUNJA_DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      VIKUNJA_DATABASE_PASSWORD: ${POSTGRES_PASSWORD} #Same as above
       VIKUNJA_DATABASE_TYPE: postgres
       VIKUNJA_DATABASE_USER: vikunja
       VIKUNJA_DATABASE_DATABASE: vikunja
-      VIKUNJA_SERVICE_JWTSECRET: ${JWTSECRET}
+      VIKUNJA_SERVICE_JWTSECRET: ${JWTSECRET} #Create a JWT secret with 32 characters and define in Portainer
     volumes:
       - /srv/containers/vikunja/data:/app/vikunja/files
     ports:
@@ -35,7 +35,7 @@ services:
         constraints: [node.hostname == lxc-docker-01]
       labels:
         - "traefik.enable=true"
-        - "traefik.http.routers.vikunja.rule=Host(`vikunja.gleiton.info`)"
+        - "traefik.http.routers.vikunja.rule=Host(\"${FQDN}\")"
         - "traefik.http.routers.vikunja.entrypoints=websecure"
         - "traefik.http.services.vikunja.loadbalancer.server.port=3456"
         - "traefik.http.routers.vikunja.service=vikunja"

@@ -15,7 +15,7 @@ services:
       - MYSQL_PASSWORD=zmpass
       - MYSQL_DATABASE=zm
       - MYSQL_USER=zmuser
-      - MARIADB_ROOT_PASSWORD=w8t67u23789t
+      - MARIADB_ROOT_PASSWORD=change-me
   zm:
     image: ghcr.io/jantman/docker-zoneminder:latest
     restart: always

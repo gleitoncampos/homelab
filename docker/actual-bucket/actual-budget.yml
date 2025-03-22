@@ -31,7 +31,7 @@ services:
         constraints: [node.hostname == alpine-docker-01]
       labels:
         - "traefik.enable=true"
-        - "traefik.http.routers.actualbudget.rule=Host(`actualbudget.gleiton.info`)"
+        - "traefik.http.routers.actualbudget.rule=Host(\"${FQDN}\")"  # Set in Portainer
         - "traefik.http.routers.actualbudget.entrypoints=websecure"
         - "traefik.http.services.actualbudget.loadbalancer.server.port=5006"
         - "traefik.http.routers.actualbudget.service=actualbudget"

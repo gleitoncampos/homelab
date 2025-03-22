@@ -21,7 +21,7 @@ services:
       - kasm
     #labels:
     #  - "traefik.enable=true"
-    #  - "traefik.http.routers.kasm.rule=Host(`kasm.gleiton.info`)"
+    #  - "traefik.http.routers.kasm.rule=Host(\"${FQDN}\")
     #  - "traefik.http.services.kasm.loadbalancer.server.port=9443"
     #  - "traefik.http.routers.kasm.tls.certresolver=cloudflare"
     #  - "traefik.http.services.kasm.loadbalancer.server.scheme=https" #Addded to avoid error 400 "http sent do https port"

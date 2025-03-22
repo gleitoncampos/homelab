@@ -68,9 +68,9 @@ services:
       PAPERLESS_TIKA_GOTENBERG_ENDPOINT: http://tasks.gotenberg:3000
       PAPERLESS_TIKA_ENDPOINT: http://tasks.tika:9998
       PAPERLESS_URL: https://paperless.gleiton.info
-      PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}
-      PAPERLESS_TIME_ZONE: ${pAPERLESS_TIME_ZONE}
-      PAPERLESS_DBPASS: ${POSTGRES_PASSWORD}
+      PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY} #Define in Portainer
+      PAPERLESS_TIME_ZONE: ${pAPERLESS_TIME_ZONE} #Define in Portainer
+      PAPERLESS_DBPASS: ${POSTGRES_PASSWORD} #Define in Portainer
     deploy:
       resources:
         limits:
@@ -80,7 +80,7 @@ services:
         constraints: [node.hostname == lxc-docker-01]
       labels:
         - "traefik.enable=true"
-        - "traefik.http.routers.paperless.rule=Host(`paperless.gleiton.info`)"
+        - "traefik.http.routers.paperless.rule=${FQDN}
         - "traefik.http.routers.paperless.entrypoints=websecure"
         - "traefik.http.services.paperless.loadbalancer.server.port=8000"
         - "traefik.http.routers.paperless.service=paperless"
