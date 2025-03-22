@@ -2,9 +2,6 @@ services:
     organizr:
         volumes:
             - /srv/containers/organizr/config:/config
-        #environment:
-        #    - PGID=<gid>
-        #    - PUID=<uid>
         #ports:
         #    - 80:80
         image: organizr/organizr
@@ -20,10 +17,6 @@ services:
             - "traefik.http.routers.organizr.tls.certresolver=cloudflare"
         networks:
           - traefik_public
-          - organizr
 networks:
   traefik_public:
     external: true
-  organizr:
-    driver: overlay
-    name: organizr
