@@ -1,0 +1,96 @@
+services:
+  broker:
+    image: docker.io/library/redis:7.4.2-alpine
+    volumes:
+      - /srv/containers/paperless-ngx/redis-data:/data
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+    networks:
+      - paperless
+
+  gotenberg:
+    image: docker.io/gotenberg/gotenberg:8.17.3
+    deploy:
+      placement:
+        constraints: [node.hostname == lxc-docker-01]
+    networks:
+      - paperless
+
+    # The gotenberg chromium route is used to convert .eml files. We do not
+    # want to allow external content like tracking pixels or even javascript.
+    command:
+      - "gotenberg"
+      - "--chromium-disable-javascript=true"
+      - "--chromium-allow-list=file:///tmp/.*"
+
+  tika:
+    image: docker.io/apache/tika:3.1.0.0
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 500M
+      placement:
+        constraints: [node.hostname == lxc-docker-01]
+    networks:
+      - paperless
+
+  db:
+    image: docker.io/library/postgres:17-bookworm
+    volumes:
+      - /srv/containers/paperless-ngx/pgdata:/var/lib/postgresql/data
+    networks:
+      - paperless
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+    environment:
+      POSTGRES_DB: paperless
+      POSTGRES_USER: paperless
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+  webserver:
+    image: ghcr.io/paperless-ngx/paperless-ngx:2.14.7
+    #ports:
+    #  - 8010:8000
+    volumes:
+      - /srv/containers/paperless-ngx/webserver-data:/usr/src/paperless/data
+      - /srv/containers/paperless-ngx/webserver-media:/usr/src/paperless/media
+      - /srv/containers/paperless-ngx/webserver-export:/usr/src/paperless/export
+      - /srv/containers/paperless-ngx/webserver-consume:/usr/src/paperless/consume
+    environment:
+      USERMAP_UID: 65534
+      USERMAP_GID: 65534
+      PAPERLESS_REDIS: redis://tasks.broker:6379
+      PAPERLESS_DBHOST: tasks.db
+      PAPERLESS_TIKA_ENABLED: 1
+      PAPERLESS_TIKA_GOTENBERG_ENDPOINT: http://tasks.gotenberg:3000
+      PAPERLESS_TIKA_ENDPOINT: http://tasks.tika:9998
+      PAPERLESS_URL: https://paperless.gleiton.info
+      PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}
+      PAPERLESS_TIME_ZONE: ${pAPERLESS_TIME_ZONE}
+      PAPERLESS_DBPASS: ${POSTGRES_PASSWORD}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1024M
+      placement:
+        constraints: [node.hostname == lxc-docker-01]
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.paperless.rule=Host(`paperless.gleiton.info`)"
+        - "traefik.http.routers.paperless.entrypoints=websecure"
+        - "traefik.http.services.paperless.loadbalancer.server.port=8000"
+        - "traefik.http.routers.paperless.service=paperless"
+        - "traefik.http.routers.paperless.tls.certresolver=cloudflare"
+    networks:
+      - traefik_public
+      - paperless
+networks:
+  traefik_public:
+    external: true
+  paperless:
+    driver: overlay
+    name: paperless

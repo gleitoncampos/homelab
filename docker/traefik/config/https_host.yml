@@ -1,0 +1,20 @@
+### Example from a route to a HTTPS destination like OPN Sense. ###
+http:
+  routers:
+    opnsense:
+      rule: "Host(`opnsense.example.com`)"
+      entryPoints:
+        - websecure
+      service: opnsense
+      tls:
+        certResolver: cloudflare
+  services:
+    opnsense:
+      loadBalancer:
+        passHostHeader: true
+        serversTransport: "opnsense"
+        servers:
+          - url: "https://10.10.10.10"
+  serversTransports:
+    opnsense:
+      insecureSkipVerify: true #Needed to avoid SSL check in the native HTTPS

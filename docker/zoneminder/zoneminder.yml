@@ -1,0 +1,38 @@
+version: '2'
+
+volumes:
+  data:
+  db:
+
+services:
+  mariadb:
+    image: mariadb:11.1-jammy
+    restart: always
+    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW --default-time-zone=America/Sao_Paulo
+    volumes:
+      - /srv/containers/zoneminder/db:/var/lib/mysql
+    environment:
+      - MYSQL_PASSWORD=zmpass
+      - MYSQL_DATABASE=zm
+      - MYSQL_USER=zmuser
+      - MARIADB_ROOT_PASSWORD=w8t67u23789t
+  zm:
+    image: ghcr.io/jantman/docker-zoneminder:latest
+    restart: always
+    shm_size: 1G
+    ports:
+      - 8080:80
+    links:
+      - mariadb
+    tmpfs:
+      - /run
+      - /tmp
+    volumes:
+      - /etc/localtime:/etc/localtime
+      - /srv/containers/zoneminder/cache:/var/cache/zoneminder
+      - /srv/containers/zoneminder/logs:/var/log/zm
+      - /srv/containers/zoneminder/logs:/var/log/apache2
+      - /srv/containers/zoneminder/config/es_rules.json:/etc/zm/es_rules.json
+      - /srv/containers/zoneminder/config/secrets.ini:/etc/zm/secrets.ini
+      - /srv/containers/zoneminder/config/zmeventnotification.ini:/etc/zm/zmeventnotification.ini
+      - /srv/containers/zoneminder/config/objectconfig.ini:/etc/zm/objectconfig.ini

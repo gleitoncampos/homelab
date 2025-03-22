@@ -1,0 +1,29 @@
+services:
+    organizr:
+        volumes:
+            - /srv/containers/organizr/config:/config
+        #environment:
+        #    - PGID=<gid>
+        #    - PUID=<uid>
+        #ports:
+        #    - 80:80
+        image: organizr/organizr
+        deploy:
+          placement:
+            constraints: [node.role == manager]
+          labels:
+            - "traefik.enable=true"
+            - "traefik.http.routers.organizr.rule=Host(`organizr.gleiton.info`)"
+            - "traefik.http.routers.organizr.entrypoints=websecure"
+            - "traefik.http.services.organizr.loadbalancer.server.port=80"
+            - "traefik.http.routers.organizr.service=organizr"
+            - "traefik.http.routers.organizr.tls.certresolver=cloudflare"
+        networks:
+          - traefik_public
+          - organizr
+networks:
+  traefik_public:
+    external: true
+  organizr:
+    driver: overlay
+    name: organizr

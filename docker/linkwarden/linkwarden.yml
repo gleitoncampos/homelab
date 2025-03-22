@@ -1,0 +1,44 @@
+version: "3.5"
+services:
+  postgres:
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    image: postgres:17-bookworm
+    volumes:
+      - /srv/containers/linkwarden/pgdata:/var/lib/postgresql/data
+    networks:
+      - linkwarden
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+  linkwarden:
+    environment:
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@tasks.linkwarden_postgres:5432/postgres
+      - NEXTAUTH_URL=https://linkwarden.gleiton.info/api/v1/auth
+      - NEXTAUTH_SECRET=${POSTGRES_PASSWORD}
+    image: ghcr.io/linkwarden/linkwarden:latest # comment this line to build from source
+    #ports:
+    #  - target: 3000
+    #    published: 3000
+    #    mode: host
+    volumes:
+      - /srv/containers/linkwarden/data:/data/data
+    deploy:
+      placement:
+        constraints: [node.hostname == lxc-docker-01]
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.linkwarden.rule=Host(`linkwarden.gleiton.info`)"
+        - "traefik.http.routers.linkwarden.entrypoints=websecure"
+        - "traefik.http.services.linkwarden.loadbalancer.server.port=3000"
+        - "traefik.http.routers.linkwarden.service=linkwarden"
+        - "traefik.http.routers.linkwarden.tls.certresolver=cloudflare"
+    networks:
+      - traefik_public
+      - linkwarden
+networks:
+  traefik_public:
+    external: true
+  linkwarden:
+    driver: overlay
+    name: linkwarden

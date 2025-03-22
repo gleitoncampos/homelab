@@ -1,0 +1,21 @@
+version: "3"
+services:
+    jdownloader-2:
+        image: jlesage/jdownloader-2
+        container_name: jdownloader-2
+        restart: until-stopped
+        ports:
+            - 5800:5800
+            - 3129:3129
+        volumes:
+            - ./config:/config:rw
+            - ./Downloads:/output:rw
+        environment:
+            TZ: "America/Sao_Paulo"
+            DARK_MODE: 1
+            WEB_AUTHENTICATION: 1
+            WEB_AUTHENTICATION_USERNAME: "admin"
+            WEB_AUTHENTICATION_PASSWORD: "admin"
+            SECURE_CONNECTION: 1
+
+            

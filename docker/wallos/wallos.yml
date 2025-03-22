@@ -1,0 +1,31 @@
+services:
+  wallos:
+    image: bellamy/wallos:2.46.1
+    #command: "sh -c 'chmod -R 777 /var/www/ && sh /var/www/html/startup.sh'"
+    #ports:
+    #  - "8282:80/tcp"
+    environment:
+      TZ: 'America/Sao_Paulo'
+    # Volumes store your data between container upgrades
+    volumes:
+      - '/srv/containers/wallos/db:/var/www/html/db'
+      - '/srv/containers/wallos/logos:/var/www/html/images/uploads/logos'
+    deploy:
+      placement:
+        constraints: [node.hostname == debian12]
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.wallos.rule=Host(`wallos.gleiton.info`)"
+        - "traefik.http.routers.wallos.entrypoints=websecure"
+        - "traefik.http.services.wallos.loadbalancer.server.port=80"
+        - "traefik.http.routers.wallos.service=wallos"
+        - "traefik.http.routers.wallos.tls.certresolver=cloudflare"
+    networks:
+      - traefik_public
+      - wallos
+networks:
+  traefik_public:
+    external: true
+  wallos:
+    driver: overlay
+    name: wallos

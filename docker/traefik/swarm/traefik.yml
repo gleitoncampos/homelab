@@ -1,0 +1,57 @@
+services:
+  traefik:
+    image: traefik:v3.2
+    command:
+      - --api.insecure=false  #Enable the API dashboard access
+      - --log.level=INFO
+      - --global.checkNewVersion=true
+      - --global.sendAnonymousUsage=true
+      - --serverstransport.insecureSkipVerify=true
+      - --providers.swarm=true
+      - --providers.swarm.endpoint=unix:///var/run/docker.sock
+      - --providers.swarm.exposedbydefault=false
+      #- --providers.docker.constraints=Label(\"traefik.enable=true\")
+      - --providers.swarm.network=traefik_public #Defina a mesma rede que você criou para o traefik
+      - --providers.swarm.endpoint=unix:///var/run/docker.sock
+      #Enable use files as providers. Used to redirect to static sites/hosts
+      - --providers.file.directory=/config
+      - --providers.file.watch=true
+      ###################################
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      # Enable a dns challenge named "cloudflare"
+      - --certificatesResolvers.cloudflare.acme.dnschallenge=true
+      # Tell which provider to use
+      - --certificatesResolvers.cloudflare.acme.dnschallenge.provider=cloudflare
+      # The email to provide to let's encrypt
+      - --certificatesResolvers.cloudflare.acme.email=${CLOUDFLARE_EMAIL} ## Passar essa env no Portainer
+      - --certificatesResolvers.cloudflare.acme.storage=/data/acme.json # Tell to store the certificate on a path under our volume
+      - --certificatesResolvers.cloudflare.acme.dnsChallenge.resolvers=1.1.1.1:53,1.0.0.1:53
+      - --certificatesresolvers.letsencrypt.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory     #Let's Encrypt Staging Server, comment out after testing - (https://doc.traefik.io/traefik/https/acme/#caserver) - highly recommend that you config works ok in staging before using Let's Encrypt live servers. In case of failures in this config you might be banned by Let's Encrypt for a while for abusing their live servers with faulty configuration requests.
+      # Global HTTP -> HTTPS
+      - --entrypoints.web.http.redirections.entryPoint.to=websecure
+      - --entrypoints.web.http.redirections.entryPoint.scheme=https
+      - --entryPoints.web.http.redirections.entrypoint.permanent=true
+    environment:
+      - CF_DNS_API_TOKEN=${CLOUDFLARE_TOKEN} ## Passar essa env no Portainer
+  
+    ports:
+      - 80:80
+      - 443:443
+      #- 8080:8080 # Dashboard port
+
+    volumes:
+      - /srv/containers/traefik/data/:/data #Certificate storage
+      - /srv/containers/traefik/config:/config:ro #Configuration storage
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+    networks:
+      - traefik_public
+networks:
+  traefik_public:
+    external: true

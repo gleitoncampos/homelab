@@ -1,0 +1,15 @@
+# Example of a route to a HTTP host
+http:
+  routers:
+    http:
+      rule: "Host(`example.com`)"
+      entryPoints:
+        - websecure
+      service: http
+      tls:
+        certResolver: cloudflare
+  services:
+    http:
+      loadBalancer:
+        servers:
+          - url: "http://10.10.10.10
