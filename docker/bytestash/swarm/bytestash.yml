@@ -11,7 +11,7 @@ services:
     environment:
       # See https://github.com/jordan-dalby/ByteStash/wiki/FAQ#environment-variables
       BASE_PATH: ""
-      JWT_SECRET: your-secret
+      JWT_SECRET: ${JWT_SECRET} #Create and define in Portainer
       TOKEN_EXPIRY: 24h
       ALLOW_NEW_ACCOUNTS: "true"
       DEBUG: "true"
@@ -27,7 +27,7 @@ services:
       OIDC_SCOPES: ""
     deploy:
       placement:
-        constraints: [node.hostname == lxc-docker-01]
+        constraints: [node.role == manager]
       labels:
         - "traefik.enable=true"
         - "traefik.http.routers.bytestash.rule=Host(\"${FQDN}\")
