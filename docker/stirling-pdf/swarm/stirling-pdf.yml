@@ -1,6 +1,6 @@
 services:
   stirling-pdf:
-    image: frooodle/s-pdf:latest
+    image: frooodle/s-pdf:0.44.3.fat
     #ports:
     #  - '8080:8080'
     volumes:
@@ -29,6 +29,4 @@ services:
         - "traefik.http.routers.stirling-pdf.tls.certresolver=cloudflare"
 networks:
   traefik_public:
-    driver: overlay
-    name: traefik_public
-    attachable: true
+    external: true
