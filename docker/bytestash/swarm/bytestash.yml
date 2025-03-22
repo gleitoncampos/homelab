@@ -30,7 +30,7 @@ services:
         constraints: [node.role == manager]
       labels:
         - "traefik.enable=true"
-        - "traefik.http.routers.bytestash.rule=Host(\"${FQDN}\")
+        - "traefik.http.routers.bytestash.rule=Host(\"${FQDN}\")"
         - "traefik.http.routers.bytestash.entrypoints=websecure"
         - "traefik.http.services.bytestash.loadbalancer.server.port=5000"
         - "traefik.http.routers.bytestash.service=bytestash"
