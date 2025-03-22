@@ -23,7 +23,7 @@ services:
       #VIKUNJA_DATABASE_USER: vikunja
       #VIKUNJA_DATABASE_DATABASE: vikunja
       VIKUNJA_SERVICE_JWTSECRET: ${JWTSECRET} #Create a JWT secret with 32 characters and define in Portainer
-      VIKUNJA_SERVICE_ENABLEREGISTRATION: false
+      VIKUNJA_SERVICE_ENABLEREGISTRATION: "false"
     volumes:
       - /srv/containers/vikunja/data:/app/vikunja/files
       - /srv/containers/vikunja/db:/app/vikunja/db
