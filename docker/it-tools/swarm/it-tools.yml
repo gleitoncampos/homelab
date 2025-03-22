@@ -1,0 +1,20 @@
+services:
+    it-tools:
+        #ports:
+        #    - 8080:80
+        image: ghcr.io/corentinth/it-tools:2024.10.22-7ca5933
+        deploy:
+            placement:
+                constraints: [node.role == manager]
+            labels:
+                - "traefik.enable=true"
+                - "traefik.http.routers.it-tools.rule=Host(\"${FQDN}\")" #Define in Portainer
+                - "traefik.http.routers.it-tools.entrypoints=websecure"
+                - "traefik.http.services.it-tools.loadbalancer.server.port=80"
+                - "traefik.http.routers.it-tools.service=it-tools"
+                - "traefik.http.routers.it-tools.tls.certresolver=cloudflare"
+    networks:
+      - traefik_public
+networks:
+  traefik_public:
+    external: true
