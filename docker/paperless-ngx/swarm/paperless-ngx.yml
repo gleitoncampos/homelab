@@ -81,7 +81,7 @@ services:
         constraints: [node.role == manager]
       labels:
         - "traefik.enable=true"
-        - "traefik.http.routers.paperless.rule=Host(/"${FQDN}/")" #Define in Portainer
+        - "traefik.http.routers.paperless.rule=Host(\"${FQDN}\")" #Define in Portainer
         - "traefik.http.routers.paperless.entrypoints=websecure"
         - "traefik.http.services.paperless.loadbalancer.server.port=8000"
         - "traefik.http.routers.paperless.service=paperless"
