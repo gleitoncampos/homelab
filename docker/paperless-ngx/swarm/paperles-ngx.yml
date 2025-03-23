@@ -69,7 +69,7 @@ services:
       PAPERLESS_TIKA_ENDPOINT: http://tasks.tika:9998
       PAPERLESS_URL: https://paperless.gleiton.info
       PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY} #Define in Portainer
-      PAPERLESS_TIME_ZONE: ${pAPERLESS_TIME_ZONE} #Define in Portainer
+      PAPERLESS_TIME_ZONE: America/Sao_Paulo
       PAPERLESS_DBPASS: ${POSTGRES_PASSWORD} #Define in Portainer
     deploy:
       resources:
