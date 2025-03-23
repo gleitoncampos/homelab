@@ -4,9 +4,9 @@ services:
             - /srv/containers/organizr/config:/config
         #ports:
         #    - 80:80
-        image: organizr/organizr
-        #environment:
-        #  - TZ=America/Sao_Paulo 
+        image: organizr/organizr:latest
+        environment:
+          - TZ=America/Sao_Paulo 
         deploy:
           placement:
             constraints: [node.role == manager]
