@@ -49,6 +49,7 @@ services:
       POSTGRES_DB: paperless
       POSTGRES_USER: paperless
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD} #Define in portainer
+      TZ: America/Sao_Paulo
 
   webserver:
     image: ghcr.io/paperless-ngx/paperless-ngx:2.14.7
