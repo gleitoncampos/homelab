@@ -28,7 +28,7 @@ services:
       start_period: 20s
     deploy:
       placement:
-        constraints: [node.hostname == alpine-docker-01]
+        constraints: [node.role == manager]
       labels:
         - "traefik.enable=true"
         - "traefik.http.routers.actualbudget.rule=Host(\"${FQDN}\")"  # Set in Portainer
