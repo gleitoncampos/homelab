@@ -1,3 +1,7 @@
+# To create the admi user, run
+# python3 manage.py createsuperuser
+# inside webserver container
+
 services:
   broker:
     image: docker.io/library/redis:7.4.2-alpine

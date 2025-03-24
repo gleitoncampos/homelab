@@ -2,8 +2,8 @@ version: "3.5"
 services:
   postgres:
     environment:
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-    image: postgres:17-bookworm
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD} #Define in Portainer
+    image: postgres:17.4-bookworm
     volumes:
       - /srv/containers/linkwarden/pgdata:/var/lib/postgresql/data
     networks:
@@ -15,8 +15,8 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@tasks.linkwarden_postgres:5432/postgres
       - NEXTAUTH_URL=https://${FQDN}/api/v1/auth
-      - NEXTAUTH_SECRET=${POSTGRES_PASSWORD}
-    image: ghcr.io/linkwarden/linkwarden:latest # comment this line to build from source
+      - NEXTAUTH_SECRET=${POSTGRES_PASSWORD} # Same as abobe
+    image: ghcr.io/linkwarden/linkwarden:v2.9.3 # comment this line to build from source
     #ports:
     #  - target: 3000
     #    published: 3000
@@ -25,10 +25,10 @@ services:
       - /srv/containers/linkwarden/data:/data/data
     deploy:
       placement:
-        constraints: [node.hostname == lxc-docker-01]
+        constraints: [node.role == manager]
       labels:
         - "traefik.enable=true"
-        - "traefik.http.routers.linkwarden.rule=Host(\"${FQDN}\")
+        - "traefik.http.routers.linkwarden.rule=Host(\"${FQDN}\")" #Define in POrtainer
         - "traefik.http.routers.linkwarden.entrypoints=websecure"
         - "traefik.http.services.linkwarden.loadbalancer.server.port=3000"
         - "traefik.http.routers.linkwarden.service=linkwarden"
