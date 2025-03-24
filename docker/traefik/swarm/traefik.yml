@@ -3,7 +3,7 @@ services:
     image: traefik:v3.2
     command:
       - --api.insecure=false  #Enable the API dashboard access
-      - --log.level=DEBBUG
+      - --log.level=DEBUG
       - --global.checkNewVersion=true
       - --global.sendAnonymousUsage=true
       - --serverstransport.insecureSkipVerify=true
