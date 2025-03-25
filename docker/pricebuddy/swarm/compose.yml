@@ -17,7 +17,7 @@ services:
             constraints: [node.role == manager]
 
     scraper:
-        image: amerkurev/scrapper:0.17.0
+        image: amerkurev/scrapper:v0.17.0
         networks:
             - pricebuddy
         #ports:
