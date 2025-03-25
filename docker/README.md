@@ -13,3 +13,10 @@ Qualquer outro container/serviço deve ser executado por dentro do Portainer, pa
 #
 # 
 Qualquer serviço que esteja nessa pasta pode ser considerado um serviço *fixo* no meu cluster. Serviços que foram apenas testados, serão mantidos apenas na pasta de *Compose*.
+
+#
+#
+#
+# TO-DO
+- IaC do provisionamento do Portainer
+- IaC do provisionamento dos stacks
