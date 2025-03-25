@@ -1,21 +1,5 @@
 
 services:
-    database:
-        image: mysql:9.2
-        environment:
-            MYSQL_DATABASE: pricebuddy
-            MYSQL_USER: pricebuddy
-            MYSQL_PASSWORD: ${DB_PASSWORD} 
-            MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD} 
-        volumes:
-            - /srv/containers/pricebuddy/db:/var/lib/mysql
-        networks:
-            - pricebuddy
-
-        deploy:
-          placement:
-            constraints: [node.role == manager]
-
     scraper:
         image: amerkurev/scrapper:v0.17.0
         networks:
@@ -25,6 +9,36 @@ services:
         deploy:
           placement:
             constraints: [node.role == manager]
+    #database:
+    #    image: mysql:9.2
+    #    environment:
+    #        MYSQL_DATABASE: pricebuddy
+    ###        MYSQL_USER: pricebuddy
+    #        MYSQL_PASSWORD: ${DB_PASSWORD} 
+    #        MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD} 
+    #    volumes:
+    #        - /srv/containers/pricebuddy/db:/var/lib/mysql
+    #    networks:
+    #        - pricebuddy#
+
+     #   deploy:
+     #     placement:
+     #       constraints: [node.role == manager]
+    postgres:
+      environment:
+        POSTGRES_DB: pricebuddy
+        POSTGRES_USER: pricebuddy
+        POSTGRES_PASSWORD: ${POSTGRES_PASSWORD} #Define in portainer
+        
+        TZ: America/Sao_Paulo
+      image: postgres:17.4-bookworm
+      volumes:
+        - /srv/containers/pricebuddy/pgdata:/var/lib/postgresql/data
+      networks:
+      - pricebuddy
+      deploy:
+        placement:
+          constraints: [node.role == manager]
 
     pricebuddy:
         image: jez500/pricebuddy:v1.0.31
@@ -34,10 +48,12 @@ services:
             - /srv/containers/pricebuddy/storage:/app/storage
             - /srv/containers/pricebuddy/storage/.env:/app/.env
         environment:
-            DB_HOST: tasks.pricebuddy_database                       # Name of the database service
+            DB_CONNECTION: postgres
+            DB_HOST: tasks.pricebuddy_postgres                       # Name of the database service
             DB_USERNAME: pricebuddy                 # Should match the MYSQL_USER in the database service
-            DB_PASSWORD: ${DB_PASSWORD}                 # Should match the MYSQL_PASSWORD in the database service
+            DB_PASSWORD: ${POSTGRES_PASSWORD}                 # Should match the MYSQL_PASSWORD in the database service
             DB_DATABASE: pricebuddy                 # Should match the MYSQL_DATABASE in the database service
+            #DB_PORT: 3306
             APP_USER_EMAIL: admin@example.com       # Only used for seeding the database
             APP_USER_PASSWORD: admin                # Only used for seeding the database
             SCRAPER_BASE_URL: http://tasks.scraper:3000   # Url to Name of the scrapper service
