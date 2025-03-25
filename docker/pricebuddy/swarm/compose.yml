@@ -19,7 +19,7 @@ services:
         volumes:
             - /srv/containers/pricebuddy/db:/var/lib/mysql
         networks:
-            - pricebuddy#
+            - pricebuddy
 
         deploy:
           placement:
