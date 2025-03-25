@@ -41,7 +41,7 @@ services:
             APP_USER_EMAIL: admin@example.com       # Only used for seeding the database
             APP_USER_PASSWORD: admin                # Only used for seeding the database
             SCRAPER_BASE_URL: http://tasks.scraper:3000   # Url to Name of the scrapper service
-            AFFILIATE_ENABLED: true                 # See https://pricebuddy.jez.me/support-project.html
+            AFFILIATE_ENABLED: "true"                 # See https://pricebuddy.jez.me/support-project.html
 
         labels:
         - "traefik.enable=true"
