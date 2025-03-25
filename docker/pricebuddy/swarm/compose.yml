@@ -42,14 +42,16 @@ services:
             APP_USER_PASSWORD: admin                # Only used for seeding the database
             SCRAPER_BASE_URL: http://tasks.scraper:3000   # Url to Name of the scrapper service
             AFFILIATE_ENABLED: "true"                 # See https://pricebuddy.jez.me/support-project.html
-
-        labels:
-        - "traefik.enable=true"
-        - "traefik.http.routers.pricebuddy.rule=Host(\"${FQDN}\")" #Define in POrtainer
-        - "traefik.http.routers.pricebuddy.entrypoints=websecure"
-        - "traefik.http.services.pricebuddy.loadbalancer.server.port=80"
-        - "traefik.http.routers.pricebuddy.service=pricebuddy"
-        - "traefik.http.routers.pricebuddy.tls.certresolver=cloudflare"
+        deploy:
+          placement:
+            constraints: [node.role == manager]
+          labels:
+            - "traefik.enable=true"
+            - "traefik.http.routers.pricebuddy.rule=Host(\"${FQDN}\")" #Define in POrtainer
+            - "traefik.http.routers.pricebuddy.entrypoints=websecure"
+            - "traefik.http.services.pricebuddy.loadbalancer.server.port=80"
+            - "traefik.http.routers.pricebuddy.service=pricebuddy"
+            - "traefik.http.routers.pricebuddy.tls.certresolver=cloudflare"
         networks:
             - pricebuddy
             - traefik_public
