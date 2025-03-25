@@ -47,7 +47,7 @@ services:
             - /srv/containers/pricebuddy/storage:/app/storage
             - /srv/containers/pricebuddy/storage/.env:/app/.env
         environment:
-            DB_CONNECTION: postgres
+            #DB_CONNECTION: postgres
             DB_HOST: tasks.pricebuddy_postgres                       # Name of the database service
             DB_USERNAME: pricebuddy                 # Should match the MYSQL_USER in the database service
             DB_PASSWORD: ${POSTGRES_PASSWORD}                 # Should match the MYSQL_PASSWORD in the database service
