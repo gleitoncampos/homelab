@@ -10,12 +10,12 @@ services:
           placement:
             constraints: [node.role == manager]
     database:
-        image: mysql:9.2
+        image: mariadb:11.7.2-noble
         environment:
-            MYSQL_DATABASE: pricebuddy
-            MYSQL_USER: pricebuddy
-            MYSQL_PASSWORD: ${DB_PASSWORD} 
-            MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD} 
+            MARIADB_DATABASE: pricebuddy
+            MARIADB_USER: pricebuddy
+            MARIADB_PASSWORD: ${DB_PASSWORD} 
+            MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD} 
         volumes:
             - /srv/containers/pricebuddy/db:/var/lib/mysql
         networks:
