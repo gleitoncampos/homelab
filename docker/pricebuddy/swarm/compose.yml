@@ -29,7 +29,6 @@ services:
         POSTGRES_DB: pricebuddy
         POSTGRES_USER: pricebuddy
         POSTGRES_PASSWORD: ${POSTGRES_PASSWORD} #Define in portainer
-        
         TZ: America/Sao_Paulo
       image: postgres:17.4-bookworm
       volumes:
@@ -53,7 +52,7 @@ services:
             DB_USERNAME: pricebuddy                 # Should match the MYSQL_USER in the database service
             DB_PASSWORD: ${POSTGRES_PASSWORD}                 # Should match the MYSQL_PASSWORD in the database service
             DB_DATABASE: pricebuddy                 # Should match the MYSQL_DATABASE in the database service
-            #DB_PORT: 3306
+            DB_PORT: 5432
             APP_USER_EMAIL: admin@example.com       # Only used for seeding the database
             APP_USER_PASSWORD: admin                # Only used for seeding the database
             SCRAPER_BASE_URL: http://tasks.scraper:3000   # Url to Name of the scrapper service
