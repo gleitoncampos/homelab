@@ -1,6 +1,6 @@
 services:
   wallos:
-    image: bellamy/wallos:2.46.1
+    image: bellamy/wallos:2.48.1
     #ports:
     #  - "8282:80/tcp"
     environment:
