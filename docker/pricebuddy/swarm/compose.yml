@@ -1,7 +1,7 @@
 
 services:
     scraper:
-        image: amerkurev/scrapper:v0.17.0
+        image: amerkurev/scrapper:v1.0.0
         networks:
             - pricebuddy
         #ports:
