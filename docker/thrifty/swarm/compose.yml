@@ -1,0 +1,45 @@
+services:
+  thrifty-ui:
+    image: tiehfood/thrifty-ui:latest
+    environment:
+      - CURRENCY_ISO: "USD"
+      - LOCAL_API_HOSTNAME: "tasks.thrifty-api"
+    deploy:
+        placement:
+          constraints: [node.role == manager]
+        labels:
+          - "traefik.enable=true"
+          - "traefik.http.routers.thrifty-ui.rule=Host(\"${FQDN}\")" #Define in POrtainer
+          - "traefik.http.routers.thrifty-ui.entrypoints=websecure"
+          - "traefik.http.services.thrifty-ui.loadbalancer.server.port=8080"
+          - "traefik.http.routers.thrifty-ui.service=thrifty-ui"
+          - "traefik.http.routers.thrifty-ui.tls.certresolver=cloudflare"
+    networks:
+      - traefik_public
+      - thrifty
+
+  thrifty-api:
+    image: tiehfood/thrifty-api:latest
+    environment:
+      - SQLITE_DB_PATH: "/data/thrifty.sqlite"
+    volumes:
+      - /srv/containers/thrifty:/data
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      #labels:
+      #  - "traefik.enable=true"
+      ##  - "traefik.http.routers.thrifty-api.rule=Host(\"${FQDN}\")" #Define in POrtainer
+       # - "traefik.http.routers.thrifty-api.entrypoints=websecure"
+       # - "traefik.http.services.thrifty-api.loadbalancer.server.port=8080"
+       # - "traefik.http.routers.thrifty-api.service=thrifty-api"
+       # - "traefik.http.routers.thrifty-api.tls.certresolver=cloudflare"
+    networks:
+      - thrifty
+
+networks:
+  traefik_public:
+    external: true
+  thrifty:
+    driver: olverlay
+    name: thrifty
