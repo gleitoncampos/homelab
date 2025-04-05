@@ -3,8 +3,8 @@ services:
     image: tiehfood/thrifty-ui:latest
     environment:
       CURRENCY_ISO: "USD"
-      LOCAL_API_HOSTNAME: "http://tasks.thrifty_thrifty-api"
-      LOCAL_API_PORT: 8080
+      LOCAL_API_HOSTNAME: "${FQDN2}"
+      LOCAL_API_PORT: 80
     deploy:
         placement:
           constraints: [node.role == manager]
@@ -28,14 +28,15 @@ services:
     deploy:
       placement:
         constraints: [node.role == manager]
-      #labels:
-      #  - "traefik.enable=true"
-      ##  - "traefik.http.routers.thrifty-api.rule=Host(\"${FQDN}\")" #Define in POrtainer
-       # - "traefik.http.routers.thrifty-api.entrypoints=websecure"
-       # - "traefik.http.services.thrifty-api.loadbalancer.server.port=8080"
-       # - "traefik.http.routers.thrifty-api.service=thrifty-api"
-       # - "traefik.http.routers.thrifty-api.tls.certresolver=cloudflare"
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.thrifty-api.rule=Host(\"${FQDN2}\")" #Define in POrtainer
+        - "traefik.http.routers.thrifty-api.entrypoints=websecure"
+        - "traefik.http.services.thrifty-api.loadbalancer.server.port=8080"
+        - "traefik.http.routers.thrifty-api.service=thrifty-api"
+        - "traefik.http.routers.thrifty-api.tls.certresolver=cloudflare"
     networks:
+      - traefik_public
       - thrifty
 
 networks:
