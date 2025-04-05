@@ -1,6 +1,7 @@
 services:
   cronicle:
       image: cronicle/edge:v1.9.6
+      command: manager
       #ports:
       #    - 3012:3012
       volumes:
