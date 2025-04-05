@@ -41,5 +41,5 @@ networks:
   traefik_public:
     external: true
   thrifty:
-    driver: olverlay
+    driver: overlay
     name: thrifty
