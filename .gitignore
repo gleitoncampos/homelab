@@ -2,3 +2,5 @@
 .tfvars
 .terraform
 .terraform.lock.hcl
+.env
+stacks.txt

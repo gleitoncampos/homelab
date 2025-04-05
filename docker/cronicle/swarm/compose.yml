@@ -1,0 +1,26 @@
+cronicle:
+    image: cronicle/edge:v1.9.6
+    #ports:
+    #    - 3012:3012
+    volumes:
+        - /srv/containers/cron:/opt/cronicle/data
+    environment:
+        - CRONICLE_secret_key=mysecretKey
+    
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.cronicle.rule=Host(\"${FQDN}\")" #Define in POrtainer
+        - "traefik.http.routers.cronicle.entrypoints=websecure"
+        - "traefik.http.services.cronicle.loadbalancer.server.port=3012"
+        - "traefik.http.routers.cronicle.service=cronicle"
+        - "traefik.http.routers.cronicle.tls.certresolver=cloudflare"
+    networks:
+      - traefik_public
+
+
+networks:
+  traefik_public:
+    external: true
