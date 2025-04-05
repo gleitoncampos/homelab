@@ -4,6 +4,7 @@ services:
     environment:
       CURRENCY_ISO: "USD"
       LOCAL_API_HOSTNAME: "tasks.thrifty_thrifty-api"
+      LOCAL_API_PORT: 8080
     deploy:
         placement:
           constraints: [node.role == manager]
