@@ -1,6 +1,6 @@
 services:
-  statping:
-    image: statping/statping:dev
+  statping-ng:
+    image: adamboutcher/statping-ng:latest
     volumes:
       - /srv/containers/statping:/app
     environment:
