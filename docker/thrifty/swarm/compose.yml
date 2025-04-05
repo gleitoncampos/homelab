@@ -2,8 +2,8 @@ services:
   thrifty-ui:
     image: tiehfood/thrifty-ui:latest
     environment:
-      - CURRENCY_ISO: "USD"
-      - LOCAL_API_HOSTNAME: "tasks.thrifty-api"
+      CURRENCY_ISO: "USD"
+      LOCAL_API_HOSTNAME: "tasks.thrifty-api"
     deploy:
         placement:
           constraints: [node.role == manager]
@@ -21,7 +21,7 @@ services:
   thrifty-api:
     image: tiehfood/thrifty-api:latest
     environment:
-      - SQLITE_DB_PATH: "/data/thrifty.sqlite"
+      SQLITE_DB_PATH: "/data/thrifty.sqlite"
     volumes:
       - /srv/containers/thrifty:/data
     deploy:
