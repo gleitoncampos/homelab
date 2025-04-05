@@ -4,7 +4,7 @@ services:
       #ports:
       #    - 3012:3012
       volumes:
-          - /srv/containers/cron:/opt/cronicle/data
+          - /srv/containers/cronicle:/opt/cronicle/data
       environment:
           - CRONICLE_secret_key=mysecretKey
       
