@@ -1,0 +1,78 @@
+services:
+  prometheus:
+    image: uay.io/prometheus/prometheus:v3.2.1
+    command: --config.file=/etc/prometheus/prometheus.yml --log.level=debug
+    #ports:
+    #  - 9090:9090
+    volumes:
+      - /srv/containers/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - /srv/containers/prometheus/data:/prometheus #Needs 777 mode
+
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.prometheus.rule=Host(\"${FQDN}\")" #Define in Portainer
+        - "traefik.http.routers.prometheus.entrypoints=websecure"
+        - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+        - "traefik.http.routers.prometheus.service=prometheus"
+        - "traefik.http.routers.prometheus.tls.certresolver=cloudflare"
+    networks:
+        - monitoring
+        - traefik_public
+        
+  node_exporter:
+    image: quay.io/prometheus/node-exporter:v.1.9.1
+    command:
+      - '--path.rootfs=/host'
+    volumes:
+      - '/:/host:ro,rslave'
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+    networks:
+    - monitoring
+      
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    #ports:
+    # - 8080:8080
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+    networks:
+    - monitoring
+
+  grafana:
+    image: grafana/grafana:11.6.0
+    volumes:
+      - /srv/containers/grafana/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
+      - /srv/containers/grafana/data:/var/lib/grafana
+    #ports:
+    # - "9100:3000"
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.grafana.rule=Host(\"${FQDN2}\")" #Define in POrtainer
+        - "traefik.http.routers.grafana.entrypoints=websecure"
+        - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+        - "traefik.http.routers.grafana.service=grafana"
+        - "traefik.http.routers.grafana.tls.certresolver=cloudflare"
+    networks:
+        - monitoring
+        - traefik_public
+
+networks:
+  traefik_public:
+    external: true
+  monitoring:
+    driver: overlay
+    name: monitoring
