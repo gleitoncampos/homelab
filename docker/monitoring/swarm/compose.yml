@@ -73,8 +73,8 @@ services:
   
   influxdb:
     image: influxdb:2.7.11
-    #ports:
-    #  - "8086:8086"
+    ports:
+      - "8086:8086"
     volumes:
       - /srv/containers/influxdb/config:/etc/influxdb2
       - /srv/containers/influxdb/db:/var/lib/influxdb2
