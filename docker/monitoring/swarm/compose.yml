@@ -70,6 +70,27 @@ services:
     networks:
         - monitoring
         - traefik_public
+  
+  influxdb:
+    image: influxdb:2.7.11
+    #ports:
+    #  - "8086:8086"
+    volumes:
+      - /srv/containers/influxdb/config:/etc/influxdb2
+      - /srv/containers/influxdb/db:/var/lib/influxdb2
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.influxdb.rule=Host(\"${FQDN3}\")" #Define in POrtainer
+        - "traefik.http.routers.influxdb.entrypoints=websecure"
+        - "traefik.http.services.influxdb.loadbalancer.server.port=8086"
+        - "traefik.http.routers.influxdb.service=influxdb"
+        - "traefik.http.routers.influxdb.tls.certresolver=cloudflare"
+    networks:
+        - monitoring
+        - traefik_public
 
 networks:
   traefik_public:
