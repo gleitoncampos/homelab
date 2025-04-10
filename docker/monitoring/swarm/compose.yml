@@ -93,6 +93,8 @@ services:
         - traefik_public
   prometheus-pve-exporter:
     image: prompve/prometheus-pve-exporter
+    volumes:
+      - /srv/containers/pve-exporeter/pve.yml:/etc/prometheus/pve.yml
     environment:
       PVE_USER: "${PVE_USER}"
       PVE_PASSWORD: "${PVE_PASSWORD}"
