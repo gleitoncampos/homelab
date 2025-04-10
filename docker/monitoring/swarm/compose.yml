@@ -91,6 +91,16 @@ services:
     networks:
         - monitoring
         - traefik_public
+  prometheus-pve-exporter:
+    image: prompve/prometheus-pve-exporter
+    environment:
+      PVE_USER: "${PVE_USER}"
+      PVE_PASSWORD: "${PVE_PASSWORD}"
+    ports:
+      - 9221:9221
+    networks:
+    - monitoring
+    - traefik_public
 
 networks:
   traefik_public:
