@@ -98,7 +98,7 @@ services:
     environment:
       PVE_USER: "${PVE_USER}"
       PVE_PASSWORD: "${PVE_PASSWORD}"
-      PVE_VERIFY_SSL: false
+      PVE_VERIFY_SSL: "false"
     ports:
       - 9221:9221
     networks:
