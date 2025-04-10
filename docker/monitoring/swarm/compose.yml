@@ -26,6 +26,7 @@ services:
     image: quay.io/prometheus/node-exporter:v1.9.1
     command:
       - '--path.rootfs=/host'
+      - --collector.processes
     volumes:
       - '/:/host:ro,rslave'
     deploy:
