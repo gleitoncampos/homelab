@@ -99,11 +99,33 @@ services:
       PVE_USER: "${PVE_USER}"
       PVE_PASSWORD: "${PVE_PASSWORD}"
       PVE_VERIFY_SSL: "false"
-    ports:
-      - 9221:9221
+    #ports:
+    #  - 9221:9221
     networks:
     - monitoring
     - traefik_public
+  loki:
+    image: grafana/loki:2.9.4
+    volumes:
+      - /srv/containers/loki/loki-config.yml:/mnt/config/loki-config.yml
+    #ports:
+    #  - "3100:3100"
+    command:
+      - "-config.file=/mnt/config/loki-config.yml"
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.loki.rule=Host(\"${FQDN4}\")" #Define in POrtainer
+        - "traefik.http.routers.loki.entrypoints=websecure"
+        - "traefik.http.services.loki.loadbalancer.server.port=3100"
+        - "traefik.http.routers.loki.service=loki"
+        - "traefik.http.routers.loki.tls.certresolver=cloudflare"
+    networks:
+        - monitoring
+        - traefik_public
+
 
 networks:
   traefik_public:
