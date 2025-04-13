@@ -105,7 +105,7 @@ services:
     - monitoring
     - traefik_public
   loki:
-    image: grafana/loki:2.9.4
+    image: grafana/loki:v3.4.3 
     volumes:
       - /srv/containers/loki/loki-config.yml:/mnt/config/loki-config.yml
     #ports:
