@@ -108,7 +108,7 @@ services:
     image: grafana/loki:3.4.3 
     volumes:
       - /srv/containers/loki/loki-config.yml:/mnt/config/loki-config.yml
-      - /srv/containers/loki/data:/loki
+      - /srv/containers/loki/data:/tmp/loki
     #ports:
     #  - "3100:3100"
     command:
