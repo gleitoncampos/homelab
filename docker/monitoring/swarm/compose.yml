@@ -126,6 +126,14 @@ services:
     networks:
         - monitoring
         - traefik_public
+  promtail:
+    image: grafana/promtail:3.4.3
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers
+      - /srv/containers/promtail/config.yml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - monitoring
 
 
 networks:
