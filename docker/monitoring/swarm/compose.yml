@@ -138,6 +138,7 @@ services:
     volumes:
       - /srv/containers/alloy/config.alloy:/etc/alloy/config.alloy
       - /srv/containers/alloy/data:/var/lib/alloy/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
         - 12345:12345
     image: grafana/alloy:latest
