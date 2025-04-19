@@ -108,7 +108,7 @@ services:
     image: grafana/loki:3.4.3 
     volumes:
       - /srv/containers/loki/loki-config.yml:/mnt/config/loki-config.yml
-      - /srv/containers/loki/data:/tmp/loki
+      - /srv/containers/loki/data:/tmp/loki # Needs chmod 777 to permit Loki to create with own uid
     #ports:
     #  - "3100:3100"
     command:
@@ -126,14 +126,24 @@ services:
     networks:
         - monitoring
         - traefik_public
-  promtail:
-    image: grafana/promtail:3.4.3
+  #promtail:
+  #  image: grafana/promtail:3.4.3
+  #  volumes:
+  #    - /var/run/docker.sock:/var/run/docker.sock:ro
+  #    - /srv/containers/promtail/config.yml:/etc/promtail/config.yml
+  #  command: -config.file=/etc/promtail/config.yml
+  #  networks:
+  #    - monitoring
+  alloy:
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /srv/containers/promtail/config.yml:/etc/promtail/config.yml
-    command: -config.file=/etc/promtail/config.yml
-    networks:
-      - monitoring
+      - /srv/containers/alloy/config.alloy:/etc/alloy/config.alloy
+      - /srv/containers/alloy/data:/var/lib/alloy/data
+    ports:
+        - 12345:12345
+    image: grafana/alloy:latest
+    command: 
+    - "run --server.http.listen-addr=0.0.0.0:12345"
+    - "--storage.path=/var/lib/alloy/data /etc/alloy/config.alloy"
 
 
 networks:

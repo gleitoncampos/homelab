@@ -1,0 +1,90 @@
+local.file_match "system" {
+	path_targets = [{
+		__address__ = "localhost",
+		__path__    = "/var/log/syslog",
+		job         = "RSYSLOG",
+	}]
+}
+
+loki.source.file "system" {
+	targets               = local.file_match.system.targets
+	forward_to            = [loki.write.default.receiver]
+	legacy_positions_file = "/tmp/positions.yaml"
+}
+
+local.file_match "OpenWrt" {
+	path_targets = [{
+		__address__ = "localhost",
+		__path__    = "/var/log/openwrt/falcon.log",
+		job         = "FALCON",
+	}]
+}
+
+loki.source.file "OpenWrt" {
+	targets               = local.file_match.OpenWrt.targets
+	forward_to            = [loki.write.default.receiver]
+	legacy_positions_file = "/tmp/positions.yaml"
+}
+
+local.file_match "OpnSense" {
+	path_targets = [{
+		__address__ = "localhost",
+		__path__    = "/var/log/opnsense/rogers.log",
+		job         = "ROGERS",
+	}]
+}
+
+loki.source.file "OpnSense" {
+	targets               = local.file_match.OpnSense.targets
+	forward_to            = [loki.write.default.receiver]
+	legacy_positions_file = "/tmp/positions.yaml"
+}
+
+local.file_match "OpenMediaVault" {
+	path_targets = [{
+		__address__ = "localhost",
+		__path__    = "/var/log/omv/alexandria.log",
+		job         = "ALEXANDRIA",
+	}]
+}
+
+loki.source.file "OpenMediaVault" {
+	targets               = local.file_match.OpenMediaVault.targets
+	forward_to            = [loki.write.default.receiver]
+	legacy_positions_file = "/tmp/positions.yaml"
+}
+
+local.file_match "Coulson" {
+	path_targets = [{
+		__address__ = "localhost",
+		__path__    = "/var/log/pve/coulson.log",
+		job         = "COULSON",
+	}]
+}
+
+loki.source.file "Coulson" {
+	targets               = local.file_match.Coulson.targets
+	forward_to            = [loki.write.default.receiver]
+	legacy_positions_file = "/tmp/positions.yaml"
+}
+
+local.file_match "Fury" {
+	path_targets = [{
+		__address__ = "localhost",
+		__path__    = "/var/log/pve/fury.log",
+		job         = "FURY",
+	}]
+}
+
+loki.source.file "Fury" {
+	targets               = local.file_match.Fury.targets
+	forward_to            = [loki.write.default.receiver]
+	legacy_positions_file = "/tmp/positions.yaml"
+}
+
+loki.write "default" {
+	endpoint {
+		url = "http://loki.gleiton.info/loki/api/v1/push"
+	}
+	external_labels = {}
+}
