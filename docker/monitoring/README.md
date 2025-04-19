@@ -13,3 +13,5 @@ https://grafana.com/blog/2021/02/09/how-i-monitor-my-openwrt-router-with-grafana
 https://www.rsyslog.com/doc/tutorials/log_rotation_fix_size.html
 https://gist.github.com/ruanbekker/c6fa9bc6882e6f324b4319c5e3622460
 
+
+https://grafana.com/docs/alloy/latest/set-up/install/linux/
