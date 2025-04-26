@@ -1,0 +1,75 @@
+services:
+  firefly:
+    image: fireflyiii/core:version-6.2.12
+    environment:
+      APP_ENV: "production"
+      APP_DEBUG: "false"
+      SITE_OWNER: "${SITE_OWNER}" # Define in portainer
+      APP_KEY: "${APP_KEY}" # Avoid the "#" character in your APP_KEY, it may break things. Use exacly 32 caracters
+      DEFAULT_LANGUAGE: "en_US"
+      DEFAULT_LOCALE: "equal"
+      TZ: "America/Sao_Paulo"       
+      LOG_CHANNEL: "stack"
+      APP_LOG_LEVEL: "notice"
+      AUDIT_LOG_LEVEL: "emergency"
+      DB_CONNECTION: "pgsql"
+      DB_HOST: "tasks.firefly_postgres"
+      DB_PORT: "5432"
+      DB_DATABASE: "firefly"
+      DB_USERNAME: "firefly"
+      DB_PASSWORD: "${POSTGRES_PASSWORD}"
+      CACHE_DRIVER: "file"
+      SESSION_DRIVER: "file"
+      COOKIE_PATH: "/"
+      #COOKIE_DOMAIN=
+      COOKIE_SECURE: "false"
+      COOKIE_SAMESITE: "lax"
+      AUTHENTICATION_GUARD: "web"
+      DISABLE_FRAME_HEADER: "false"
+      DISABLE_CSP_HEADER: "false"
+      #STATIC_CRON_TOKEN=
+      APP_NAME: "FireflyIII"
+      BROADCAST_DRIVER: "log"
+      QUEUE_DRIVER: "sync"
+      CACHE_PREFIX: "firefly"
+      FIREFLY_III_LAYOUT: "v1"
+      QUERY_PARSER_IMPLEMENTATION: "legacy"
+      APP_URL: "https://${FQDN}
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.firefly.rule=Host(\"${FQDN}\")" #Define in POrtainer
+        - "traefik.http.routers.firefly.entrypoints=websecure"
+        - "traefik.http.services.firefly.loadbalancer.server.port=8080"
+        - "traefik.http.routers.firefly.service=firefly"
+        - "traefik.http.routers.firefly.tls.certresolver=cloudflare"
+    networks:
+        - firefly
+        - traefik_public
+
+    volumes:
+      - /srv/containers/firefly3/upload:/var/www/html/storage/upload
+    #ports:
+    #  - 9090:8080
+      
+  postgres:
+    image: docker.io/library/postgres:17.4-bookworm
+    environment:
+      POSTGRES_DB: "firefly"
+      POSTGRES_USER: "firefly"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}" #Define in portainer
+      TZ: "America/Sao_Paulo"
+    volumes:
+      - /srv/containers/firefly3/pgdata:/var/lib/postgresql/data
+    networks:
+      - firefly
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+networks:
+  firefly:
+    driver: overlay
+  traefik_public:
+    external: true
