@@ -34,7 +34,7 @@ services:
       CACHE_PREFIX: "firefly"
       FIREFLY_III_LAYOUT: "v1"
       QUERY_PARSER_IMPLEMENTATION: "legacy"
-      APP_URL: "https://${FQDN}"
+      APP_URL: "http://localhost"
     deploy:
       placement:
         constraints: [node.role == manager]
