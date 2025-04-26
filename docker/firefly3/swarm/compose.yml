@@ -35,6 +35,8 @@ services:
       FIREFLY_III_LAYOUT: "v1"
       QUERY_PARSER_IMPLEMENTATION: "legacy"
       APP_URL: "http://localhost"
+      TRUSTED_PROXIES: "**"
+
     deploy:
       placement:
         constraints: [node.role == manager]
