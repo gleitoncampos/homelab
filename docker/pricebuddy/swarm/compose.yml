@@ -26,7 +26,7 @@ services:
             constraints: [node.role == manager]
 
     pricebuddy:
-        image: jez500/pricebuddy:v1.0.31
+        image: jez500/pricebuddy:v1.0.39
         #ports:
         #    - 8080:80
         volumes:
