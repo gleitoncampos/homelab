@@ -72,7 +72,7 @@ services:
         - traefik_public
   
   influxdb:
-    image: influxdb:2.7.11
+    image: influxdb:2.7.12
     ports:
       - "8086:8086"
     volumes:
