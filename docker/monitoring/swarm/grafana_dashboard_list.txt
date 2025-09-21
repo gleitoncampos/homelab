@@ -2,3 +2,4 @@ https://grafana.com/grafana/dashboards/193-docker-monitoring/
 https://grafana.com/grafana/dashboards/1860-node-exporter-full/
 https://grafana.com/grafana/dashboards/18153-asus-openwrt-router/
 https://grafana.com/grafana/dashboards/10347-proxmox-via-prometheus/
+https://grafana.com/grafana/dashboards/19366-opnsense/
