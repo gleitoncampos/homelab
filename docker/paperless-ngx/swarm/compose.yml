@@ -14,7 +14,7 @@ services:
       - paperless
 
   gotenberg:
-    image: docker.io/gotenberg/gotenberg:8.17.3
+    image: docker.io/gotenberg/gotenberg:8.23.2
     deploy:
       placement:
         constraints: [node.role == manager]
