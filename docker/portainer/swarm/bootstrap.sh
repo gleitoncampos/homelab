@@ -31,5 +31,5 @@ sudo systemctl restart syncthing@root.service
 
 
 # Rsyslog install #
-sudo apt install rsyslog
+sudo apt install rsyslog -y
 sudo systemctl enable --now rsyslog
