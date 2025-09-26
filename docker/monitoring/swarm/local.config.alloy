@@ -76,6 +76,21 @@ local.file_match "Fury" {
 	}]
 }
 
+local.file_match "docker-critical" {
+        path_targets = [{
+                __address__ = "localhost",
+                __path__    = "/var/log/vm/docker-critical.log",
+                job         = "docker-critical",
+        }]
+}
+
+loki.source.file "docker-critical" {
+        targets               = local.file_match.docker-critical.targets
+        forward_to            = [loki.write.default.receiver]
+        legacy_positions_file = "/tmp/positions.yaml"
+}
+
+
 loki.source.file "Fury" {
 	targets               = local.file_match.Fury.targets
 	forward_to            = [loki.write.default.receiver]
