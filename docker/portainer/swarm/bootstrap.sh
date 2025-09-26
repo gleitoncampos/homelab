@@ -28,3 +28,8 @@ sudo apt install syncthing apt-transport-https -y
 sudo systemctl enable --now syncthing@root && wait 5
 sed -i 's/127.0.0.1/0.0.0.0/g' ~/.config/syncthing/config.xml
 sudo systemctl restart syncthing@root.service
+
+
+# Rsyslog install #
+sudo apt install rsyslog
+sudo systemctl enable --now rsyslog
