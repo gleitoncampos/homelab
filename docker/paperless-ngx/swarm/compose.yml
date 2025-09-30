@@ -29,7 +29,7 @@ services:
       - "--chromium-allow-list=file:///tmp/.*"
 
   tika:
-    image: docker.io/apache/tika:3.1.0.0
+    image: docker.io/apache/tika:3.2.3.0
     deploy:
       resources:
         limits:
