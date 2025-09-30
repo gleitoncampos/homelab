@@ -16,7 +16,7 @@ services:
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@tasks.linkwarden_postgres:5432/postgres
       - NEXTAUTH_URL=https://${FQDN}/api/v1/auth
       - NEXTAUTH_SECRET=${POSTGRES_PASSWORD} # Same as abobe
-    image: ghcr.io/linkwarden/linkwarden:v2.9.3 # comment this line to build from source
+    image: ghcr.io/linkwarden/linkwarden:v2.13.0 # comment this line to build from source
     #ports:
     #  - target: 3000
     #    published: 3000
