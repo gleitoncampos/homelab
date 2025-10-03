@@ -4,7 +4,7 @@
 
 services:
   broker:
-    image: docker.io/library/redis:7.4.2-alpine
+    image: docker.io/library/redis:8.2.2-alpine
     volumes:
       - /srv/containers/paperless-ngx/redis-data:/data
     deploy:
