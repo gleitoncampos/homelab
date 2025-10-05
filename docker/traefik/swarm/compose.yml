@@ -1,6 +1,6 @@
 services:
   traefik:
-    image: traefik:v3.2
+    image: traefik:v3.5
     command:
       - --api.insecure=false  #Enable the API dashboard access
       - --log.level=DEBUG
