@@ -6,7 +6,7 @@ volumes:
 
 services:
   mariadb:
-    image: mariadb:11.1-jammy
+    image: mariadb:11.3-jammy
     restart: always
     command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW --default-time-zone=America/Sao_Paulo
     volumes:
