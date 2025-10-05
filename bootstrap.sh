@@ -26,7 +26,7 @@ echo "deb [signed-by=/usr/share/keyrings/syncthing-archive-keyring.gpg] https://
 sudo apt update
 sudo apt install syncthing apt-transport-https -y
 sudo systemctl enable --now syncthing@root && wait 5
-sed -i 's/127.0.0.1/0.0.0.0/g' ~/.config/syncthing/config.xml
+sed -i 's/127.0.0.1/0.0.0.0/g' ~/.local/state/syncthing/config.xml
 sudo systemctl restart syncthing@root.service
 
 
