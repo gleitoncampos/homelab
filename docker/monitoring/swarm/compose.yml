@@ -92,7 +92,7 @@ services:
         - monitoring
         - traefik_public
   prometheus-pve-exporter:
-    image: prompve/prometheus-pve-exporter:3.5.2
+    image: prompve/prometheus-pve-exporter:3.5.5
     #volumes:
     #  - /srv/containers/pve-exporeter/pve.yml:/etc/prometheus/pve.yml
     environment:
