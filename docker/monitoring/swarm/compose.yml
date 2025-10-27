@@ -127,7 +127,7 @@ services:
         - monitoring
         - traefik_public
   alloy:
-    image: grafana/alloy:v1.11.0
+    image: grafana/alloy:v1.11.3
     volumes:
       - /srv/containers/alloy/config.alloy:/etc/alloy/config.alloy
       - /srv/containers/alloy/data:/var/lib/alloy/data
