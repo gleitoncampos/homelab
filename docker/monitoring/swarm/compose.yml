@@ -51,7 +51,7 @@ services:
     - monitoring
 
   grafana:
-    image: grafana/grafana:12.2.0
+    image: grafana/grafana:12.3.0
     volumes:
       - /srv/containers/grafana/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
       - /srv/containers/grafana/data:/var/lib/grafana
