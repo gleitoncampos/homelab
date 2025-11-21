@@ -105,7 +105,7 @@ services:
     - monitoring
     - traefik_public
   loki:
-    image: grafana/loki:3.5.5 
+    image: grafana/loki:3.6.1 
     volumes:
       - /srv/containers/loki/loki-config.yml:/mnt/config/loki-config.yml
       - /srv/containers/loki/data:/tmp/loki # Needs chmod 777 to permit Loki to create with own uid
