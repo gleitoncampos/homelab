@@ -34,6 +34,7 @@ scrape_configs:
   - job_name: 'cadvisor'
     scrape_interval: 60s
     scrape_timeout: 10s
+    fallback_scrape_protocol: "PrometheusText1.0.0"
     static_configs:
       - targets: ['tasks.monitoring_cadvisor:8080']
       
