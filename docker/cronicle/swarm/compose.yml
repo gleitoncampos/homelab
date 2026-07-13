@@ -1,6 +1,6 @@
 services:
   cronicle:
-      image: cronicle/edge:v1.13.5
+      image: cronicle/edge:1.14.5
       command: manager
       #ports:
       #    - 3012:3012
