@@ -40,104 +40,82 @@ A infraestrutura foi desenhada priorizando estabilidade, facilidade de manutenç
 
 ## 📂 Estrutura do Repositório
 
-```text
-.
-├── README.md               # Documentação principal do HomeLab
-├── CLAUDE.md               # Diretrizes de desenvolvimento, premissas e boas práticas
-├── TODO.md                 # Backlog e roadmap detalhado de tarefas e melhorias
-├── bootstrap.sh            # Script de provisionamento inicial do nó Debian
-├── renovate.json           # Configuração de atualização automática de dependências
-├── .gitignore              # Proteção contra commit acidental de segredos/chaves
-├── ansible/                # Infraestrutura como Código (IaC) para automação do host e Swarm
-└── docker/                 # Diretório central de Stacks de Serviços
-    ├── README.md           # Guia de implantação de Stacks via Swarm & Portainer
-    ├── traefik/            # Configuração do Ingress Controller & SSL
-    ├── portainer/          # Painel de gestão Swarm + scripts de recuperação
-    ├── monitoring/         # Grafana, Prometheus, Loki, Alloy e log rotation
-    ├── nextcloud/          # Armazenamento em nuvem & fotos (substituto Google Photos/Drive)
-    ├── paperless-ngx/      # Gestão de documentos com OCR
-    ├── vikunja/            # Gestão de tarefas e projetos
-    ├── actual-budget/      # Controle financeiro pessoal
-    ├── firefly3/           # Gestão de finanças avançada
-    ├── wallos/             # Rastreador de assinaturas e mensalidades
-    ├── thrifty/            # Gerenciador de despesas leve
-    ├── pricebuddy/         # Monitoramento de histórico de preços
-    ├── obsidian/           # Sincronização de notas Obsidian
-    ├── stirling-pdf/       # Suíte de manipulação de PDFs
-    ├── linkwarden/         # Arquivamento de links e marcadores
-    ├── bytestash/          # Gerenciador de snippets de código
-    ├── composerize/        # Utilitário `docker run` -> Compose
-    ├── it-tools/           # Coleção de utilitários para dev/sysadmin
-    ├── statping/           # Status page & uptime monitoring
-    ├── glance/             # Dashboard unificado de Homelab
-    ├── organizr/           # Hub unificado de serviços
-    ├── cronicle/           # Agendador de tarefas distribuído
-    ├── jdownloader/        # Gerenciador de downloads headless
-    ├── kasm/               # Ambientes de trabalho e navegadores isolados
-    └── zoneminder/         # Sistema NVR e monitoramento de segurança
-```
+A árvore comentada, com o papel de cada diretório, vive em
+[`CLAUDE.md`](./CLAUDE.md#-estrutura-do-repositório) — junto das regras que
+governam onde cada coisa entra. Mantê-la em um lugar só evita a divergência
+que já aconteceu entre os dois arquivos.
+
+Em uma linha: `ansible/` automatiza o sistema e as stacks, `terraform/`
+provisiona as VMs e containers no Proxmox, `docker/` guarda as stacks que
+estão no ar (as demais em `docker/_catalog/`), `prod-snapshot/` coleta o
+estado real da produção e `docs/` tem o roadmap.
 
 ---
 
 ## 🌐 Catálogo de Serviços Self-Hosted
 
-Os serviços estão organizados por domínio funcional dentro da pasta [`docker/`](file:///home/nuvidio/git/homelab/docker):
+Os serviços estão organizados por domínio funcional dentro da pasta [`docker/`](./docker):
 
 ### 1. Ingress, Segurança & Gerenciamento
 | Serviço | Descrição | Link da Configuração |
 | :--- | :--- | :--- |
-| **Traefik** | Reverse Proxy dinâmico com roteamento HTTPS e certificados wildcard Cloudflare | [`docker/traefik`](file:///home/nuvidio/git/homelab/docker/traefik) |
-| **Portainer** | Gestão visual do Docker Swarm, Stacks e volumes + Rescue Scripts | [`docker/portainer`](file:///home/nuvidio/git/homelab/docker/portainer) |
+| **Traefik** | Reverse Proxy dinâmico com roteamento HTTPS e certificados wildcard Cloudflare | [`docker/traefik`](./docker/traefik) |
+| **Portainer** | Gestão visual do Docker Swarm, Stacks e volumes + Rescue Scripts | [`docker/portainer`](./docker/portainer) |
 
 ### 2. Monitoramento, Observabilidade & Dashboards
 | Serviço | Descrição | Link da Configuração |
 | :--- | :--- | :--- |
-| **Monitoring Stack** | Grafana + Loki + Prometheus + Alloy para métricas do host e logs de containers | [`docker/monitoring`](file:///home/nuvidio/git/homelab/docker/monitoring) |
-| **Statping** | Monitoramento de disponibilidade (uptime) e página de status dos serviços | [`docker/statping`](file:///home/nuvidio/git/homelab/docker/statping) |
-| **Glance** | Dashboard minimalista para centralizar links e widgets do homelab | [`docker/glance`](file:///home/nuvidio/git/homelab/docker/glance) |
-| **Organizr** | Hub e portal de acesso unificado para múltiplos serviços self-hosted | [`docker/organizr`](file:///home/nuvidio/git/homelab/docker/organizr) |
+| **Monitoring Stack** | Grafana + Loki + Prometheus + Alloy para métricas do host e logs de containers | [`docker/monitoring`](./docker/monitoring) |
+| **Statping** | Monitoramento de disponibilidade (uptime) e página de status dos serviços | [`docker/statping`](./docker/_catalog/statping) |
+| **Glance** | Dashboard minimalista para centralizar links e widgets do homelab | [`docker/glance`](./docker/_catalog/glance) |
+| **Organizr** | Hub e portal de acesso unificado para múltiplos serviços self-hosted | [`docker/organizr`](./docker/_catalog/organizr) |
 
 ### 3. Armazenamento, Fotos & Documentos (Substitutos Google)
 | Serviço | Descrição | Link da Configuração |
 | :--- | :--- | :--- |
-| **Nextcloud** | Substituição direta do Google Photos e Google Drive com sincronização mobile/desktop | [`docker/nextcloud`](file:///home/nuvidio/git/homelab/docker/nextcloud) |
-| **Paperless-ngx** | Indexação, busca textual por OCR e organização de documentos físicos escaneados | [`docker/paperless-ngx`](file:///home/nuvidio/git/homelab/docker/paperless-ngx) |
-| **Obsidian Sync** | Sincronização CouchDB/LiveSync para notas de base de conhecimento | [`docker/obsidian`](file:///home/nuvidio/git/homelab/docker/obsidian) |
-| **Stirling-PDF** | Suíte completa para divisão, fusão, OCR e conversão de arquivos PDF | [`docker/stirling-pdf`](file:///home/nuvidio/git/homelab/docker/stirling-pdf) |
-| **Linkwarden** | Gerenciador de marcadores e arquivador de páginas web | [`docker/linkwarden`](file:///home/nuvidio/git/homelab/docker/linkwarden) |
-| **ByteStash** | Repositório de trechos de código e anotações técnicas | [`docker/bytestash`](file:///home/nuvidio/git/homelab/docker/bytestash) |
-| **IT-Tools** | Coleção offline de utilitários para sysadmins e desenvolvedores | [`docker/it-tools`](file:///home/nuvidio/git/homelab/docker/it-tools) |
-| **Composerize** | Ferramenta para converter comandos `docker run` em `docker-compose.yml` | [`docker/composerize`](file:///home/nuvidio/git/homelab/docker/composerize) |
+| **Nextcloud** | Substituição direta do Google Photos e Google Drive com sincronização mobile/desktop | [`docker/nextcloud`](./docker/_catalog/nextcloud) |
+| **Paperless-ngx** | Indexação, busca textual por OCR e organização de documentos físicos escaneados | [`docker/paperless-ngx`](./docker/_catalog/paperless-ngx) |
+| **Obsidian Sync** | Sincronização CouchDB/LiveSync para notas de base de conhecimento | [`docker/obsidian`](./docker/_catalog/obsidian) |
+| **Stirling-PDF** | Suíte completa para divisão, fusão, OCR e conversão de arquivos PDF | [`docker/stirling-pdf`](./docker/_catalog/stirling-pdf) |
+| **Linkwarden** | Gerenciador de marcadores e arquivador de páginas web | [`docker/linkwarden`](./docker/_catalog/linkwarden) |
+| **ByteStash** | Repositório de trechos de código e anotações técnicas | [`docker/bytestash`](./docker/_catalog/bytestash) |
+| **IT-Tools** | Coleção offline de utilitários para sysadmins e desenvolvedores | [`docker/it-tools`](./docker/_catalog/it-tools) |
+| **Composerize** | Ferramenta para converter comandos `docker run` em `docker-compose.yml` | [`docker/composerize`](./docker/_catalog/composerize) |
 
 ### 4. Gestão de Tarefas, Finanças & Assinaturas
 | Serviço | Descrição | Link da Configuração |
 | :--- | :--- | :--- |
-| **Vikunja** | Gestão de tarefas, listas e projetos (Kanban, GANTT e listas encadeadas) | [`docker/vikunja`](file:///home/nuvidio/git/homelab/docker/vikunja) |
-| **Actual Budget** | Sistema de orçamento pessoal baseado em orçamento base zero | [`docker/actual-budget`](file:///home/nuvidio/git/homelab/docker/actual-budget) |
-| **Firefly III** | Gerenciador financeiro avançado para contas, relatórios e transações | [`docker/firefly3`](file:///home/nuvidio/git/homelab/docker/firefly3) |
-| **Wallos** | Acompanhamento de custos com assinaturas de serviços recorrentes | [`docker/wallos`](file:///home/nuvidio/git/homelab/docker/wallos) |
-| **Thrifty** | Controle de despesas diárias ágil e leve | [`docker/thrifty`](file:///home/nuvidio/git/homelab/docker/thrifty) |
-| **PriceBuddy** | Rastreador de variação de preços e promoções | [`docker/pricebuddy`](file:///home/nuvidio/git/homelab/docker/pricebuddy) |
+| **Vikunja** | Gestão de tarefas, listas e projetos (Kanban, GANTT e listas encadeadas) | [`docker/vikunja`](./docker/_catalog/vikunja) |
+| **Actual Budget** | Sistema de orçamento pessoal baseado em orçamento base zero | [`docker/actual-budget`](./docker/_catalog/actual-budget) |
+| **Firefly III** | Gerenciador financeiro avançado para contas, relatórios e transações | [`docker/firefly3`](./docker/_catalog/firefly3) |
+| **Wallos** | Acompanhamento de custos com assinaturas de serviços recorrentes | [`docker/wallos`](./docker/_catalog/wallos) |
+| **Thrifty** | Controle de despesas diárias ágil e leve | [`docker/thrifty`](./docker/_catalog/thrifty) |
+| **PriceBuddy** | Rastreador de variação de preços e promoções | [`docker/pricebuddy`](./docker/_catalog/pricebuddy) |
 
 ### 5. Automação, Ambientes Isolados & Mídia
 | Serviço | Descrição | Link da Configuração |
 | :--- | :--- | :--- |
-| **Cronicle** | Agendador centralizado de tarefas, scripts e rotinas periódicas | [`docker/cronicle`](file:///home/nuvidio/git/homelab/docker/cronicle) |
-| **JDownloader** | Gerenciador de downloads remotos com controle web | [`docker/jdownloader`](file:///home/nuvidio/git/homelab/docker/jdownloader) |
-| **KASM Workspaces** | Execução de navegadores e desktops em containers isolados via web | [`docker/kasm`](file:///home/nuvidio/git/homelab/docker/kasm) |
-| **ZoneMinder** | Sistema de videomonitoramento NVR e análise de câmeras de segurança | [`docker/zoneminder`](file:///home/nuvidio/git/homelab/docker/zoneminder) |
+| **Cronicle** | Agendador centralizado de tarefas, scripts e rotinas periódicas | [`docker/cronicle`](./docker/_catalog/cronicle) |
+| **JDownloader** | Gerenciador de downloads remotos com controle web | [`docker/jdownloader`](./docker/_catalog/jdownloader) |
+| **KASM Workspaces** | Execução de navegadores e desktops em containers isolados via web | [`docker/kasm`](./docker/_catalog/kasm) |
+| **ZoneMinder** | Sistema de videomonitoramento NVR e análise de câmeras de segurança | [`docker/zoneminder`](./docker/_catalog/zoneminder) |
 
 ---
 
 ## 🚀 Guia Rápidos de Implantação
 
 ### 1. Provisionamento do Host (Debian 12/13)
-Em um nó Debian recém-instalado, execute o script de bootstrap ([`bootstrap.sh`](file:///home/nuvidio/git/homelab/bootstrap.sh)) para instalar Docker CE, Syncthing e utilitários de sistema:
+Do control node, com o inventário preenchido:
 
 ```bash
-chmod +x bootstrap.sh
-./bootstrap.sh
+cd ansible
+ansible-galaxy collection install -r requirements.yml
+ansible-playbook -i inventories/prod/hosts.ini playbooks/01-bootstrap-os.yml
 ```
+
+O playbook instala Docker CE, aplica o hardening de SSH e UFW e cria a árvore
+em `/srv/containers`. Para um nó recém-criado, sem o usuário administrativo
+ainda, rode antes `playbooks/00-node-bootstrap.yml` com `-e target=<host>`.
 
 ### 2. Inicialização do Cluster Swarm
 Inicialize o Docker Swarm na máquina principal (Manager):
@@ -154,26 +132,25 @@ docker network create --driver=overlay traefik_public
 
 ### 3. Deploy do Ingress & Portainer
 1. Suba a stack do **Traefik** para habilitar o roteamento de domínios.
-2. Suba o **Portainer** para gerenciar as demais Stacks via interface gráfica. Consulte as instruções detalhadas em [`docker/README.md`](file:///home/nuvidio/git/homelab/docker/README.md).
+2. Suba o **Portainer** para gerenciar as demais Stacks via interface gráfica. Consulte as instruções detalhadas em [`docker/README.md`](./docker/README.md).
 
 ---
 
 ## 🛡️ Boas Práticas & Segurança
 
 - **Segredos e Variáveis de Ambiente**: Arquivos `.env` contendo senhas, chaves de API Cloudflare e tokens são mantidos fora do controle de versão via `.gitignore`.
-- **Ansible Vault como fonte única, um por ambiente**: Os segredos consumidos pela automação vivem em dois arquivos criptografados — `ansible/inventories/prod/group_vars/all/vault.yml` e `ansible/inventories/dev/group_vars/all/vault.yml` (ambos gitignorados). O Ansible injeta os valores no campo `env` da API do Portainer, que resolve os `${VAR}` do `compose.yml` — assim nenhum segredo entra no repositório. Setup em [`ansible/README.md`](file:///home/nuvidio/git/homelab/ansible/README.md) → **Passo 0**. Variável de segredo **nunca** usa `| default('...')`: os playbooks abortam via `tasks/validate_vault.yml` se um segredo faltar, em vez de provisionar com valor público.
+- **Ansible Vault como fonte única, um por ambiente**: Os segredos consumidos pela automação vivem em dois arquivos criptografados — `ansible/inventories/prod/group_vars/all/vault.yml` e `ansible/inventories/dev/group_vars/all/vault.yml` (ambos gitignorados). O Ansible injeta os valores no campo `env` da API do Portainer, que resolve os `${VAR}` do `compose.yml` — assim nenhum segredo entra no repositório. Setup em [`ansible/README.md`](./ansible/README.md) → **Passo 0**. Variável de segredo **nunca** usa `| default('...')`: os playbooks abortam via `tasks/validate_vault.yml` se um segredo faltar, em vez de provisionar com valor público.
 - **Split produção/desenvolvimento**: o inventário Ansible tem dois ambientes independentes, `ansible/inventories/prod/` e `ansible/inventories/dev/`, cada um com seu próprio inventário, variáveis e vault. O Portainer de **produção** acompanha a branch `main` deste repositório (`github_repo_branch: refs/heads/main`); o Portainer de **dev** acompanha a branch `develop` (`refs/heads/develop`). Isso significa que uma mudança em `compose.yml` só chega a cada ambiente depois do `push` para a branch correspondente — ver assimetria abaixo.
-- **Assimetria push vs. Ansible**: mudar um `compose.yml` (ou qualquer arquivo dentro de `docker/`) é invisível para a stack já em execução até o commit ser enviado ao GitHub — é de lá que o Portainer clona via GitOps. Já uma mudança num arquivo de config *sidecar* (ex.: `docker/monitoring/swarm/loki-config.yml`, listado em `monitoring_sidecar_files` em `inventories/_common/all.yml`) chega ao host pelo **working tree local** via Ansible (`ansible.builtin.template`/`copy`) na próxima execução do playbook, e **não depende de push**. ⚠️ O sidecar `prometheus.yml.j2` referenciado em `monitoring_sidecar_files` **ainda não existe** — o `prometheus.yml` atual do repo é sintaxe Alloy River, não YAML do Prometheus; templatá-lo é trabalho pendente (ver `TODO.md`). Confundir os dois caminhos é o erro mais comum ao editar uma stack já rodando.
+- **Assimetria push vs. Ansible**: mudar um `compose.yml` (ou qualquer arquivo dentro de `docker/`) é invisível para a stack já em execução até o commit ser enviado ao GitHub — é de lá que o Portainer clona via GitOps. Já uma mudança num arquivo de config *sidecar* (ex.: `docker/monitoring/swarm/loki-config.yml`, listado em `monitoring_sidecar_files` em `inventories/_common/all.yml`) chega ao host pelo **working tree local** via Ansible (`ansible.builtin.template`/`copy`) na próxima execução do playbook, e **não depende de push**. ⚠️ O sidecar `prometheus.yml.j2` referenciado em `monitoring_sidecar_files` **ainda não existe** — o `prometheus.yml` atual do repo é sintaxe Alloy River, não YAML do Prometheus; templatá-lo é trabalho pendente (ver [`docs/ROADMAP.md`](./docs/ROADMAP.md)). Confundir os dois caminhos é o erro mais comum ao editar uma stack já rodando.
 - **Roteamento HTTPS**: Nenhum serviço é exposto em HTTP puro. O Traefik força o redirecionamento automático para HTTPS com TLS 1.2/1.3.
 - **Persistência de Dados**: Os dados persistentes de cada aplicação devem ser armazenados sob a pasta padrão `/srv/containers/<nome-do-servico>`.
 
 ---
 
-## 📌 Próximos Passos (Roadmap)
+## 📌 Próximos Passos
 
-- [ ] **IaC (Infrastructure as Code)**: Automatizar a configuração de nós e Docker Swarm com Ansible / Terraform.
-- [ ] **Estratégia de Backup 3-2-1**: Implementar rotinas automatizadas de backup dos volumes em `/srv/containers/` utilizando Restic ou BorgBackup com envio offsite.
-- [ ] **Single Sign-On (SSO)**: Integrar um provedor de identidade (Authelia / Authentik) no Traefik para proteção uniforme dos serviços.
+O backlog completo, por fase, está em [`docs/ROADMAP.md`](./docs/ROADMAP.md).
+Antes do primeiro push público, veja [`docs/PRE-DEPLOY.md`](./docs/PRE-DEPLOY.md).
 
 ---
 

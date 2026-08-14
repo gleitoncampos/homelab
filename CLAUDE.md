@@ -89,7 +89,7 @@ Este arquivo estabelece os princípios de arquitetura, padrões de projeto, conv
 ### 6. Imagens Docker & Atualizações
 - **Tag Fixa**: Sempre fixar a versão da imagem (ex: `image: postgres:16-alpine` ou `image: ghcr.io/paperless-ngx/paperless-ngx:2.14.0`).
 - ❌ **Proibido em Produção**: Evitar o uso da tag `:latest` sem controle de versão.
-- **Automação**: O bot **Renovate** ([`renovate.json`](file:///home/nuvidio/git/homelab/renovate.json)) é responsável por abrir Pull Requests automáticos de atualização de versão das imagens.
+- **Automação**: O bot **Renovate** ([`renovate.json`](./renovate.json)) é responsável por abrir Pull Requests automáticos de atualização de versão das imagens.
 
 ---
 
@@ -97,28 +97,35 @@ Este arquivo estabelece os princípios de arquitetura, padrões de projeto, conv
 
 ```text
 .
-├── CLAUDE.md               # Este arquivo (Diretrizes e premissas do repositório)
-├── README.md               # Documentação principal e catálogo de serviços
-├── TODO.md                 # Roadmap e backlog de tarefas/melhorias
-├── bootstrap.sh            # Script de setup do SO base (Debian 12/13)
-├── renovate.json           # Configuração de atualização de dependências pelo Renovate
-├── .gitignore              # Arquivos ignorados pelo Git (vault.yml, hosts.ini, .tfvars, .tfstate, ...)
-├── ansible/                # Playbooks e papéis do Ansible (IaC do Host e Swarm)
-│   ├── requirements.yml    # Collections Galaxy exigidas (community.docker, community.general, ansible.posix)
+├── AGENTS.md               # Regras de estilo para assistentes (CLAUDE.md é symlink)
+├── CLAUDE.md               # Este arquivo (diretrizes e premissas do repositório)
+├── README.md               # Porta de entrada: o que é o projeto e como subir
+├── renovate.json           # Atualização automática de versão de imagem
+├── .gitignore              # vault.yml, hosts.ini, .tfvars, .tfstate, dados coletados
+├── docs/
+│   ├── ROADMAP.md          # Backlog por fase
+│   └── PRE-DEPLOY.md       # Pré-requisitos do primeiro push público
+├── ansible/                # IaC do sistema operacional, do Swarm e das stacks
+│   ├── requirements.yml    # Collections Galaxy (community.docker/general, ansible.posix)
 │   ├── inventories/        # Um diretório por ambiente — ver ansible/README.md
 │   │   ├── _common/        # Variáveis comuns a prod e dev (camada 1 de 3)
-│   │   ├── prod/            # hosts.ini (gitignorado) + group_vars/ (main.yml, vault.yml)
-│   │   └── dev/              # idem, ambiente de desenvolvimento (CT isolado, branch develop)
-│   ├── tasks/               # Tasks reutilizáveis (login/deploy no Portainer, validação do vault)
-│   └── playbooks/           # 00-node-bootstrap, 01-05 (bootstrap OS/cluster/stacks), network/
+│   │   ├── prod/           # hosts.ini (gitignorado) + group_vars/ (main.yml, vault.yml)
+│   │   └── dev/            # idem, ambiente de desenvolvimento
+│   ├── tasks/              # Tasks reutilizáveis (login e deploy no Portainer, vault)
+│   └── playbooks/          # 00-node-bootstrap, 01-05, network/
 ├── terraform/              # IaC do hardware virtual (Proxmox VE — VMs e CTs LXC)
-│   └── proxmox/            # Provider bpg/proxmox; ver terraform/proxmox/README.md p/ runbook de import
-└── docker/                 # Stacks de Serviços (1 diretório por aplicação)
-    ├── README.md           # Instruções de deploy das stacks
-    └── <servico>/          # Pasta do serviço
-        └── swarm/
-            └── compose.yml # Definição da stack Docker Swarm
+│   └── proxmox/            # Provider bpg/proxmox; runbook de import no README de lá
+├── prod-snapshot/          # Coleta do estado real da produção; os dados são ignorados
+│   ├── collect.sh          # Coleta config por host, conforme o grupo do inventário
+│   └── discover.sh         # Descobre hosts na rede e sugere o hosts.ini
+└── docker/                 # Stacks de serviço
+    ├── README.md           # Instruções de deploy
+    ├── _catalog/           # Definidas mas NÃO implantadas — ver o README de lá
+    └── <servico>/swarm/compose.yml
 ```
+
+> `docker/` contém apenas o que está no ar. Tudo o mais vive em
+> `docker/_catalog/`, para que a árvore não descreva serviços inexistentes.
 
 ---
 
@@ -136,5 +143,28 @@ Ao adicionar uma nova aplicação ao repositório, siga o checklist:
    - [ ] Imagem Docker com tag de versão fixada (sem `:latest`).
    - [ ] Blocos `deploy.resources.limits` e `deploy.placement.constraints` configurados.
 4. **Documentação**:
-   - Atualizar a tabela de catálogo no [`README.md`](file:///home/nuvidio/git/homelab/README.md).
-   - Atualizar o guia de stacks em [`docker/README.md`](file:///home/nuvidio/git/homelab/docker/README.md).
+   - Atualizar a tabela de catálogo no [`README.md`](./README.md).
+   - Atualizar o guia de stacks em [`docker/README.md`](./docker/README.md).
+
+---
+
+## 🗣️ Estilo de resposta dos assistentes
+
+Este arquivo é a fonte única: `AGENTS.md` é um symlink para cá, de modo que
+todas as ferramentas leiam as mesmas regras. Antes existiam seis cópias
+(`.clinerules/`, `.cursor/`, `.github/`, `.opencode/`, `.windsurf/` e a raiz),
+quatro idênticas byte a byte e duas já divergidas.
+
+- Responder de forma direta e comprimida. Toda substância técnica permanece; só
+  o enfeite sai.
+- Cortar: artigos supérfluos, muletas ("apenas", "basicamente"), saudações e
+  hedging. Fragmentos são aceitáveis.
+- Termos técnicos, nomes de API, mensagens de erro e blocos de código ficam
+  **literais**, nunca comprimidos.
+- Padrão: `[coisa] [ação] [motivo]. [próximo passo].`
+  Em vez de "Claro! Ficarei feliz em ajudar com isso", escrever
+  "Bug no middleware de auth. Corrige assim:".
+
+**Voltar ao texto normal** em avisos de segurança, ações irreversíveis, sequências
+de passos em que a ordem importa, e quando a compressão criar ambiguidade.
+Mensagens de commit, PRs e documentação são sempre escritas por extenso.

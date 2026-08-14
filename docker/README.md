@@ -19,7 +19,7 @@ Para subir a infraestrutura do zero, siga a ordem de prioridade de inicializaç�
 
 ### 2. Monitoramento & Observabilidade
 - **Monitoring Stack** (`docker/monitoring/`): Grafana + Prometheus + Loki + Grafana Alloy para centralização de métricas e logs de containers e do host.
-  - **Só o Grafana é publicado pelo Traefik** (rota `${FQDN_GRAFANA}`). **Prometheus, Loki e InfluxDB não têm mais label de roteamento** e ficam acessíveis apenas dentro da rede overlay interna `monitoring` — nenhum dos três tem autenticação própria, e o middleware `forwardAuth` de um futuro SSO (ver `TODO.md` secção 2.1) não serve para eles: o portal de login redireciona para uma página HTML, o que quebra qualquer cliente de máquina (Grafana consultando o Prometheus como datasource, Alloy fazendo `remote_write` para o Loki). Expor os três exigiria autenticação nativa própria de cada um — nenhum tem hoje — então a decisão de arquitetura foi não publicá-los.
+  - **Só o Grafana é publicado pelo Traefik** (rota `${FQDN_GRAFANA}`). **Prometheus, Loki e InfluxDB não têm mais label de roteamento** e ficam acessíveis apenas dentro da rede overlay interna `monitoring` — nenhum dos três tem autenticação própria, e o middleware `forwardAuth` de um futuro SSO (ver [`docs/ROADMAP.md`](../docs/ROADMAP.md) secção 2.1) não serve para eles: o portal de login redireciona para uma página HTML, o que quebra qualquer cliente de máquina (Grafana consultando o Prometheus como datasource, Alloy fazendo `remote_write` para o Loki). Expor os três exigiria autenticação nativa própria de cada um — nenhum tem hoje — então a decisão de arquitetura foi não publicá-los.
 - **Statping** (`docker/_catalog/statping/`): Dashboard de status de serviços e alertas de uptime.
 
 ### 3. Demais Stacks de Aplicação
