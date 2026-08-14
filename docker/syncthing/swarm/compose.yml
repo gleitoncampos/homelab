@@ -1,0 +1,78 @@
+services:
+  syncthing-node1:
+    image: syncthing/syncthing:1.27
+    hostname: syncthing-node1
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - STNODEFAULTFOLDER=true
+    volumes:
+      - /srv/containers/syncthing/node1_config:/var/syncthing/config
+      - /srv/containers:/var/syncthing/containers
+    ports:
+      - "22000:22000/tcp"  # Sync protocol TCP
+      - "22000:22000/udp"  # Sync protocol QUIC
+      - "21027:21027/udp"  # Local discovery
+    networks:
+      - traefik_public
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.hostname == docker-swarm-node01
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.syncthing-node1.rule=Host(\"${SYNCTHING_NODE1_FQDN}\")"
+        - "traefik.http.routers.syncthing-node1.entrypoints=websecure"
+        - "traefik.http.services.syncthing-node1.loadbalancer.server.port=8384"
+        - "traefik.http.routers.syncthing-node1.service=syncthing-node1"
+        - "traefik.http.routers.syncthing-node1.tls.certresolver=cloudflare"
+
+  syncthing-node2:
+    image: syncthing/syncthing:1.27
+    hostname: syncthing-node2
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - STNODEFAULTFOLDER=true
+    volumes:
+      - /srv/containers/syncthing/node2_config:/var/syncthing/config
+      - /srv/containers:/var/syncthing/containers
+    ports:
+      - "22001:22000/tcp"  # Sync protocol TCP
+      - "22001:22000/udp"  # Sync protocol QUIC
+      - "21028:21027/udp"  # Local discovery
+    networks:
+      - traefik_public
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.hostname == docker-swarm-node02
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.syncthing-node2.rule=Host(\"${SYNCTHING_NODE2_FQDN}\")"
+        - "traefik.http.routers.syncthing-node2.entrypoints=websecure"
+        - "traefik.http.services.syncthing-node2.loadbalancer.server.port=8384"
+        - "traefik.http.routers.syncthing-node2.service=syncthing-node2"
+        - "traefik.http.routers.syncthing-node2.tls.certresolver=cloudflare"
+
+networks:
+  traefik_public:
+    external: true

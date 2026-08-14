@@ -1,0 +1,97 @@
+---
+- name: "04 - Deploy do Bloco de Gestao, Financas & Produtividade"
+  hosts: homelab_managers
+  become: true
+  pre_tasks:
+    - name: Validar segredos do Vault exigidos por este play
+      ansible.builtin.include_tasks: "../tasks/validate_vault.yml"
+      vars:
+        required_secrets:
+          - portainer_admin_password
+          - postgres_paperless_password
+          - paperless_secret_key
+          - postgres_vikunja_password
+          - homelab_domain
+  tasks:
+    - name: Fazer Login na API do Portainer
+      ansible.builtin.include_tasks: "../tasks/portainer_login.yml"
+
+    - name: Deploy da Stack Paperless-ngx (OCR e Gestao de Documentos)
+      ansible.builtin.include_tasks: "../tasks/portainer_stack.yml"
+      vars:
+        stack_name: "paperless"
+        stack_repo_url: "{{ github_repo_url }}"
+        stack_repo_ref: "{{ github_repo_branch }}"
+        stack_compose_path: "docker/paperless-ngx/swarm/compose.yml"
+        stack_env:
+          - name: "POSTGRES_PASSWORD"
+            value: "{{ postgres_paperless_password }}"
+          - name: "PAPERLESS_SECRET_KEY"
+            value: "{{ paperless_secret_key }}"
+          - name: "FQDN"
+            value: "{{ fqdn_paperless }}"
+        portainer_url: "http://localhost:9000"
+        portainer_endpoint_id: "{{ endpoint_id }}"
+      no_log: true
+
+    - name: Deploy da Stack Actual Budget (Financas)
+      ansible.builtin.include_tasks: "../tasks/portainer_stack.yml"
+      vars:
+        stack_name: "actualbudget"
+        stack_repo_url: "{{ github_repo_url }}"
+        stack_repo_ref: "{{ github_repo_branch }}"
+        stack_compose_path: "docker/actual-budget/swarm/compose.yml"
+        stack_env:
+          - name: "FQDN"
+            value: "{{ fqdn_actualbudget }}"
+        portainer_url: "http://localhost:9000"
+        portainer_endpoint_id: "{{ endpoint_id }}"
+
+    - name: Deploy da Stack Vikunja (Tarefas e Projetos)
+      ansible.builtin.include_tasks: "../tasks/portainer_stack.yml"
+      vars:
+        stack_name: "vikunja"
+        stack_repo_url: "{{ github_repo_url }}"
+        stack_repo_ref: "{{ github_repo_branch }}"
+        stack_compose_path: "docker/vikunja/swarm/compose.yml"
+        stack_env:
+          - name: "POSTGRES_PASSWORD"
+            value: "{{ postgres_vikunja_password }}"
+          - name: "FQDN"
+            value: "{{ fqdn_vikunja }}"
+        portainer_url: "http://localhost:9000"
+        portainer_endpoint_id: "{{ endpoint_id }}"
+      no_log: true
+
+    - name: Deploy da Stack Wallos (Assinaturas)
+      ansible.builtin.include_tasks: "../tasks/portainer_stack.yml"
+      vars:
+        stack_name: "wallos"
+        stack_repo_url: "{{ github_repo_url }}"
+        stack_repo_ref: "{{ github_repo_branch }}"
+        stack_compose_path: "docker/wallos/swarm/compose.yml"
+        stack_env:
+          - name: "FQDN"
+            value: "{{ fqdn_wallos }}"
+        portainer_url: "http://localhost:9000"
+        portainer_endpoint_id: "{{ endpoint_id }}"
+
+    - name: Deploy da Stack Thrifty (Despesas)
+      ansible.builtin.include_tasks: "../tasks/portainer_stack.yml"
+      vars:
+        stack_name: "thrifty"
+        stack_repo_url: "{{ github_repo_url }}"
+        stack_repo_ref: "{{ github_repo_branch }}"
+        stack_compose_path: "docker/thrifty/swarm/compose.yml"
+        # Duas rotas: FQDN é a UI, FQDN2 é a API (LOCAL_API_HOSTNAME).
+        stack_env:
+          - name: "FQDN"
+            value: "{{ fqdn_thrifty }}"
+          - name: "FQDN2"
+            value: "{{ fqdn_thrifty_api }}"
+        portainer_url: "http://localhost:9000"
+        portainer_endpoint_id: "{{ endpoint_id }}"
+
+    - name: Exibir status da Gestão e Finanças
+      ansible.builtin.debug:
+        msg: "💼 Stacks de Gestão e Finanças (Paperless/Actual/Vikunja/Wallos/Thrifty) cadastradas no Portainer!"

@@ -1,0 +1,116 @@
+---
+# Task reutilizável: garante que os segredos do Vault existem ANTES de qualquer
+# operação destrutiva ou de provisionamento.
+#
+# Motivo: antes desta validação, cada consumidor usava `{{ var | default('...') }}`.
+# Como `group_vars/all/vault.yml` não era carregado, o default era sempre o valor
+# efetivo — o playbook provisionava o Portainer com uma senha publicada no repo e
+# reportava sucesso. Falhar aqui é o comportamento correto.
+#
+# Uso, nos `pre_tasks` de cada play que consome segredo:
+#   pre_tasks:
+#     - name: Validar segredos do Vault
+#       ansible.builtin.include_tasks: "../tasks/validate_vault.yml"
+#       vars:
+#         required_secrets: [portainer_admin_password, cloudflare_api_token]
+#
+# `required_secrets` é uma lista com os NOMES das variáveis exigidas por aquele
+# play — só o que ele usa de fato, para que um playbook isolado não exija o vault
+# inteiro.
+
+- name: Verificar se a lista de segredos exigidos foi informada
+  ansible.builtin.assert:
+    that:
+      - required_secrets is defined
+      - required_secrets | length > 0
+    fail_msg: >-
+      validate_vault.yml foi incluído sem `required_secrets`.
+      Informe a lista de variáveis que este play consome.
+    quiet: true
+
+- name: Exigir que cada segredo esteja definido e não vazio
+  ansible.builtin.assert:
+    that:
+      - item in vars
+      - vars[item] is string
+      - vars[item] | length > 0
+    fail_msg: >-
+      Segredo '{{ item }}' ausente ou vazio.
+      Crie/edite o Vault do ambiente em uso e rode novamente:
+        cd ansible/
+        cp inventories/vault.yml.example inventories/prod/group_vars/all/vault.yml   # ou dev/, se ainda não existir
+        ansible-vault edit inventories/prod/group_vars/all/vault.yml                 # ou dev/
+      Nunca reintroduza `| default('...')` para contornar este erro.
+    success_msg: "Segredo '{{ item }}' presente."
+    quiet: true
+  loop: "{{ required_secrets }}"
+  # SEM no_log aqui: o NOME da variável (`item`) não é segredo — só o VALOR é
+  # (censurado pelo `loop_control.label` abaixo). Sem isso, o operador não sabe
+  # QUAL das chaves de `required_secrets` faltou quando o assert falha.
+  loop_control:
+    label: "{{ item }}"
+
+- name: Exigir comprimento mínimo da senha de admin do Portainer
+  ansible.builtin.assert:
+    that:
+      - portainer_admin_password | length >= 16
+    fail_msg: >-
+      portainer_admin_password tem menos de 16 caracteres.
+      O Portainer monta o socket do Docker: esta senha é root-equivalente nos dois
+      nós do Swarm. Gere uma nova com `openssl rand -base64 32`.
+    quiet: true
+  when: "'portainer_admin_password' in required_secrets"
+  no_log: true
+
+- name: Exigir comprimento mínimo da chave de assinatura do Paperless
+  ansible.builtin.assert:
+    that:
+      - paperless_secret_key | length >= 32
+    fail_msg: >-
+      paperless_secret_key tem menos de 32 caracteres. Ela assina sessões e tokens
+      de reset de senha do Django. Gere com `openssl rand -hex 32`.
+    quiet: true
+  when: "'paperless_secret_key' in required_secrets"
+  no_log: true
+
+- name: Exigir comprimento mínimo da senha de admin do Grafana
+  ansible.builtin.assert:
+    that:
+      - grafana_admin_password | length >= 16
+    fail_msg: >-
+      grafana_admin_password tem menos de 16 caracteres.
+      Sem essa var o Grafana sobe com o login admin/admin exposto pelo Traefik.
+      Gere uma nova com `openssl rand -base64 32`.
+    quiet: true
+  when: "'grafana_admin_password' in required_secrets"
+  no_log: true
+
+- name: Exigir formato válido da chave pública SSH
+  ansible.builtin.assert:
+    that:
+      - >-
+        ssh_public_key.startswith('ssh-ed25519 AAAA')
+        or ssh_public_key.startswith('ssh-rsa AAAA')
+        or ssh_public_key.startswith('ssh-ecdsa AAAA')
+      - ssh_public_key | length > 80
+    fail_msg: >-
+      ssh_public_key não parece uma chave pública SSH válida: precisa começar com
+      "ssh-ed25519 AAAA", "ssh-rsa AAAA" ou "ssh-ecdsa AAAA" e ter mais de 80
+      caracteres. O valor anterior em main.yml era um placeholder truncado que
+      nunca instalou chave nenhuma.
+    quiet: true
+  when: "'ssh_public_key' in required_secrets"
+  no_log: true
+
+- name: Exigir que homelab_domain seja um domínio real, não um placeholder
+  ansible.builtin.assert:
+    that:
+      - "'.' in homelab_domain"
+      - not homelab_domain.startswith('TROCAR')
+    fail_msg: >-
+      homelab_domain inválido: precisa conter um ponto (domínio real) e não pode
+      começar com "TROCAR" (placeholder de exemplo). Edite o Vault e defina o
+      domínio real de produção.
+    quiet: true
+  when: "'homelab_domain' in required_secrets"
+  no_log: true

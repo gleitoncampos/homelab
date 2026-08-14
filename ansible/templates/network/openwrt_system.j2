@@ -1,0 +1,35 @@
+config system
+	option hostname '{{ openwrt_hostname | default('openwrt-ap') }}'
+	option ttylogin '0'
+	option log_size '64'
+	option urandom_seed '0'
+	option compat_version '1.0'
+	option zonename '{{ network_timezone | default('America/Sao_Paulo') }}'
+	option log_proto '{{ syslog_protocol | default('udp') }}'
+	option conloglevel '8'
+	option cronloglevel '5'
+	option log_ip '{{ syslog_server_ip }}'
+	option log_port '{{ syslog_server_port | default('1514') }}'
+	option timezone '<-03>3'
+	option packet_steering '1'
+
+config timeserver 'ntp'
+	option enabled '1'
+	option enable_server '0'
+{% for ntp in ntp_servers | default(['a.st1.ntp.br', 'b.st1.ntp.br', 'c.st1.ntp.br', 'd.st1.ntp.br']) %}
+	list server '{{ ntp }}'
+{% endfor %}
+
+config dropbear
+	option PasswordAuth 'off'
+	option RootPasswordAuth 'off'
+	option Port '2222'
+	option Interface 'vlan10'
+	option RootKeyOnly '1'
+
+config uhttpd 'main'
+	list listen_http '0.0.0.0:80'
+	list listen_https '0.0.0.0:443'
+	option redirect_https '1'
+	option cert '/etc/uhttpd.crt'
+	option key '/etc/uhttpd.key'

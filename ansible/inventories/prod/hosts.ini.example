@@ -1,0 +1,26 @@
+[homelab_managers]
+node1 ansible_host=<IP-DO-MANAGER> ansible_user=nuvidio
+
+[homelab_workers]
+node2 ansible_host=<IP-DO-WORKER-1> ansible_user=nuvidio
+
+[opnsense]
+# opnsense ansible_host=<IP-DA-OPNSENSE> ansible_user=root
+
+[openwrt]
+# openwrt ansible_host=<IP-DO-OPENWRT> ansible_user=root ansible_shell_type=sh
+
+[proxmox]
+# hypervisor1 ansible_host=<IP-DO-HYPERVISOR-1> ansible_user=root
+# hypervisor2 ansible_host=<IP-DO-HYPERVISOR-2> ansible_user=root
+
+[omv]
+# omv ansible_host=<IP-DO-OMV> ansible_user=root
+
+[homelab:children]
+homelab_managers
+homelab_workers
+
+[network:children]
+opnsense
+openwrt

@@ -1,0 +1,11 @@
+---
+# Dev não gerencia nenhum dispositivo de rede (sem OPNsense/OpenWrt próprio),
+# então este arquivo NÃO replica `inventories/prod/group_vars/network.yml`
+# (syslog/netflow, NTP, parent_interface etc.) — só a VLAN usada pelo CT 210.
+vlans:
+  - tag: 20
+    name: "HOMELAB"
+    descr: "Servidores, Docker Swarm & Storage NAS"
+    ip: "198.18.20.1"
+    subnet: 24
+    dhcp_enabled: false

@@ -1,0 +1,30 @@
+services:
+  cronicle:
+      image: cronicle/edge:v1.14.5
+      command: manager
+      #ports:
+      #    - 3012:3012
+      volumes:
+          - /srv/containers/cronicle:/opt/cronicle/data
+      environment:
+          # Assina token de API/sessão de um agendador de comandos arbitrários.
+          # Definir no Portainer: openssl rand -hex 32
+          - CRONICLE_secret_key=${CRONICLE_SECRET_KEY}
+      
+      deploy:
+        placement:
+          constraints: [node.role == manager]
+        labels:
+          - "traefik.enable=true"
+          - "traefik.http.routers.cronicle.rule=Host(\"${FQDN}\")" #Define in POrtainer
+          - "traefik.http.routers.cronicle.entrypoints=websecure"
+          - "traefik.http.services.cronicle.loadbalancer.server.port=3012"
+          - "traefik.http.routers.cronicle.service=cronicle"
+          - "traefik.http.routers.cronicle.tls.certresolver=cloudflare"
+      networks:
+        - traefik_public
+
+
+networks:
+  traefik_public:
+    external: true

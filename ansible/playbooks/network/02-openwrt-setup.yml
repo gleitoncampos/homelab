@@ -1,0 +1,62 @@
+---
+- name: "OpenWrt - Padronização via Templates UCI (Syslog, System, Firewall)"
+  hosts: openwrt
+  gather_facts: false # Desativado pois OpenWrt não possui Python por padrão
+  pre_tasks:
+    - name: Validar segredos do Vault exigidos por este play
+      ansible.builtin.include_tasks: "../../tasks/validate_vault.yml"
+      vars:
+        required_secrets:
+          - wifi_main_password
+          - wifi_iot_password
+          - wifi_media_password
+          - wifi_guest_password
+  tasks:
+    - name: Fazer backup da configuração /etc/config/system no OpenWrt
+      ansible.builtin.raw: "cp /etc/config/system /etc/config/system.bak"
+
+    - name: Garantir instalação dos pacotes de QoL no OpenWrt (Tema Argon, NLBWmon, Schedule)
+      ansible.builtin.raw: "opkg update && opkg install luci-theme-argon luci-app-nlbwmon luci-app-access-control"
+      ignore_errors: true
+
+    - name: Aplicar arquivo de Sistema & Syslog padronizado em /etc/config/system
+      ansible.builtin.raw: |
+        cat << 'EOF' > /etc/config/system
+        {{ lookup('template', '../../templates/network/openwrt_system.j2') }}
+        EOF
+
+    - name: Aplicar arquivo de Firewall padronizado em /etc/config/firewall
+      ansible.builtin.raw: |
+        cat << 'EOF' > /etc/config/firewall
+        {{ lookup('template', '../../templates/network/openwrt_firewall.j2') }}
+        EOF
+
+    # no_log: o template renderizado contém as 4 PSKs de Wi-Fi em texto puro.
+    - name: Aplicar configuração de Wi-Fi e SSIDs Segregados em /etc/config/wireless
+      ansible.builtin.raw: |
+        cat << 'EOF' > /etc/config/wireless
+        {{ lookup('template', '../../templates/network/openwrt_wireless.j2') }}
+        EOF
+      no_log: true
+
+    - name: Aplicar desativação de DHCP/ODHCPD em /etc/config/dhcp
+      ansible.builtin.raw: |
+        cat << 'EOF' > /etc/config/dhcp
+        {{ lookup('template', '../../templates/network/openwrt_dhcp.j2') }}
+        EOF
+
+    - name: Desativar daemons dnsmasq e odhcpd no inicialização do OpenWrt
+      ansible.builtin.raw: "/etc/init.d/dnsmasq disable && /etc/init.d/odhcpd disable && /etc/init.d/dnsmasq stop && /etc/init.d/odhcpd stop"
+
+    - name: Agendar reboot semanal automático nos domingos às 04:00 AM via Crontab
+      ansible.builtin.raw: '(crontab -l 2>/dev/null; echo "0 4 * * 0 /sbin/reboot") | sort -u | crontab - && /etc/init.d/cron enable && /etc/init.d/cron restart'
+
+    - name: Aplicar otimizações de Kernel sysctl (TCP BBR, Sockets 16MB, txqueuelen)
+      ansible.builtin.raw: "sysctl -w net.ipv4.tcp_congestion_control=bbr net.core.rmem_max=16777216 net.core.wmem_max=16777216 net.core.netdev_max_backlog=10000 && sysctl -p"
+
+    - name: Recarregar serviços de Log, Wi-Fi e Firewall do OpenWrt
+      ansible.builtin.raw: "/etc/init.d/log restart && wifi reload && reload_config"
+
+    - name: Exibir confirmação do OpenWrt
+      ansible.builtin.debug:
+        msg: "📶 OpenWrt ({{ openwrt_hostname | default('openwrt-ap') }}) padronizado! Syslog em {{ syslog_server_ip }}:{{ syslog_server_port }}, SSIDs segregados (30,40,50,60), dhcp/odhcpd desativados e reboot agendado aos domingos às 04:00."

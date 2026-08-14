@@ -1,0 +1,33 @@
+services:
+  statping-ng:
+    # ":latest" era tag flutuante — CLAUDE.md §6 proíbe em produção. "latest"
+    # aponta hoje para v0.90.78; o Renovate abre PR quando ela mudar.
+    image: adamboutcher/statping-ng:v0.90.78
+    volumes:
+      - /srv/containers/statping:/app
+    environment:
+      DB_CONN: sqlite
+    #ports:
+    #  - 8080:8080
+    deploy:
+        placement:
+          constraints: [node.role == manager]
+        resources:
+          limits:
+            cpus: '0.5'
+            memory: 256M
+        restart_policy:
+          condition: on-failure
+        labels:
+          - "traefik.enable=true"
+          - "traefik.http.routers.statping.rule=Host(\"${FQDN}\")" #Define in POrtainer
+          - "traefik.http.routers.statping.entrypoints=websecure"
+          - "traefik.http.services.statping.loadbalancer.server.port=8080"
+          - "traefik.http.routers.statping.service=statping"
+          - "traefik.http.routers.statping.tls.certresolver=cloudflare"
+    networks:
+      - traefik_public
+
+networks:
+  traefik_public:
+    external: true

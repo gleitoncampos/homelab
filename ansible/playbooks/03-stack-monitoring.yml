@@ -1,0 +1,54 @@
+---
+- name: "03 - Deploy da Stack de Monitoramento & Observabilidade (Grafana/Loki/Prometheus/Alloy)"
+  hosts: homelab_managers
+  become: true
+  vars:
+    portainer_url: "http://localhost:9000"
+  pre_tasks:
+    - name: Validar segredos do Vault exigidos por este play
+      ansible.builtin.include_tasks: "../tasks/validate_vault.yml"
+      vars:
+        required_secrets:
+          - portainer_admin_password
+          - homelab_domain
+          - grafana_admin_password
+          - pve_exporter_token_value
+  tasks:
+    - name: Fazer Login na API do Portainer
+      ansible.builtin.include_tasks: "../tasks/portainer_login.yml"
+
+    - name: Deploy da Stack Monitoring (Grafana/Loki/Prometheus/Alloy)
+      ansible.builtin.include_tasks: "../tasks/portainer_stack.yml"
+      vars:
+        stack_name: "monitoring"
+        stack_repo_url: "{{ github_repo_url }}"
+        stack_repo_ref: "{{ github_repo_branch }}"
+        stack_compose_path: "docker/monitoring/swarm/compose.yml"
+        stack_env:
+          - name: "FQDN_GRAFANA"
+            value: "{{ fqdn_grafana }}"
+          - name: "GF_SECURITY_ADMIN_PASSWORD"
+            value: "{{ grafana_admin_password }}"
+          - name: "PVE_TOKEN_NAME"
+            value: "{{ pve_exporter_token_name }}"
+          - name: "PVE_TOKEN_VALUE"
+            value: "{{ pve_exporter_token_value }}"
+        portainer_endpoint_id: "{{ endpoint_id }}"
+      no_log: true
+
+    - name: Deploy da Stack Statping (Status Page)
+      ansible.builtin.include_tasks: "../tasks/portainer_stack.yml"
+      vars:
+        stack_name: "statping"
+        stack_repo_url: "{{ github_repo_url }}"
+        stack_repo_ref: "{{ github_repo_branch }}"
+        stack_compose_path: "docker/statping/swarm/compose.yml"
+        stack_env:
+          - name: "FQDN"
+            value: "{{ fqdn_statping }}"
+        portainer_endpoint_id: "{{ endpoint_id }}"
+      no_log: true
+
+    - name: Exibir status do Monitoramento
+      ansible.builtin.debug:
+        msg: "📊 Stacks de Monitoramento (Grafana/Loki/Prometheus/Alloy/Statping) cadastradas no Portainer!"

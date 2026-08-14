@@ -1,0 +1,70 @@
+// =============================================================
+// Grafana Alloy - Unified Configuration for Homelab Logs & Metrics
+// =============================================================
+
+// -------------------------------------------------------------
+// 1. RECEPTOR DE SYSLOG REMOTO (OpenWrt, OPNsense, Proxmox, OMV)
+// -------------------------------------------------------------
+loki.source.syslog "syslog_net" {
+  listener {
+    address  = "0.0.0.0:1514"
+    protocol = "udp"
+    labels   = { job = "syslog_net" }
+  }
+
+  listener {
+    address  = "0.0.0.0:1514"
+    protocol = "tcp"
+    labels   = { job = "syslog_net" }
+  }
+
+  forward_to = [loki.write.default.receiver]
+}
+
+// -------------------------------------------------------------
+// 2. COLETA DE LOGS DE CONTAINERS DOCKER LOCAIS
+// -------------------------------------------------------------
+discovery.docker "docker_containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "10s"
+}
+
+discovery.relabel "docker_logs" {
+  targets = []
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_log_stream"]
+    target_label  = "logstream"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_logging_jobname"]
+    target_label  = "job"
+  }
+}
+
+loki.source.docker "docker_logs" {
+  host             = "unix:///var/run/docker.sock"
+  targets          = discovery.docker.docker_containers.targets
+  forward_to       = [loki.write.default.receiver]
+  relabel_rules    = discovery.relabel.docker_logs.rules
+  refresh_interval = "10s"
+}
+
+// -------------------------------------------------------------
+// 3. ENVIO DIRETO PARA O LOKI
+// -------------------------------------------------------------
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+  external_labels = {
+    cluster = "homelab"
+  }
+}

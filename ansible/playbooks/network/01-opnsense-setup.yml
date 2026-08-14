@@ -1,0 +1,106 @@
+---
+- name: "OPNsense - Padronização, Instalação de Plugins e Restauração de Configuração"
+  hosts: opnsense
+  become: true
+  gather_facts: false
+  pre_tasks:
+    # Este play SUBSTITUI o /conf/config.xml inteiro e recarrega tudo. Se um
+    # segredo faltar, o firewall receberia senha vazia e o acesso à GUI e a WAN
+    # cairiam. Por isso a validação vem antes de qualquer escrita, e nenhuma
+    # dessas variáveis tem `| default(...)`.
+    - name: Validar segredos do Vault exigidos por este play
+      ansible.builtin.include_tasks: "../../tasks/validate_vault.yml"
+      vars:
+        required_secrets:
+          - opnsense_root_password_hash
+          - opnsense_admin_username
+          - opnsense_admin_password_hash
+          - opnsense_snmp_ro_community
+          - opnsense_pppoe_username
+          - opnsense_pppoe_password_b64
+          - opnsense_gui_cert_crt_b64
+          - opnsense_gui_cert_key_b64
+  tasks:
+    # Sem ignore_errors: se o backup falhar, ABORTA. A task seguinte sobrescreve
+    # o /conf/config.xml inteiro — seguir sem cópia de segurança deixaria o
+    # firewall sem ponto de retorno.
+    - name: Fazer backup da configuração atual do OPNsense no servidor remoto com timestamp
+      ansible.builtin.shell: "cp /conf/config.xml /conf/config.xml.bak.$(date +%Y%m%d_%H%M%S)"
+      changed_when: true
+
+    - name: Garantir a instalação dos plugins essenciais (Node Exporter, QEMU Guest Agent, CrowdSec, mDNS, UPnP, IGMP Proxy, Speedtest, Monit, Arpwatch)
+      ansible.builtin.command: "pkg install -y {{ item }}"
+      loop:
+        - os-node_exporter
+        - os-qemu-guest-agent
+        - os-crowdsec
+        - os-mdns-repeater
+        - os-upnp
+        - os-igmp-proxy
+        - os-speedtest-community
+        - os-monit
+        - os-arpwatch
+        - os-osint
+        - os-theme-rebellion
+      ignore_errors: true
+
+    - name: Habilitar módulos de sensores térmicos de CPU em /boot/loader.conf
+      ansible.builtin.lineinfile:
+        path: /boot/loader.conf
+        line: "{{ item }}"
+        create: true
+      loop:
+        - 'coretemp_load="YES"'
+        - 'amdtemp_load="YES"'
+      ignore_errors: true
+
+    - name: Carregar módulos térmicos no kernel em tempo de execução
+      ansible.builtin.command: "kldload {{ item }}"
+      loop:
+        - coretemp
+        - amdtemp
+      ignore_errors: true
+
+    - name: Configurar Banner Legal de Aviso no SSH (/etc/motd)
+      ansible.builtin.copy:
+        dest: /etc/motd
+        content: |
+          ====================================================================
+          ⚠️  AVISO DE SEGURANÇA - ACESSO RESTRITO AO OPNsense HOMELAB
+          ====================================================================
+          Este sistema e exclusivo para uso autorizado. Todo acesso e comandos
+          executados via SSH sao monitorados e registrados em log continuo.
+          Acessos nao autorizados estao sujeitos a bloqueio e auditoria.
+          ====================================================================
+        owner: root
+        group: wheel
+        mode: '0644'
+      ignore_errors: true
+
+    # no_log: o arquivo renderizado contém hashes de senha, a credencial PPPoE e
+    # a chave privada TLS da GUI. validate: XML inválido aborta ANTES de escrever.
+    - name: Aplicar novo arquivo /conf/config.xml a partir do Template Jinja2
+      ansible.builtin.template:
+        src: "../../templates/network/opnsense_config.xml.j2"
+        dest: /conf/config.xml
+        owner: root
+        group: wheel
+        mode: '0640'
+        backup: true
+        validate: 'xmllint --noout %s'
+      no_log: true
+
+    - name: Recarregar todos os serviços e regras do OPNsense sem reiniciar
+      ansible.builtin.command: /usr/local/etc/rc.reload_all
+
+    - name: Garantir que os serviços do Node Exporter, QEMU Guest Agent e Monit estejam ativos
+      ansible.builtin.command: "{{ item }}"
+      loop:
+        - /usr/local/etc/rc.d/node_exporter restart
+        - /usr/local/etc/rc.d/qemu-guest-agent restart
+        - /usr/local/etc/rc.d/monit restart
+      ignore_errors: true
+
+    - name: Exibir confirmação do OPNsense
+      ansible.builtin.debug:
+        msg: "🛡️ OPNsense atualizado! Plugins (Node Exporter, Guest Agent, CrowdSec, mDNS, UPnP, IGMP, Speedtest, Monit, Sensores Térmicos) ativos e serviços recarregados!"

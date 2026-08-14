@@ -1,0 +1,27 @@
+---
+# =============================================================================
+# DEV — variáveis específicas deste ambiente
+# =============================================================================
+# Carrega depois de 00-common.yml e antes de vault.yml (merge alfabético).
+# Só entra aqui o que DIFERE entre prod e dev. O comum está em
+# ../../../_common/all.yml, o secreto em vault.yml.
+# =============================================================================
+
+# Rótulo do ambiente. Vai para `external_labels` do Prometheus e para o campo
+# `cluster` do Alloy, então métrica e log de dev nunca se misturam com prod.
+homelab_env: "dev"
+
+# Branch que o Portainer clona nas stacks GitOps. Mudar isto muda o que roda.
+github_repo_branch: "refs/heads/develop"
+
+# CA do ACME usada pelo resolver `cloudflare` do Traefik.
+# Dev fica de propósito na CA de staging do Let's Encrypt, nunca na real:
+# - Os dois ambientes disputariam certificado se emitissem para os mesmos
+#   FQDNs, e o rate limit do Let's Encrypt é de 5 certificados por domínio
+#   por semana — um `docker stack deploy` de teste em dev pode queimar a
+#   cota que produção precisa.
+# - Por isso o vault de dev tem que usar `homelab_domain` com prefixo
+#   `dev-` (ou subdomínio próprio, ex.: `dev.exemplo.com`) e senhas
+#   distintas das de produção. Nunca reaproveitar o `homelab_domain` nem as
+#   senhas do vault de prod aqui.
+acme_caserver: "https://acme-staging-v02.api.letsencrypt.org/directory"

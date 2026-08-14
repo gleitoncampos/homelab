@@ -1,0 +1,174 @@
+---
+# =============================================================================
+# VARIÁVEIS COMUNS AOS DOIS AMBIENTES — única cópia
+# =============================================================================
+# Carregado por prod e dev via symlink `group_vars/all/00-common.yml`. Os
+# arquivos de `group_vars/all/` fazem merge em ordem alfabética, então a
+# precedência é de três camadas:
+#
+#   00-common.yml  (este)   →  main.yml  (por ambiente)  →  vault.yml  (vence)
+#
+# O que vive aqui: nada que seja segredo e nada que difira entre ambientes.
+# Por ambiente (`<env>/group_vars/all/main.yml`): homelab_env,
+# github_repo_branch, acme_caserver.
+# Segredo ou nocivo em repo público (`vault.yml`): homelab_domain,
+# ssh_public_key, senhas, tokens.
+# =============================================================================
+
+# Configurações do Sistema Operacional
+timezone: "America/Sao_Paulo"
+system_user: "nuvidio"
+containers_base_dir: "/srv/containers"
+
+# Diretório onde os compose.yml das stacks são copiados para o host antes do
+# deploy (`docker stack deploy`). Não confundir com `containers_base_dir`:
+# aquele é dado persistente (ex.: /srv/containers/portainer é o /data do
+# Portainer); este é só o manifesto YAML da stack em si.
+stack_manifest_dir: "/srv/stacks"
+
+# Repositório GitHub para Stacks GitOps no Portainer.
+# `github_repo_branch` NÃO fica aqui: é o que separa prod de dev. Ver
+# <env>/group_vars/all/main.yml.
+github_repo_url: "https://github.com/gleitoncampos/homelab.git"
+
+# Pacotes Base
+base_packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - ufw
+  - fail2ban
+  - htop
+  - iotop
+  - git
+  - rsyslog
+  - syncthing
+  # community.docker.docker_swarm, docker_network e docker_stack importam o
+  # SDK Python (Docker SDK for Python) NO HOST REMOTO, não no control node.
+  # Sem isso o play falha com "Failed to import the required Python library
+  # (Docker SDK for Python)".
+  - python3-docker
+  # python3-jsondiff pode não existir no Debian 13. Se faltar no repositório,
+  # a alternativa é usar ansible.builtin.command: docker stack deploy no lugar
+  # do módulo community.docker.docker_stack.
+  - python3-jsondiff
+  - python3-yaml
+
+# Configurações de Rede e Swarm
+swarm_network_name: "traefik_public"
+
+# Firewall (UFW) - Portas Liberadas
+allowed_tcp_ports:
+  - "22"    # SSH
+  - "80"    # HTTP (Traefik Ingress)
+  - "443"   # HTTPS (Traefik Ingress)
+  - "1514"  # Alloy Syslog Receiver (TCP)
+# 9000 (Portainer) e 8384 (Syncthing) saíram daqui: ambos são alcançados pelo
+# Traefik na overlay, e liberar para "Anywhere" só anunciava a porta. O publish
+# do Portainer continua existindo (a automação chama localhost:9000 no próprio
+# manager), mas quem fecha esse tipo de porta é regra em DOCKER-USER, não UFW —
+# o DNAT do Docker acontece antes da chain filter. Ver comentário no
+# docker/portainer/swarm/compose.yml.
+
+allowed_udp_ports:
+  - "1514"  # Alloy Syslog Receiver (UDP)
+
+# Portas que o Swarm precisa liberadas ENTRE os nós do cluster e que hoje
+# faltam no UFW, deixando a rede overlay sem conseguir cruzar entre hosts.
+# A liberação é por `src` dos outros nós do cluster, NUNCA "Anywhere" — quem
+# efetivamente consome esta lista e monta a regra UFW é outra tarefa em
+# `01-bootstrap-os.yml`, aqui é só a definição das portas.
+swarm_cluster_ports:
+  - port: "2377"
+    proto: "tcp"  # Comunicação de management do cluster (docker swarm join)
+  - port: "7946"
+    proto: "tcp"  # Descoberta de nós (gossip protocol)
+  - port: "7946"
+    proto: "udp"  # Descoberta de nós (gossip protocol)
+  - port: "4789"
+    proto: "udp"  # VXLAN do data plane (overlay network)
+
+# Mapa de FQDNs derivado de `homelab_domain`. `homelab_domain` NÃO é definido
+# aqui: vem do vault, porque domínio real em arquivo rastreado de repo
+# público entrega a superfície de ataque mapeada. Jinja é lazy, então
+# referenciar uma var que só existe no vault funciona normalmente aqui.
+# `fqdn_prometheus`, `fqdn_loki` e `fqdn_influxdb` não existem de propósito:
+# por decisão de arquitetura, esses três deixaram de ser publicados no
+# Traefik.
+fqdn_traefik: "proxy.{{ homelab_domain }}"
+fqdn_portainer: "portainer.{{ homelab_domain }}"
+fqdn_grafana: "grafana.{{ homelab_domain }}"
+fqdn_statping: "status.{{ homelab_domain }}"
+fqdn_paperless: "paperless.{{ homelab_domain }}"
+fqdn_actualbudget: "finance.{{ homelab_domain }}"
+fqdn_vikunja: "tasks.{{ homelab_domain }}"
+#
+# ⚠️ CONFIRA OS SUBDOMÍNIOS ABAIXO ANTES DE RODAR 04/05 CONTRA PRODUÇÃO.
+# Estas 8 stacks já rodam em produção com o FQDN digitado à mão no formulário
+# do Portainer — valor que só existe no BoltDB e não está em lugar nenhum do
+# git, então não dá para derivá-lo, só adivinhar pelo nome do serviço. O env do
+# vault SOBRESCREVE o do Portainer no redeploy: subdomínio errado aqui troca o
+# Host() da rota por um que não tem registro DNS, e o serviço some do Traefik.
+# Ajuste cada linha para o subdomínio que realmente existe no seu DNS.
+fqdn_wallos: "wallos.{{ homelab_domain }}"
+fqdn_thrifty: "thrifty.{{ homelab_domain }}"
+fqdn_thrifty_api: "thrifty-api.{{ homelab_domain }}"
+fqdn_cronicle: "cronicle.{{ homelab_domain }}"
+fqdn_linkwarden: "links.{{ homelab_domain }}"
+fqdn_stirling: "pdf.{{ homelab_domain }}"
+fqdn_bytestash: "snippets.{{ homelab_domain }}"
+fqdn_ittools: "tools.{{ homelab_domain }}"
+
+# Split-horizon de DNS: faz `*.<homelab_domain>` resolver para o manager do
+# Swarm DENTRO de casa, em vez de sair para o IP público. É o que sustenta o
+# acesso interno a todos os serviços atrás do Traefik.
+#
+# Precisa estar aqui, e não só no vault, porque o `<hosts>` do Unbound é
+# reescrito inteiro pelo opnsense_config.xml.j2: uma lista vazia não "mantém o
+# que já existe", ela APAGA. A produção tem exatamente este curinga, e perdê-lo
+# derruba o acesso interno a todos os serviços de uma vez.
+#
+# Para acrescentar overrides pontuais sem perder este, defina
+# `unbound_host_overrides_extra` no vault do ambiente.
+unbound_host_overrides: "{{ [{'hostname': '*', 'domain': homelab_domain, 'server': hostvars[groups['homelab_managers'][0]].ansible_host}] + (unbound_host_overrides_extra | default([])) }}"
+
+# IPs de destino de syslog/netflow derivados do inventário (e não mais um
+# literal fixo, ex.: 198.18.20.10, hardcoded em
+# inventories/prod/group_vars/network.yml). Ficar em `all` (e não em
+# network.yml) é o que faz tanto os nós do cluster quanto os dispositivos de
+# rede resolverem a mesma var, e faz o inventário de dev apontar sozinho para
+# o manager de dev.
+syslog_server_ip: "{{ hostvars[groups['homelab_managers'][0]].ansible_host }}"
+netflow_collector_ip: "{{ syslog_server_ip }}"
+
+# Parâmetros de coleta e retenção do stack de observabilidade (Prometheus +
+# Loki), comuns aos dois ambientes.
+prometheus_scrape_interval: "15s"
+prometheus_retention_time: "30d"
+prometheus_retention_size: "8GB"
+loki_retention_period: "336h"
+
+# Arquivos de configuração dos sidecars de monitoramento que serão
+# templatados depois. `src` é relativo a `docker/monitoring/swarm/`.
+monitoring_sidecar_files:
+  - src: "prometheus.yml.j2"
+    dest: "/srv/containers/prometheus/prometheus.yml"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  - src: "loki-config.yml"
+    dest: "/srv/containers/loki/loki-config.yml"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  - src: "config.alloy"
+    dest: "/srv/containers/alloy/config.alloy"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  - src: "datasources.yml"
+    dest: "/srv/containers/grafana/datasources.yml"
+    owner: "root"
+    group: "root"
+    mode: "0644"

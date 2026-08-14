@@ -1,0 +1,68 @@
+---
+# Task reutilizável para autenticação na API do Portainer
+#
+# `portainer_admin_password` vem do Ansible Vault
+# (inventories/<env>/group_vars/all/vault.yml).
+# Não use `| default(...)` aqui: a task abaixo CRIA a conta de admin no primeiro
+# boot, então um default transformaria "vault ausente" em "Portainer provisionado
+# com senha pública". A presença da variável é validada nos `pre_tasks` do play
+# via tasks/validate_vault.yml.
+#
+# `no_log: true` em toda task que carrega a senha ou o JWT: o ansible.cfg usa
+# `stdout_callback = yaml`, que imprime o body completo da requisição em falha
+# ou com -v.
+
+- name: Tentar autenticação de admin na API do Portainer
+  ansible.builtin.uri:
+    url: "http://localhost:9000/api/auth"
+    method: POST
+    body_format: json
+    body:
+      username: "admin"
+      password: "{{ portainer_admin_password }}"
+    status_code: [200, 422, 400, 404]
+  register: portainer_auth_try
+  no_log: true
+
+- name: Inicializar senha de admin se for o primeiro boot do Portainer
+  ansible.builtin.uri:
+    url: "http://localhost:9000/api/users/admin/init"
+    method: POST
+    body_format: json
+    body:
+      username: "admin"
+      password: "{{ portainer_admin_password }}"
+    status_code: [200, 409]
+  when: portainer_auth_try.status != 200
+  no_log: true
+
+- name: Obter token JWT do Portainer
+  ansible.builtin.uri:
+    url: "http://localhost:9000/api/auth"
+    method: POST
+    body_format: json
+    body:
+      username: "admin"
+      password: "{{ portainer_admin_password }}"
+    status_code: 200
+  register: portainer_login
+  no_log: true
+
+- name: Definir cabeçalho JWT de Autenticação
+  ansible.builtin.set_fact:
+    portainer_jwt: "{{ portainer_login.json.jwt }}"
+    portainer_headers:
+      Authorization: "Bearer {{ portainer_login.json.jwt }}"
+  no_log: true
+
+- name: Obter ID do Endpoint Swarm no Portainer
+  ansible.builtin.uri:
+    url: "http://localhost:9000/api/endpoints"
+    method: GET
+    headers: "{{ portainer_headers }}"
+    status_code: 200
+  register: portainer_endpoints
+
+- name: Definir Endpoint ID do Swarm
+  ansible.builtin.set_fact:
+    endpoint_id: "{{ portainer_endpoints.json[0].Id }}"

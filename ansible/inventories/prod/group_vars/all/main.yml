@@ -1,0 +1,20 @@
+---
+# =============================================================================
+# PRODUÇÃO — variáveis específicas deste ambiente
+# =============================================================================
+# Carrega depois de 00-common.yml e antes de vault.yml (merge alfabético).
+# Só entra aqui o que DIFERE entre prod e dev. O comum está em
+# ../../../_common/all.yml, o secreto em vault.yml.
+# =============================================================================
+
+# Rótulo do ambiente. Vai para `external_labels` do Prometheus e para o campo
+# `cluster` do Alloy, então métrica e log de dev nunca se misturam com prod.
+homelab_env: "prod"
+
+# Branch que o Portainer clona nas stacks GitOps. Mudar isto muda o que roda.
+github_repo_branch: "refs/heads/main"
+
+# CA do ACME usada pelo resolver `cloudflare` do Traefik.
+# Produção emite da CA real do Let's Encrypt. Dev usa staging para não queimar
+# o rate limit da conta (5 certificados por domínio por semana).
+acme_caserver: "https://acme-v02.api.letsencrypt.org/directory"

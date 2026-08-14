@@ -1,0 +1,34 @@
+services:
+  composerize:
+    image: oaklight/composerize:latest
+    #ports:
+    #  - "8080:80"
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      labels:
+        - "traefik.enable=true"
+          # Rota para /
+        - "traefik.http.routers.composerize.rule=Host(\"${FQDN}\")"
+        - "traefik.http.routers.composerize.entrypoints=websecure"
+        - "traefik.http.routers.composerize.service=composerize"
+
+        # Rota para /decomposerize
+        - "traefik.http.routers.decomposerize.rule=Host(\"${FQDN}\") && PathPrefix(`/decomposerize`)"
+        - "traefik.http.routers.decomposerize.entrypoints=websecure"
+        - "traefik.http.routers.decomposerize.service=composerize"
+
+        # Rota para /composeverter
+        - "traefik.http.routers.composeverter.rule=Host(\"${FQDN}\") && PathPrefix(`/composeverter`)"
+        - "traefik.http.routers.composeverter.entrypoints=websecure"
+        - "traefik.http.routers.composeverter.service=composerize"
+
+        # Serviço apontando para porta interna do container
+        - "traefik.http.services.composerize.loadbalancer.server.port=80"
+        - "traefik.http.routers.composerize.tls.certresolver=cloudflare"
+    networks:
+      - traefik_public
+
+networks:
+  traefik_public:
+    external: true

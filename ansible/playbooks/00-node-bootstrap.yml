@@ -1,0 +1,113 @@
+---
+# =============================================================================
+# 00 - Bootstrap de Acesso do Nó (ponte root -> usuário de automação)
+# =============================================================================
+# LACUNA QUE ESTE PLAYBOOK FECHA:
+#   O Terraform provisiona os CTs LXC e injeta a chave SSH via
+#   `initialization.user_account.keys`. Isso escreve APENAS em
+#   `/root/.ssh/authorized_keys` — não cria nenhum usuário. Todo o resto do
+#   repositório (inventories/*/hosts.ini) assume `ansible_user={{ system_user }}`
+#   (hoje "nuvidio") com `become` via sudo. Resultado: um CT recém-criado pelo
+#   Terraform é inalcançável por `01-bootstrap-os.yml` e por todos os
+#   playbooks seguintes — eles tentam logar como um usuário que não existe.
+#
+#   Nos nós de produção esse usuário existe porque foi criado manualmente por
+#   um `bootstrap.sh` rodado à mão, uma única vez, nunca repetido nem
+#   automatizado. Este playbook substitui aquele passo manual.
+#
+# QUANDO RODAR:
+#   Logo depois do `terraform apply` que cria o CT (ele só tem acesso root via
+#   chave SSH nesse momento) e ANTES de `01-bootstrap-os.yml` (que já espera
+#   `ansible_user={{ system_user }}` funcionando com sudo sem senha).
+#
+# COMO RODAR (a partir de ansible/, contra o CT novo de dev — já está no
+# grupo `dev_bootstrap` do inventário, então nenhum `-e target=` é necessário):
+#   ansible-playbook -i inventories/dev/hosts.ini playbooks/00-node-bootstrap.yml
+#
+#   Em produção, o host novo não está em `dev_bootstrap` — informe-o explicitamente:
+#   ansible-playbook -i inventories/prod/hosts.ini \
+#     playbooks/00-node-bootstrap.yml -e target=novo-no-prod
+#
+# POR QUE O ALVO É "{{ target | default('dev_bootstrap') }}":
+#   Por padrão o play só bate no grupo `dev_bootstrap` — nunca em produção por
+#   acidente, mesmo que alguém rode sem `--limit`. Para bootstrapar um host
+#   fora desse grupo (ex.: um nó de produção recém-criado, que não teria por
+#   que estar em `dev_bootstrap`), passe `-e target=<nome-do-host>` (ou
+#   qualquer padrão de host válido) explicitamente:
+#     ansible-playbook -i inventories/prod/hosts.ini \
+#       playbooks/00-node-bootstrap.yml -e target=novo-no-prod
+#   Uma união com `all` (usada antes) equivale, na prática, a `all` — rodar
+#   sem `--limit` bateria em TODOS os hosts do inventário, root incluso, contra
+#   nós de produção já bootstrapados. O default seguro evita esse acidente; o
+#   `-e target=` continua permitindo o caso legítimo de mirar um host fora do
+#   grupo.
+#
+# POR QUE remote_user root SEM become:
+#   No momento em que este playbook roda, o único acesso que existe é
+#   root via chave SSH (o que o Terraform escreveu). Não há usuário sudo
+#   ainda — become falharia. `become: false` aqui é intencional e sobrepõe o
+#   `become = True` global de `ansible.cfg`.
+# =============================================================================
+
+- name: "00 - Bootstrap de Acesso do Nó, de root para {{ system_user | default('usuário de automação') }}"
+  hosts: "{{ target | default('dev_bootstrap') }}"
+  remote_user: root
+  become: false
+  gather_facts: false
+  # Sem gather_facts: um LXC recém-criado pode não ter nenhum interpretador
+  # Python ainda — a coleta de facts (implícita antes de pre_tasks quando
+  # gather_facts não é false) exigiria Python e falharia antes mesmo de
+  # começar. Instalamos o Python via `raw` explicitamente abaixo.
+  pre_tasks:
+    - name: Validar segredos do Vault exigidos por este playbook
+      ansible.builtin.include_tasks: "../tasks/validate_vault.yml"
+      vars:
+        required_secrets:
+          - ssh_public_key
+          - system_user
+
+    - name: Garantir presença de python3 (via raw, sem depender de interpretador remoto)
+      ansible.builtin.raw: |
+        set -e
+        if command -v python3 >/dev/null 2>&1; then
+          echo "PYTHON3_JA_PRESENTE"
+        else
+          (apt-get update -qq && apt-get install -y -qq python3) || \
+          (apk add --no-cache python3) || \
+          (dnf install -y python3) || \
+          (yum install -y python3)
+          echo "PYTHON3_INSTALADO"
+        fi
+      register: _python3_bootstrap
+      changed_when: "'PYTHON3_INSTALADO' in _python3_bootstrap.stdout"
+
+  tasks:
+    - name: "Criar o usuário de automação {{ system_user }}"
+      ansible.builtin.user:
+        name: "{{ system_user }}"
+        shell: /bin/bash
+        create_home: true
+        groups: sudo
+        append: true
+        state: present
+
+    - name: "Instalar a chave SSH pública do administrador para {{ system_user }}"
+      ansible.posix.authorized_key:
+        user: "{{ system_user }}"
+        key: "{{ ssh_public_key }}"
+        state: present
+      # SEM ignore_errors: uma chave inválida tem que abortar o playbook aqui
+      # e agora — não pode virar um CT criado mas inacessível por SSH depois
+      # que o root perder acesso, ou um "sucesso" que na prática trancou o nó.
+
+    - name: "Conceder sudo NOPASSWD via /etc/sudoers.d ao usuário {{ system_user }}"
+      ansible.builtin.copy:
+        dest: "/etc/sudoers.d/{{ system_user }}"
+        content: "{{ system_user }} ALL=(ALL) NOPASSWD:ALL\n"
+        owner: root
+        group: root
+        mode: "0440"
+        validate: "visudo -cf %s"
+      # validate é obrigatório: um sudoers.d malformado trava `become` de
+      # TODOS os playbooks seguintes para este nó, inclusive o próximo
+      # (01-bootstrap-os.yml), que depende de sudo funcionando de primeira.

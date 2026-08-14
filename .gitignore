@@ -1,0 +1,60 @@
+# =============================================================================
+# ESTE REPOSITÓRIO É PÚBLICO.
+# O critério aqui não é só "é segredo?", mas "é nocivo em repositório aberto?".
+# IP interno, MAC, hostname de dispositivo e FQDN real entram na segunda regra.
+# =============================================================================
+
+# --- Editor / local ---------------------------------------------------------
+.plan
+.vscode/
+
+# --- Ansible Vault & segredos -----------------------------------------------
+# Casa em qualquer profundidade, porque o vault vive por ambiente em
+# ansible/inventories/<env>/group_vars/all/vault.yml. Uma regra de caminho fixo
+# deixaria de casar no próximo restructure e um `git add -A` publicaria o vault.
+**/vault.yml
+!**/vault.yml.example
+.ansible_vault_pass*
+*.vault_pass
+
+# --- Inventário -------------------------------------------------------------
+# hosts.ini carrega todo IP interno do lab. Só o .example é rastreado.
+# ⚠️  Guarde backup do seu hosts.ini JUNTO do backup da senha do vault: sem os
+#    dois, um clone novo não reproduz o cluster.
+ansible/inventories/*/hosts.ini
+
+# --- Terraform --------------------------------------------------------------
+# `*.tfvars` e não `.tfvars`: o Git casa componente inteiro de caminho, então a
+# regra antiga `.tfvars` NUNCA casou `terraform.tfvars`.
+# Arquivo de plano salvo (`-out=tfplan`) contém os secrets das variáveis.
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan*
+.terraform/
+crash.log
+crash.*.log
+# .terraform.lock.hcl NÃO entra aqui: o lock DEVE ser commitado.
+
+# --- TLS / chaves privadas --------------------------------------------------
+*.pem
+*.key
+*.p12
+*.pfx
+
+# --- Runtime / ambiente -----------------------------------------------------
+.env
+.env.*
+!.env.example
+stacks.txt
+
+# --- Snapshot da produção ---------------------------------------------------
+# Arquivos REAIS copiados dos hosts, para diff contra o repo. Nunca commitar.
+prod-snapshot/
+
+# --- Relatórios internos de auditoria ---------------------------------------
+SECURITY-AUDIT.local.md
+*.local.md

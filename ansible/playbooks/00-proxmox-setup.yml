@@ -1,0 +1,389 @@
+---
+- name: "00 - Proxmox VE Host Setup, Hardening, Performance Enterprise e Exportação de Configurações"
+  hosts: proxmox
+  become: true
+  pre_tasks:
+    - name: Validar segredos do Vault exigidos por este play
+      ansible.builtin.include_tasks: "../tasks/validate_vault.yml"
+      vars:
+        required_secrets:
+          - ssh_public_key
+          - proxmox_alert_email
+  tasks:
+    - name: Corrigir repositórios oficiais do Debian Bookworm no /etc/apt/sources.list
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list
+        content: |
+          deb https://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
+          deb https://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
+          deb https://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Remover repositório PVE Enterprise não pago e Ceph Enterprise
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/apt/sources.list.d/pve-enterprise.list
+        - /etc/apt/sources.list.d/ceph.list
+
+    - name: Adicionar repositório PVE No-Subscription oficial
+      ansible.builtin.apt_repository:
+        repo: "deb http://download.proxmox.com/debian/pve bookworm pve-no-subscription"
+        state: present
+        filename: pve-no-subscription
+
+    - name: Atualizar cache do APT no Proxmox
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: dist
+
+    - name: Instalar pacotes Enterprise e ferramentas CLI modernas (ksmtuned, chrony, fail2ban, btop, ncdu, ripgrep, fzf, tmux)
+      ansible.builtin.apt:
+        name:
+          - intel-microcode
+          - amd64-microcode
+          - fail2ban
+          - smartmontools
+          - proxmox-backup-client
+          - cpufrequtils
+          - ksmtuned
+          - chrony
+          - zram-tools
+          - btop
+          - ncdu
+          - ripgrep
+          - fzf
+          - tmux
+          - htop
+          - lm-sensors
+          - sysstat
+          - zfsutils-linux
+          - curl
+          - git
+          - rsync
+          - ethtool
+        state: present
+      ignore_errors: true
+
+    - name: Garantir desduplicação de memória RAM em tempo real (KSM) ativa
+      ansible.builtin.systemd:
+        name: ksmtuned
+        state: started
+        enabled: true
+      ignore_errors: true
+
+    - name: Configurar Chrony NTP apontando para o Gateway OPNsense (198.18.10.1)
+      ansible.builtin.copy:
+        dest: /etc/chrony/chrony.conf
+        content: |
+          server 198.18.10.1 iburst
+          driftfile /var/lib/chrony/drift
+          makestep 1.0 3
+          rtcsync
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Reiniciar Chrony NTP
+      ansible.builtin.systemd:
+        name: chrony
+        state: restarted
+        enabled: true
+      ignore_errors: true
+
+    - name: Configurar Fail2ban para proteção do Proxmox Web GUI (Porta 8006)
+      ansible.builtin.copy:
+        dest: /etc/fail2ban/jail.d/proxmox.conf
+        content: |
+          [proxmox]
+          enabled = true
+          port = 8006
+          filter = proxmox
+          logpath = /var/log/daemon.log
+          maxretry = 3
+          findtime = 600
+          bantime = 3600
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Garantir serviço do Fail2ban ativo e habilitado
+      ansible.builtin.systemd:
+        name: fail2ban
+        state: started
+        enabled: true
+      ignore_errors: true
+
+    - name: Configurar CPU Performance Governor no Proxmox Host
+      ansible.builtin.copy:
+        dest: /etc/default/cpufrequtils
+        content: |
+          GOVERNOR="performance"
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Desativar serviços de High Availability (HA) em nó único Proxmox (Economia de CPU/RAM)
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: false
+      loop:
+        - pve-ha-crm
+        - pve-ha-lrm
+      ignore_errors: true
+
+    - name: Remover o aviso/popup de assinatura (No Subscription NAG Popup) na Web GUI (Idempotente)
+      ansible.builtin.shell: |
+        if ! grep -q "void({ //Ext.Msg.show" /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js; then
+          sed -Ezi.bak "s/(Ext.Msg.show\(\{\s+title: gettext\('No valid sub)/void\(\{ \/\/\1/g" /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
+          systemctl restart pveproxy.service
+        fi
+      args:
+        executable: /bin/bash
+
+    - name: Desativar serviços desnecessários do Debian Host (avahi-daemon, cups, modemmanager)
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: false
+      loop:
+        - avahi-daemon
+        - cups
+        - modemmanager
+      ignore_errors: true
+
+    - name: Configurar Blacklist de módulos de Kernel não utilizados (bluetooth, firewire)
+      ansible.builtin.copy:
+        dest: /etc/modprobe.d/blacklist-unused.conf
+        content: |
+          blacklist bluetooth
+          blacklist firewire-core
+          blacklist appletalk
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Configurar Timeout de Shell Ocioso, Aliases QoL (pve-vms, pve-top, disk-map) e Histórico Bash
+      ansible.builtin.copy:
+        dest: /etc/profile.d/homelab-qol.sh
+        content: |
+          export TMOUT=900
+          export HISTTIMEFORMAT="%F %T "
+          export HISTSIZE=50000
+          export HISTFILESIZE=100000
+          alias pve-vms='qm list'
+          alias pve-cts='pct list'
+          alias pve-top='btop'
+          alias disk-map='ncdu /'
+          alias zram-stats='zramctl'
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Reduzir Timeout de Desligamento de Serviços Travados para 15s (/etc/systemd/system.conf)
+      ansible.builtin.lineinfile:
+        path: /etc/systemd/system.conf
+        regexp: '^#?DefaultTimeoutStopSec='
+        line: 'DefaultTimeoutStopSec=15s'
+      ignore_errors: true
+
+    - name: Desativar daemon systemd-resolved para usar consulta direta de DNS no OPNsense (198.18.10.1)
+      ansible.builtin.systemd:
+        name: systemd-resolved
+        state: stopped
+        enabled: false
+      ignore_errors: true
+
+    - name: Travar resolução pvelocalhost no /etc/hosts apontando estritamente para IPv4 (127.0.0.1)
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        regexp: '.*pvelocalhost.*'
+        line: '127.0.0.1 pvelocalhost'
+      ignore_errors: true
+
+    - name: Configurar ZRAM Swap Comprimido em RAM (12GB de capacidade virtual ideal para host 16GB RAM no Intel N100)
+      ansible.builtin.copy:
+        dest: /etc/default/zramswap
+        content: |
+          ALGO=lz4
+          SIZE=12288
+          PRIORITY=100
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Reiniciar serviço ZRAM Swap
+      ansible.builtin.systemd:
+        name: zramswap
+        state: restarted
+        enabled: true
+      ignore_errors: true
+
+    - name: Configurar Hardening de Cifras e Algoritmos SSH no Debian Host
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/hardening.conf
+        content: |
+          KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512
+          Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.org,aes128-gcm@openssh.org
+          MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Configurar Sysctl Enterprise do Kernel (swappiness=10, fq_codel, somaxconn, eBPF, suid_dumpable, dirty memory, max_map_count)
+      ansible.builtin.copy:
+        dest: /etc/sysctl.d/99-proxmox-tuning.conf
+        content: |
+          vm.swappiness = 10
+          vm.vfs_cache_pressure = 50
+          vm.max_map_count = 262144
+          vm.dirty_ratio = 10
+          vm.dirty_background_ratio = 5
+          fs.file-max = 2097152
+          fs.inotify.max_user_watches = 524288
+          fs.suid_dumpable = 0
+          net.core.default_qdisc = fq_codel
+          net.core.somaxconn = 65535
+          net.core.rmem_max = 16777216
+          net.core.wmem_max = 16777216
+          net.core.netdev_max_backlog = 10000
+          net.ipv4.ip_local_port_range = 1024 65535
+          net.ipv4.ip_early_demux = 1
+          net.ipv4.conf.all.accept_source_route = 0
+          net.ipv4.conf.all.accept_redirects = 0
+          net.ipv4.conf.all.send_redirects = 0
+          net.ipv4.icmp_echo_ignore_broadcasts = 1
+          net.ipv6.conf.all.accept_redirects = 0
+          kernel.kptr_restrict = 2
+          kernel.dmesg_restrict = 1
+          kernel.unprivileged_bpf_disabled = 1
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Aplicar sysctl no Proxmox Host
+      ansible.builtin.command: "sysctl --system"
+      ignore_errors: true
+
+    - name: Configurar Regra de I/O Scheduler para SSDs (mq-deadline / kyber)
+      ansible.builtin.copy:
+        dest: /etc/udev/rules.d/60-scheduler.rules
+        content: |
+          ACTION=="add|change", KERNEL=="sd[a-z]|nvme[0-n]n[1-9]", ATTR{queue/scheduler}="mq-deadline"
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Configurar Envio Centralizado de Logs Syslog do Proxmox para o Grafana Alloy (UDP 1514)
+      ansible.builtin.copy:
+        dest: /etc/rsyslog.d/50-remote-alloy-syslog.conf
+        content: |
+          *.* @{{ syslog_server_ip }}:{{ syslog_server_port | default('1514') }}
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Reiniciar rsyslog para ativar envio centralizado de logs
+      ansible.builtin.systemd:
+        name: rsyslog
+        state: restarted
+        enabled: true
+      ignore_errors: true
+
+    - name: Configurar CPU Pinning no OPNsense VM (1 núcleo dedicado - Core 0)
+      ansible.builtin.lineinfile:
+        path: /etc/pve/qemu-server/100.conf
+        line: "affinity: 0"
+        create: false
+      ignore_errors: true
+
+    - name: Configurar pcie_aspm=performance no GRUB contra desconexões de placa de rede
+      ansible.builtin.lineinfile:
+        path: /etc/default/grub
+        regexp: '^GRUB_CMDLINE_LINUX_DEFAULT='
+        line: 'GRUB_CMDLINE_LINUX_DEFAULT="quiet pcie_aspm=performance"'
+      ignore_errors: true
+
+    - name: Atualizar GRUB se modificado
+      ansible.builtin.command: "update-grub"
+      ignore_errors: true
+
+    - name: Agendar fstrim semanal nos domingos às 02:00 AM para manutenção do SSD LVM-Thin
+      ansible.builtin.raw: '(crontab -l 2>/dev/null; echo "0 2 * * 0 /sbin/fstrim -av") | sort -u | crontab -'
+
+    - name: Agendar limpeza semanal automática de caches e imagens no Proxmox via Crontab
+      ansible.builtin.raw: '(crontab -l 2>/dev/null; echo "0 3 * * 0 pveam update && apt-get autoremove -y && apt-get clean") | sort -u | crontab -'
+
+    - name: Aplicar padronização de interfaces de rede (/etc/network/interfaces)
+      ansible.builtin.template:
+        src: ../templates/proxmox/proxmox_interfaces.j2
+        dest: /etc/network/interfaces
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Aplicar padronização de armazenamento LVM-Thin (/etc/pve/storage.cfg)
+      ansible.builtin.template:
+        src: ../templates/proxmox/proxmox_storage.j2
+        dest: /etc/pve/storage.cfg
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Aplicar padronização de Datacenter (Teclado ABNT2 pt-br e E-mail de Alertas)
+      ansible.builtin.template:
+        src: ../templates/proxmox/proxmox_datacenter.j2
+        dest: /etc/pve/datacenter.cfg
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Configurar e-mail oficial do usuário root@pam no Proxmox
+      ansible.builtin.command: "pveum user modify root@pam -email {{ proxmox_alert_email }}"
+      ignore_errors: true
+
+    - name: Configurar Chave SSH Pública do Administrador no Proxmox Host
+      ansible.posix.authorized_key:
+        user: root
+        state: present
+        key: "{{ ssh_public_key }}"
+
+    - name: Criar diretório local de exportação de backup das configurações do Proxmox
+      ansible.builtin.file:
+        path: /var/backups/proxmox_config_exports
+        state: directory
+        mode: '0755'
+
+    - name: Exportar configurações essenciais do Proxmox VE (storage, VMs, LXC, interfaces)
+      ansible.builtin.shell: |
+        tar -czf /var/backups/proxmox_config_exports/pve-configs-$(date +%Y%m%d_%H%M%S).tar.gz \
+          /etc/pve/storage.cfg \
+          /etc/pve/qemu-server/ \
+          /etc/pve/lxc/ \
+          /etc/network/interfaces \
+          /etc/hosts \
+          /etc/hostname \
+          2>/dev/null || true
+      args:
+        executable: /bin/bash
+
+    - name: Exibir confirmação do Proxmox Host
+      ansible.builtin.debug:
+        msg: "🖥️ Proxmox VE Host Enterprise padronizado! Chrony sincronizado com OPNsense (198.18.10.1), RAM KSM ativa, Fail2ban (porta 8006), Sysctl max_map_count/inotify e Syslog Alloy prontos."

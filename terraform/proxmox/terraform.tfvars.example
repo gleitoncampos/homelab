@@ -1,0 +1,33 @@
+# ==============================================================================
+# EXEMPLO de terraform.tfvars - NÃO contém nenhum valor real do homelab.
+# Copie para terraform.tfvars (git-ignorado - ver .gitignore) e substitua
+# TODOS os valores abaixo pelos reais antes de rodar `plan`/`apply`.
+#
+# Os endereços IP usados aqui são das faixas RFC 5737 (192.0.2.0/24,
+# 198.51.100.0/24, 203.0.113.0/24), reservadas pela IANA exclusivamente para
+# documentação/exemplos - de propósito, para não sugerir nenhum IP real de
+# infraestrutura de produção.
+# ==============================================================================
+
+proxmox_api_url          = "https://192.0.2.10:8006/"
+# Usuário DEDICADO com role de menor privilégio (ver README) - nunca root@pam.
+proxmox_api_token_id     = "terraform@pve!terraform"
+proxmox_api_token_secret = "SEU_TOKEN_SECRET_AQUI"
+proxmox_ssh_username     = "root"
+
+# Nomes dos dois nós físicos do cluster (não há variável única
+# "proxmox_node_name": são dois nós distintos, um por VM/CT - ver main.tf).
+proxmox_node_primary   = "<NOME-DO-NO-1>"
+proxmox_node_secondary = "<NOME-DO-NO-2>"
+
+ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... exemplo@homelab"
+
+# Endereço PCI (lspci no nó primário) da NIC física de WAN em passthrough.
+opnsense_wan_pci_id = "0000:05:00.0"
+
+# IPs estáticos (CIDR) na VLAN homelab - RFC 5737, substitua pelos reais.
+docker_swarm_node01_ip = "198.51.100.10/24"
+docker_swarm_node02_ip = "198.51.100.11/24"
+omv_nas_ip              = "198.51.100.15/24"
+dev_node_ip             = "198.51.100.20/24"
+swarm_gateway           = "198.51.100.1"

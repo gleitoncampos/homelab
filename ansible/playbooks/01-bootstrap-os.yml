@@ -1,0 +1,225 @@
+---
+- name: "01 - Bootstrap & Hardening do SO (Debian 12/13)"
+  hosts: homelab
+  become: true
+  pre_tasks:
+    - name: Validar segredos do Vault exigidos por este play
+      ansible.builtin.include_tasks: "../tasks/validate_vault.yml"
+      vars:
+        required_secrets:
+          - ssh_public_key
+  tasks:
+    - name: Configurar fuso horário (Timezone)
+      community.general.timezone:
+        name: "{{ timezone }}"
+
+    - name: Atualizar cache do APT e atualizar pacotes do sistema
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: dist
+
+    - name: Instalação de pacotes base do sistema
+      ansible.builtin.apt:
+        name: "{{ base_packages }}"
+        state: present
+
+    # --- Instalação Oficial do Docker ---
+    - name: Criar diretório para chaves GPG de repositórios
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Baixar chave GPG oficial do Docker
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/debian/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: '0644'
+
+    - name: Adicionar repositório oficial do Docker
+      ansible.builtin.apt_repository:
+        repo: "deb [arch={{ ansible_architecture }} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable"
+        state: present
+        filename: docker
+
+    - name: Instalar Docker CE, CLI, Containerd e plugins Compose/Buildx
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+        update_cache: true
+
+    - name: Garantir que o serviço do Docker esteja ativo e no boot
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Adicionar usuário ao grupo docker
+      ansible.builtin.user:
+        name: "{{ system_user }}"
+        groups: docker
+        append: true
+
+    - name: Configurar Chave SSH Pública do Administrador para os usuários root e {{ system_user }}
+      ansible.posix.authorized_key:
+        user: "{{ item }}"
+        state: present
+        key: "{{ ssh_public_key }}"
+      loop:
+        - "root"
+        - "{{ system_user }}"
+      when: ssh_public_key is defined and ssh_public_key != ""
+
+    # --- Estrutura de Diretórios de Dados (/srv/containers) ---
+    - name: Criar diretório base de dados /srv/containers
+      ansible.builtin.file:
+        path: "{{ containers_base_dir }}"
+        state: directory
+        owner: "{{ system_user }}"
+        group: docker
+        mode: '0755'
+
+    - name: Criar diretório de manifestos das stacks (compose.yml copiado pelo Portainer antes do deploy)
+      ansible.builtin.file:
+        path: "{{ stack_manifest_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Criar subpastas de serviços em /srv/containers
+      ansible.builtin.file:
+        path: "{{ containers_base_dir }}/{{ item }}"
+        state: directory
+        owner: "{{ system_user }}"
+        group: docker
+        mode: '0755'
+      loop:
+        - traefik/config
+        - portainer
+        - monitoring
+        - alloy
+        - prometheus
+        - grafana
+        - loki
+        - influxdb
+        - nextcloud
+        - paperless-ngx
+        - vikunja
+        - actual-budget
+        - firefly3
+        - wallos
+        - thrifty
+        - obsidian
+        - stirling-pdf
+        - linkwarden
+        - bytestash
+        - it-tools
+        - statping
+        - glance
+        - organizr
+        - cronicle
+        - jdownloader
+        - kasm
+        - zoneminder
+
+    - name: Restringir ownership do diretório de dados do Traefik (contém certificados/ACME)
+      ansible.builtin.file:
+        path: "{{ containers_base_dir }}/traefik/data"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    # Ownership dedicado dos volumes de dados de monitoring/observabilidade,
+    # no lugar do antigo workaround "chmod 777" que ainda aparece como
+    # comentário no compose.yml da stack monitoring. Os UIDs abaixo são os
+    # que cada imagem usa internamente para gravar em disco; usamos o
+    # número (não o nome de usuário) porque 10001 e 472 não existem como
+    # usuário no host — passar o nome faria o chown falhar com "failed to
+    # look up user". O Alloy roda como root dentro do container, então seu
+    # diretório de dados não precisa de chown (root já é o dono padrão).
+    - name: Ajustar ownership dos diretórios de dados de monitoring/observabilidade
+      ansible.builtin.file:
+        path: "{{ containers_base_dir }}/{{ item.path }}"
+        state: directory
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: "prometheus/data", owner: "65534", group: "docker", mode: "0750" }
+        - { path: "grafana/data", owner: "472", group: "docker", mode: "0750" }
+        - { path: "loki/data", owner: "10001", group: "docker", mode: "0750" }
+        - { path: "alloy/data", owner: "root", group: "docker", mode: "0750" }
+        - { path: "influxdb/config", owner: "1000", group: "docker", mode: "0750" }
+        - { path: "influxdb/db", owner: "1000", group: "docker", mode: "0750" }
+      loop_control:
+        label: "{{ item.path }}"
+
+    # --- Firewall & Hardening (UFW & Fail2ban) ---
+    # ATENÇÃO ao limite do UFW no Docker Swarm: o routing mesh do Swarm faz
+    # DNAT na chain nat/PREROUTING do iptables, que é avaliada ANTES da
+    # chain filter onde o UFW aplica `policy: deny` para tráfego de entrada.
+    # Ou seja: uma porta publicada por `ports:` em um serviço Swarm chega ao
+    # container mesmo com o UFW em "deny incoming" — o DNAT já decidiu o
+    # destino do pacote antes da regra de negação ser avaliada. Hoje isso
+    # deixa efetivamente expostas ao mundo as portas influxdb:8086 e
+    # alloy:12345, publicadas via `ports:` nos respectivos compose.yml, sem
+    # que exista (nem possa existir) uma regra UFW que as cubra. O fechamento
+    # real dessas portas é remover o `ports:` do compose e expor o serviço só
+    # via Traefik/rede overlay interna; dos serviços atuais, apenas o
+    # receptor de syslog do Alloy (porta 1514) realmente precisa manter um
+    # `ports:` publicado no host.
+    - name: Liberar portas TCP no UFW
+      community.general.ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop: "{{ allowed_tcp_ports }}"
+
+    - name: Liberar portas UDP no UFW
+      community.general.ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: udp
+      loop: "{{ allowed_udp_ports }}"
+
+    # Portas de control plane do cluster Swarm (gerência de nós, gossip da
+    # rede overlay e VXLAN dos containers). Diferente das portas acima, estas
+    # NUNCA podem ser liberadas para "Anywhere": são liberadas apenas com
+    # `src` no IP de cada peer do cluster, derivado do inventário (nunca IP
+    # literal). Sem esta regra a rede overlay não atravessa os nós porque o
+    # tráfego de cluster de um peer é bloqueado pela política "deny incoming".
+    - name: Liberar portas de cluster do Swarm no UFW apenas para os peers do inventário
+      community.general.ufw:
+        rule: allow
+        port: "{{ item.0.port }}"
+        proto: "{{ item.0.proto }}"
+        src: "{{ hostvars[item.1].ansible_host }}"
+      loop: "{{ swarm_cluster_ports | product(groups['homelab'] | difference([inventory_hostname])) | list }}"
+      loop_control:
+        label: "{{ item.0.proto }}/{{ item.0.port }} <- {{ item.1 }}"
+
+    - name: Ativar UFW Firewall com política padrão de negar conexões de entrada
+      community.general.ufw:
+        state: enabled
+        policy: deny
+        direction: incoming
+
+    - name: Garantir que o serviço Fail2ban esteja ativo e no boot
+      ansible.builtin.systemd:
+        name: fail2ban
+        state: started
+        enabled: true
+
+    # --- Syncthing ---
+    - name: Garantir que o serviço Syncthing esteja ativo para o usuário
+      ansible.builtin.systemd:
+        name: "syncthing@{{ system_user }}"
+        state: started
+        enabled: true

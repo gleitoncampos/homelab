@@ -1,0 +1,16 @@
+dir: local
+	path /var/lib/vz
+	content iso,vztmpl,backup
+
+lvmthin: local-lvm
+	thinpool data
+	vgname pve
+	content images,rootdir
+
+cifs: NAS_STORAGE
+	path /mnt/pve/NAS_STORAGE
+	server {{ hostvars[groups['omv'][0]].ansible_host }}
+	share NAS_BACKUP
+	content backup,vztmpl,iso
+	prune-backups keep-all=1
+	username smb

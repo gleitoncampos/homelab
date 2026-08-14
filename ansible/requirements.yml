@@ -1,0 +1,33 @@
+---
+# =============================================================================
+# COLLECTIONS GALAXY EXIGIDAS PELOS PLAYBOOKS DESTE REPOSITÓRIO
+# =============================================================================
+# Nenhuma destas três collections vinha declarada em lugar nenhum antes deste
+# arquivo — cada playbook simplesmente assumia que `community.docker`,
+# `community.general` e `ansible.posix` já estavam instaladas no control node.
+# Isso funciona por acidente enquanto a coleção "core" do pacote `ansible`
+# (em oposição a `ansible-core`) as traz pré-instaladas, e quebra silenciosamente
+# em qualquer ambiente que só tenha `ansible-core` — o erro só aparece na hora
+# de rodar, como "couldn't resolve module/action" em cada task.
+#
+# Instalar (a partir de ansible/):
+#   ansible-galaxy collection install -r requirements.yml
+#
+# Módulos consumidos de cada collection, hoje, no código deste repositório:
+#   community.docker  -> docker_swarm, docker_network, docker_stack
+#                        (02-bootstrap-cluster.yml)
+#   community.general -> timezone, ufw (01-bootstrap-os.yml)
+#   ansible.posix     -> authorized_key (00-node-bootstrap.yml)
+#
+# As versões mínimas abaixo são as primeiras que trazem os módulos usados com
+# o comportamento assumido pelo código atual — não são as versões instaladas
+# no momento em que este arquivo foi escrito. Rode o comando acima e confira
+# `ansible-galaxy collection list` se um playbook falhar por módulo ausente.
+# =============================================================================
+collections:
+  - name: community.docker
+    version: ">=3.4.0"
+  - name: community.general
+    version: ">=8.0.0"
+  - name: ansible.posix
+    version: ">=1.5.0"

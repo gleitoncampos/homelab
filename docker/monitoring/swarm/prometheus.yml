@@ -1,0 +1,207 @@
+// ----------------------------------------------------------------------
+// 1. MATCH DE ARQUIVOS (DISCOVERY)
+// ----------------------------------------------------------------------
+
+// Logs do Sistema Local
+local.file_match "system" {
+  path_targets = [{
+    __address__ = "localhost",
+    __path__    = "/var/log/syslog",
+    job         = "RSYSLOG",
+  }]
+}
+
+// OpenWrt
+local.file_match "openwrt" {
+  path_targets = [{
+    __address__ = "localhost",
+    __path__    = "/var/log/rsyslog/openwrt/OPENWRT.log",
+    job         = "OPENWRT",
+  }]
+}
+
+// OPNsense
+local.file_match "opnsense" {
+  path_targets = [{
+    __address__ = "localhost",
+    __path__    = "/var/log/rsyslog/opnsense/*.log",
+    job         = "OPNSENSE",
+  }]
+}
+
+// OpenMediaVault
+local.file_match "omv" {
+  path_targets = [{
+    __address__ = "localhost",
+    __path__    = "/var/log/rsyslog/omv/openmediavault.log",
+    job         = "OMV",
+  }]
+}
+
+// Proxmox
+local.file_match "proxmox" {
+  path_targets = [
+    {
+      __address__ = "localhost",
+      __path__    = "/var/log/rsyslog/pve/PVE01.log",
+      job         = "PVE01",
+    },
+    {
+      __address__ = "localhost",
+      __path__    = "/var/log/rsyslog/pve/PVE02.log",
+      job         = "PVE02",
+    },
+  ]
+}
+
+// Docker Critical
+local.file_match "docker_critical" {
+  path_targets = [{
+    __address__ = "localhost",
+    __path__    = "/var/log/vm/docker-critical.log",
+    job         = "docker-critical",
+  }]
+}
+
+// ----------------------------------------------------------------------
+// 2. PIPELINES DE PROCESSAMENTO (PARSERS & LABELS)
+// ----------------------------------------------------------------------
+
+// Pipeline para o OPNsense
+loki.process "opnsense_pipeline" {
+  forward_to = [loki.write.default.receiver]
+
+  // Extrai o serviço principal (unbound, filterlog, etc)
+  stage.regex {
+    expression = "(?P<service>unbound|filterlog|dhcpd|kernel|system)"
+  }
+
+  // Extração do tipo de consulta DNS tratando query e reply
+  stage.regex {
+    expression = "(reply|query):\\s+\\S+\\s+\\S+\\s+(?P<dns_type>A|AAAA|TXT|MX|CNAME|PTR)"
+  }
+
+  // Força level="info" para evitar falso positivo do NOERROR como ERRO no Grafana
+  stage.static_labels {
+    values = {
+      level = "info",
+    }
+  }
+
+  stage.labels {
+    values = {
+      service  = "service",
+      dns_type = "dns_type",
+      level    = "level",
+    }
+  }
+}
+
+// Pipeline para Proxmox VE
+loki.process "proxmox_pipeline" {
+  forward_to = [loki.write.default.receiver]
+
+  stage.regex {
+    expression = "^(?P<time>\\S+\\s+\\d+\\s+\\d+:\\d+:\\d+)\\s+(?P<host>\\S+)\\s+(?P<service>[^\\[\\:]+)(\\[(?P<pid>\\d+)\\])?:\\s+((?P<level>INFO|WARNING|ERROR|CRITICAL):)?\\s*(?P<message>.*)$"
+  }
+
+  stage.labels {
+    values = {
+      service = "service",
+      level   = "level",
+    }
+  }
+}
+
+// Pipeline para OpenWrt
+loki.process "openwrt_pipeline" {
+  forward_to = [loki.write.default.receiver]
+
+  stage.regex {
+    expression = "^(?P<time>\\S+\\s+\\d+\\s+\\d+:\\d+:\\d+)\\s+(?P<host>\\S+)\\s+(?P<facility>daemon|kern|user)\\.(?P<level>err|warn|info|notice|debug)\\s+(?P<service>[^:]+):"
+  }
+
+  stage.labels {
+    values = {
+      service = "service",
+      level   = "level",
+    }
+  }
+}
+
+// Pipeline para Logs do Docker (JSON Format)
+loki.process "docker_pipeline" {
+  forward_to = [loki.write.default.receiver]
+
+  stage.json {
+    expressions = {
+      log    = "log",
+      stream = "stream",
+    }
+  }
+
+  stage.labels {
+    values = {
+      stream = "stream",
+    }
+  }
+
+  stage.output {
+    source = "log"
+  }
+}
+
+// ----------------------------------------------------------------------
+// 3. COLETA DOS LOGS (SOURCES)
+// ----------------------------------------------------------------------
+
+loki.source.file "opnsense" {
+  targets               = local.file_match.opnsense.targets
+  forward_to            = [loki.process.opnsense_pipeline.receiver]
+  legacy_positions_file = "/tmp/positions.yaml"
+}
+
+loki.source.file "proxmox" {
+  targets               = local.file_match.proxmox.targets
+  forward_to            = [loki.process.proxmox_pipeline.receiver]
+  legacy_positions_file = "/tmp/positions.yaml"
+}
+
+loki.source.file "openwrt" {
+  targets               = local.file_match.openwrt.targets
+  forward_to            = [loki.process.openwrt_pipeline.receiver]
+  legacy_positions_file = "/tmp/positions.yaml"
+}
+
+loki.source.file "docker_critical" {
+  targets               = local.file_match.docker_critical.targets
+  forward_to            = [loki.process.docker_pipeline.receiver]
+  legacy_positions_file = "/tmp/positions.yaml"
+}
+
+// Demais hosts sem pipeline customizado
+loki.source.file "system_and_omv" {
+  targets = array.concat(
+    local.file_match.system.targets,
+    local.file_match.omv.targets,
+  )
+  forward_to            = [loki.write.default.receiver]
+  legacy_positions_file = "/tmp/positions.yaml"
+}
+
+// ----------------------------------------------------------------------
+// 4. EXPORTADOR LOKI (WRITE)
+// ----------------------------------------------------------------------
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki_server/loki/api/v1/push"
+
+    batch_size = "1MB"
+    batch_wait = "1s"
+
+    min_backoff_period  = "500ms"
+    max_backoff_period  = "5s"
+    max_backoff_retries = 10
+  }
+}

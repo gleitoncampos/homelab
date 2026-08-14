@@ -1,0 +1,23 @@
+---
+# Master Playbook do Homelab - Executa a Infraestrutura Completa em Ordem
+
+- name: 00 - Proxmox VE Host Setup, Hardening e Exportação de Configurações
+  ansible.builtin.import_playbook: playbooks/00-proxmox-setup.yml
+
+- name: 00 - OpenMediaVault (OMV) NAS Host Setup, Hardening e Performance Enterprise
+  ansible.builtin.import_playbook: playbooks/00-omv-setup.yml
+
+- name: 01 - Bootstrap do Sistema Operacional e Docker
+  ansible.builtin.import_playbook: playbooks/01-bootstrap-os.yml
+
+- name: 02 - Bootstrap do Cluster (Swarm + Portainer Native + Traefik Ingress)
+  ansible.builtin.import_playbook: playbooks/02-bootstrap-cluster.yml
+
+- name: 03 - Deploy da Stack de Monitoramento & Observabilidade
+  ansible.builtin.import_playbook: playbooks/03-stack-monitoring.yml
+
+- name: 04 - Deploy do Bloco de Gestão, Finanças & Produtividade
+  ansible.builtin.import_playbook: playbooks/04-stack-management.yml
+
+- name: 05 - Deploy do Bloco de Utilitários & Ferramentas
+  ansible.builtin.import_playbook: playbooks/05-stack-utilities.yml

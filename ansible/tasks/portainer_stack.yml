@@ -1,0 +1,161 @@
+---
+# Task reutilizável: create-or-update de uma stack via API do Portainer.
+#
+# Motivo: os playbooks 02/03/04/05 repetiam ~12 blocos deste POST, todos aceitando
+# os códigos HTTP 200, 409 e 500 como sucesso. POST /api/stacks/create/swarm/repository
+# devolve 409 QUANDO A STACK JÁ EXISTE — aceitar 409 como sucesso significa que uma
+# mudança de env (FQDN novo, senha rotacionada) NUNCA chega a uma stack já
+# provisionada. Aceitar 500 como sucesso escondia falhas reais do Portainer.
+#
+# Esta task resolve isso com create-or-update:
+#   - Se a stack ainda não existe -> POST .../create/swarm/repository (cria).
+#   - Se a stack já existe        -> PUT  .../{id}/git/redeploy, com o env do
+#                                     vault MESCLADO sobre o env que a stack já
+#                                     tem (o PUT substitui a lista inteira, e
+#                                     mandar só o do vault apagaria as chaves
+#                                     que hoje só existem no BoltDB).
+# Só um dos dois HTTP calls roda por invocação; o outro fica pulado via `when`.
+#
+# Variáveis exigidas pelo chamador:
+#   stack_name             - nome da stack no Portainer (ex.: "paperless")
+#   stack_repo_url         - URL do repositório git (ex.: "{{ github_repo_url }}")
+#   stack_repo_ref         - branch/ref do repositório (ex.: "{{ github_repo_branch }}")
+#   stack_compose_path     - caminho do compose.yml dentro do repo
+#   stack_env              - lista de dicts {name, value} com o env da stack.
+#                            NUNCA vazia: há um assert. Todo compose deste repo
+#                            precisa de pelo menos ${FQDN}, e sem ele o Traefik
+#                            registra Host("") e descarta a rota sem reclamar.
+#   portainer_url          - base URL da API do Portainer (ex.: "http://localhost:9000")
+#   portainer_endpoint_id  - ID do endpoint Swarm no Portainer
+#
+# `portainer_jwt` NÃO entra na lista: portainer_login.yml o define via set_fact e
+# ele já está em escopo. Repassá-lo como `portainer_jwt: "{{ portainer_jwt }}"`
+# no `vars:` do include é um bug — o parâmetro de include tem precedência MAIOR
+# que o set_fact, então a var passa a se referenciar a si mesma e a primeira task
+# morre com "recursive loop detected in template string". Com no_log a mensagem
+# ainda sai censurada. Mesma armadilha vale para qualquer var já em escopo.
+#
+# Uso, dentro de `tasks:` (após ../tasks/portainer_login.yml já ter rodado):
+#   - name: Deploy da Stack Paperless-ngx
+#     ansible.builtin.include_tasks: "../tasks/portainer_stack.yml"
+#     vars:
+#       stack_name: "paperless"
+#       stack_repo_url: "{{ github_repo_url }}"
+#       stack_repo_ref: "{{ github_repo_branch }}"
+#       stack_compose_path: "docker/paperless-ngx/swarm/compose.yml"
+#       stack_env:
+#         - name: "POSTGRES_PASSWORD"
+#           value: "{{ postgres_paperless_password }}"
+#         - name: "FQDN"
+#           value: "{{ fqdn_paperless }}"
+#       portainer_url: "http://localhost:9000"
+#       portainer_endpoint_id: "{{ endpoint_id }}"
+#     no_log: true
+#
+# no_log: true em toda task que carrega o JWT (header Authorization) ou stack_env
+# (pode conter senhas/tokens do Vault). Nenhum ignore_errors: uma falha real de API
+# deve interromper o play, nunca ser mascarada.
+
+- name: "{{ stack_name }} :: Listar stacks existentes no Portainer"
+  ansible.builtin.uri:
+    url: "{{ portainer_url }}/api/stacks"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ portainer_jwt }}"
+    status_code: 200
+    validate_certs: false
+  register: portainer_stacks_list
+  no_log: true
+
+- name: "{{ stack_name }} :: Resolver Id da stack existente (vazio se ainda não existe)"
+  ansible.builtin.set_fact:
+    stack_id: "{{ ((portainer_stacks_list.json | selectattr('Name', 'equalto', stack_name) | map(attribute='Id') | list) + ['']) | first }}"
+
+- name: "{{ stack_name }} :: Exigir que o chamador passe env (lista vazia é sempre erro)"
+  ansible.builtin.assert:
+    that:
+      - stack_env is defined
+      - stack_env | length > 0
+    fail_msg: >-
+      A stack '{{ stack_name }}' foi chamada com stack_env vazio. Todo compose
+      deste repositório precisa de pelo menos ${FQDN} — sem env o Traefik
+      registra Host("") e descarta a rota em silêncio. Preencha stack_env no
+      playbook chamador.
+    quiet: true
+
+# O PUT de redeploy SUBSTITUI o env inteiro (o Portainer faz stack.Env =
+# payload.Env, sem merge). Mandar só o que o vault conhece apagaria toda chave
+# que hoje só existe no BoltDB, digitada no formulário da stack — e essas chaves
+# não estão em lugar nenhum do git. Por isso o env atual entra como base e o do
+# vault sobrescreve por nome.
+- name: "{{ stack_name }} :: Mesclar o env do vault sobre o env já existente no Portainer"
+  ansible.builtin.set_fact:
+    stack_env_merged: >-
+      {{ ((portainer_stacks_list.json | selectattr('Name', 'equalto', stack_name)
+           | map(attribute='Env') | list) + [[]]) | first | default([], true)
+         | rejectattr('name', 'in', stack_env | map(attribute='name') | list) | list
+         + stack_env }}
+  when: stack_id
+  no_log: true
+
+- name: "{{ stack_name }} :: Obter Id do Swarm no endpoint do Portainer (apenas para criação nova)"
+  ansible.builtin.uri:
+    url: "{{ portainer_url }}/api/endpoints/{{ portainer_endpoint_id }}/docker/swarm"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ portainer_jwt }}"
+    status_code: 200
+    validate_certs: false
+  register: portainer_swarm_info
+  when: not stack_id
+  no_log: true
+
+- name: "{{ stack_name }} :: Criar stack nova via repositório Git (primeiro deploy)"
+  ansible.builtin.uri:
+    url: "{{ portainer_url }}/api/stacks/create/swarm/repository?endpointId={{ portainer_endpoint_id }}"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ portainer_jwt }}"
+    body_format: json
+    body:
+      name: "{{ stack_name }}"
+      swarmID: "{{ portainer_swarm_info.json.ID }}"
+      repositoryURL: "{{ stack_repo_url }}"
+      repositoryReferenceName: "{{ stack_repo_ref }}"
+      composeFile: "{{ stack_compose_path }}"
+      env: "{{ stack_env }}"
+    status_code: 200
+    validate_certs: false
+  register: portainer_stack_create
+  when: not stack_id
+  no_log: true
+
+- name: "{{ stack_name }} :: Redeploy da stack existente (env mesclado)"
+  ansible.builtin.uri:
+    url: "{{ portainer_url }}/api/stacks/{{ stack_id }}/git/redeploy?endpointId={{ portainer_endpoint_id }}"
+    method: PUT
+    headers:
+      Authorization: "Bearer {{ portainer_jwt }}"
+    body_format: json
+    body:
+      env: "{{ stack_env_merged }}"
+      repositoryReferenceName: "{{ stack_repo_ref }}"
+      prune: false
+      pullImage: true
+    status_code: 200
+    validate_certs: false
+  register: portainer_stack_redeploy
+  when: stack_id
+  no_log: true
+
+- name: "{{ stack_name }} :: Confirmar que create ou redeploy retornou HTTP 200"
+  ansible.builtin.assert:
+    that:
+      - (not stack_id and portainer_stack_create is defined and portainer_stack_create.status == 200)
+        or (stack_id and portainer_stack_redeploy is defined and portainer_stack_redeploy.status == 200)
+    fail_msg: >-
+      Deploy da stack '{{ stack_name }}' falhou: nem a criação nem o redeploy
+      confirmaram HTTP 200. Verifique o Portainer e o repositório/branch
+      configurados para esta stack.
+    success_msg: "Stack '{{ stack_name }}' criada/atualizada com sucesso (HTTP 200)."
+    quiet: true

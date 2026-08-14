@@ -1,0 +1,70 @@
+services:
+  portainer-agent:
+    # ":lts" é tag flutuante — CLAUDE.md §6 proíbe em produção. "lts" aponta
+    # hoje para 2.39.5; o Renovate abre PR quando ela mudar.
+    image: portainer/agent:2.39.5
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/volumes:/var/lib/docker/volumes
+    networks:
+      - traefik_public
+    deploy:
+      mode: global
+      placement:
+        constraints: [node.platform.os == linux]
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+
+  portainer:
+    image: portainer/portainer-ce:2.39.5
+    command: -H tcp://tasks.portainer-agent:9001 --tlsskipverify
+    # Esta porta existe por um motivo só: os playbooks 02/03/04/05 chamam a API
+    # em "http://localhost:9000" a partir do próprio manager. O Traefik alcança
+    # o container pela overlay `traefik_public` (label abaixo), não por aqui. A
+    # porta 8000 (túnel do Edge Agent) foi removida: nada neste repo usa Edge.
+    #
+    # `mode: host` publica direto no nó que roda a task (com replicas: 1 +
+    # constraint de manager, é sempre o mesmo nó) em vez de passar pela malha de
+    # roteamento ingress, que abriria a 9000 em TODOS os nós.
+    #
+    # ⚠️ O bind é nas interfaces todas do manager, não só em loopback. `host_ip:
+    # 127.0.0.1` seria o certo e é Compose Spec válido, mas o schema do
+    # `docker stack deploy` não conhece o campo e REJEITA o arquivo inteiro
+    # ("Additional property host_ip is not allowed") — Swarm não tem como
+    # restringir o bind a loopback pelo stack file. UFW também não fecha isso:
+    # o publish do Docker faz DNAT em nat/PREROUTING, antes da chain filter.
+    # O fecho real é uma regra em DOCKER-USER (ver ufw-docker). Está no TODO.
+    ports:
+      - target: 9000
+        published: 9000
+        mode: host
+    volumes:
+      - /srv/containers/portainer:/data
+    networks:
+      - traefik_public
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+      labels:
+        # Frontend
+        - "traefik.enable=true"
+        - "traefik.http.routers.portainer.rule=Host(\"${FQDN}\")"
+        - "traefik.http.routers.portainer.entrypoints=websecure"
+        - "traefik.http.services.portainer.loadbalancer.server.port=9000"
+        - "traefik.http.routers.portainer.service=portainer"
+        - "traefik.http.routers.portainer.tls.certresolver=cloudflare"
+networks:
+  traefik_public:
+    external: true

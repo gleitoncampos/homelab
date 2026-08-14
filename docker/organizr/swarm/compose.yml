@@ -1,0 +1,26 @@
+services:
+    organizr:
+        volumes:
+            - /srv/containers/organizr/config:/config
+        #ports:
+        #    - 80:80
+        image: ghcr.io/organizr/organizr:latest
+        environment:
+          - TZ=America/Sao_Paulo
+          - PGID=1000
+          - PUID=1000
+        deploy:
+          placement:
+            constraints: [node.role == manager]
+          labels:
+            - "traefik.enable=true"
+            - "traefik.http.routers.organizr.rule=Host(\"${FQDN}\")" #Define in Portainer
+            - "traefik.http.routers.organizr.entrypoints=websecure"
+            - "traefik.http.services.organizr.loadbalancer.server.port=80"
+            - "traefik.http.routers.organizr.service=organizr"
+            - "traefik.http.routers.organizr.tls.certresolver=cloudflare"
+        networks:
+          - traefik_public
+networks:
+  traefik_public:
+    external: true

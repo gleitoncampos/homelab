@@ -1,0 +1,56 @@
+# Example of a file with multi routes. Usefull when a service has multiple containers with 
+# individual web interfaces, like NexCloud AIO
+http:
+  routers:
+    nextcloud:
+      rule: "Host(`nextcloud.example.info`)"
+      entrypoints:
+        - "websecure"
+      service: nextcloud
+      middlewares:
+        - nextcloud-chain
+      tls:
+        certresolver: "cloudflare"
+     
+    aio-nextcloud:
+      rule: "Host(`aio.nextcloud.example.com`)"
+      entrypoints:
+        - "websecure"
+      service: aio-nextcloud
+      middlewares:
+        - nextcloud-chain
+      tls:
+        certresolver: "cloudflare"
+
+  services:
+    nextcloud:
+      loadBalancer:
+        servers:
+          - url: "http://10.10.10.10:11000" # Use the host's IP address if Traefik runs outside the host network
+    
+    aio-nextcloud:
+      loadBalancer:
+        servers:
+          - url: "https://10.10.10.10:8080" # Use the host's IP address if Traefik runs outside the host network
+        serversTransport: "aio-nextcloud"
+
+  middlewares:
+    nextcloud-secure-headers:
+      headers:
+        hostsProxyHeaders:
+          - "X-Forwarded-Host"
+        referrerPolicy: "same-origin"
+
+    https-redirect:
+      redirectscheme:
+        scheme: https 
+
+    nextcloud-chain:
+      chain:
+        middlewares:
+          # - ... (e.g. rate limiting middleware)
+          - https-redirect
+          - nextcloud-secure-headers
+  serversTransports:
+    aio-nextcloud:
+      insecureSkipVerify: true

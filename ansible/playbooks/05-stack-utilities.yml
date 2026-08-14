@@ -1,0 +1,95 @@
+---
+- name: "05 - Deploy do Bloco de Utilitarios, Automacao & Midia"
+  hosts: homelab_managers
+  become: true
+  pre_tasks:
+    - name: Validar segredos do Vault exigidos por este play
+      ansible.builtin.include_tasks: "../tasks/validate_vault.yml"
+      vars:
+        required_secrets:
+          - portainer_admin_password
+          - homelab_domain
+          - cronicle_secret_key
+          - postgres_linkwarden_password
+          - bytestash_jwt_secret
+  tasks:
+    - name: Fazer Login na API do Portainer
+      ansible.builtin.include_tasks: "../tasks/portainer_login.yml"
+
+    - name: Deploy da Stack Cronicle (Agendador de Tarefas)
+      ansible.builtin.include_tasks: "../tasks/portainer_stack.yml"
+      vars:
+        stack_name: "cronicle"
+        stack_repo_url: "{{ github_repo_url }}"
+        stack_repo_ref: "{{ github_repo_branch }}"
+        stack_compose_path: "docker/cronicle/swarm/compose.yml"
+        stack_env:
+          - name: "FQDN"
+            value: "{{ fqdn_cronicle }}"
+          - name: "CRONICLE_SECRET_KEY"
+            value: "{{ cronicle_secret_key }}"
+        portainer_url: "http://localhost:9000"
+        portainer_endpoint_id: "{{ endpoint_id }}"
+      no_log: true
+
+    - name: Deploy da Stack Linkwarden (Bookmarks e Links)
+      ansible.builtin.include_tasks: "../tasks/portainer_stack.yml"
+      vars:
+        stack_name: "linkwarden"
+        stack_repo_url: "{{ github_repo_url }}"
+        stack_repo_ref: "{{ github_repo_branch }}"
+        stack_compose_path: "docker/linkwarden/swarm/compose.yml"
+        stack_env:
+          - name: "FQDN"
+            value: "{{ fqdn_linkwarden }}"
+          - name: "POSTGRES_PASSWORD"
+            value: "{{ postgres_linkwarden_password }}"
+        portainer_url: "http://localhost:9000"
+        portainer_endpoint_id: "{{ endpoint_id }}"
+      no_log: true
+
+    - name: Deploy da Stack Stirling-PDF (Ferramentas de PDF)
+      ansible.builtin.include_tasks: "../tasks/portainer_stack.yml"
+      vars:
+        stack_name: "stirling-pdf"
+        stack_repo_url: "{{ github_repo_url }}"
+        stack_repo_ref: "{{ github_repo_branch }}"
+        stack_compose_path: "docker/stirling-pdf/swarm/compose.yml"
+        stack_env:
+          - name: "FQDN"
+            value: "{{ fqdn_stirling }}"
+        portainer_url: "http://localhost:9000"
+        portainer_endpoint_id: "{{ endpoint_id }}"
+
+    - name: Deploy da Stack ByteStash (Snippets de Codigo)
+      ansible.builtin.include_tasks: "../tasks/portainer_stack.yml"
+      vars:
+        stack_name: "bytestash"
+        stack_repo_url: "{{ github_repo_url }}"
+        stack_repo_ref: "{{ github_repo_branch }}"
+        stack_compose_path: "docker/bytestash/swarm/compose.yml"
+        stack_env:
+          - name: "FQDN"
+            value: "{{ fqdn_bytestash }}"
+          - name: "JWT_SECRET"
+            value: "{{ bytestash_jwt_secret }}"
+        portainer_url: "http://localhost:9000"
+        portainer_endpoint_id: "{{ endpoint_id }}"
+      no_log: true
+
+    - name: Deploy da Stack IT-Tools (Utilitarios para Devs)
+      ansible.builtin.include_tasks: "../tasks/portainer_stack.yml"
+      vars:
+        stack_name: "it-tools"
+        stack_repo_url: "{{ github_repo_url }}"
+        stack_repo_ref: "{{ github_repo_branch }}"
+        stack_compose_path: "docker/it-tools/swarm/compose.yml"
+        stack_env:
+          - name: "FQDN"
+            value: "{{ fqdn_ittools }}"
+        portainer_url: "http://localhost:9000"
+        portainer_endpoint_id: "{{ endpoint_id }}"
+
+    - name: Exibir status de Utilitários
+      ansible.builtin.debug:
+        msg: "🛠️ Stacks de Utilitários (Cronicle/Linkwarden/Stirling-PDF/ByteStash/IT-Tools) cadastradas no Portainer!"

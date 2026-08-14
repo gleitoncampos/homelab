@@ -1,0 +1,183 @@
+services:
+  prometheus:
+    image: quay.io/prometheus/prometheus:v3.13.2
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--storage.tsdb.retention.size=8GB"
+      - "--log.level=info"
+    volumes:
+      - /srv/containers/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - /srv/containers/prometheus/data:/prometheus
+    # Sem roteamento publico: Prometheus nao tem autenticacao propria.
+    # forwardAuth de SSO nao serve aqui - o portal de login redireciona para
+    # HTML e quebraria o Grafana e o Alloy, que sao clientes de maquina (nao
+    # navegador). So o Grafana precisa ser publico; Prometheus fica acessivel
+    # apenas na overlay "monitoring", de onde o Grafana o consome como
+    # datasource.
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1024M
+      restart_policy:
+        condition: on-failure
+    networks:
+      - monitoring
+
+  node_exporter:
+    image: quay.io/prometheus/node-exporter:v1.9.1
+    command:
+      - '--path.rootfs=/host'
+      - --collector.processes
+    volumes:
+      - '/:/host:ro,rslave'
+    deploy:
+      mode: global
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+      restart_policy:
+        condition: on-failure
+    networks:
+      - monitoring
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    deploy:
+      mode: global
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+    networks:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:12.4.8
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: "${GF_SECURITY_ADMIN_PASSWORD}"
+    volumes:
+      - /srv/containers/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
+      - /srv/containers/grafana/data:/var/lib/grafana
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.grafana.rule=Host(\"${FQDN_GRAFANA}\")" #Define in Portainer
+        - "traefik.http.routers.grafana.entrypoints=websecure"
+        - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+        - "traefik.http.routers.grafana.service=grafana"
+        - "traefik.http.routers.grafana.tls.certresolver=cloudflare"
+    networks:
+      - monitoring
+      - traefik_public
+
+  influxdb:
+    image: influxdb:2.7.12
+    volumes:
+      - /srv/containers/influxdb/config:/etc/influxdb2
+      - /srv/containers/influxdb/db:/var/lib/influxdb2
+    # Sem roteamento publico e sem publicacao de porta: porta publicada em
+    # Swarm passa por DNAT em nat/PREROUTING, antes da chain filter, entao o
+    # UFW nao a fecha. InfluxDB fica acessivel apenas na overlay "monitoring".
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1024M
+      restart_policy:
+        condition: on-failure
+    networks:
+      - monitoring
+
+  prometheus-pve-exporter:
+    image: prompve/prometheus-pve-exporter:3.5.5
+    environment:
+      PVE_TOKEN_NAME: "${PVE_TOKEN_NAME}"
+      PVE_TOKEN_VALUE: "${PVE_TOKEN_VALUE}"
+      PVE_VERIFY_SSL: "false"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+      restart_policy:
+        condition: on-failure
+    # Só a overlay `monitoring`: nada aqui é roteado pelo Traefik.
+    networks:
+      - monitoring
+
+  loki:
+    image: grafana/loki:3.7.6
+    volumes:
+      - /srv/containers/loki/loki-config.yml:/mnt/config/loki-config.yml
+      - /srv/containers/loki/data:/tmp/loki
+    command:
+      - "-config.file=/mnt/config/loki-config.yml"
+    # Sem roteamento publico: Loki nao tem autenticacao propria e o Alloy faz
+    # remote_write para ele apenas via overlay "monitoring" (forwardAuth de
+    # SSO quebraria o Alloy, que e cliente de maquina, nao navegador).
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+    networks:
+      - monitoring
+
+  alloy:
+    image: grafana/alloy:v1.18.1
+    volumes:
+      - /srv/containers/alloy/config.alloy:/etc/alloy/config.alloy
+      - /srv/containers/alloy/data:/var/lib/alloy/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "1514:1514/udp" # Remote Syslog UDP (OpenWrt, OPNsense, Proxmox, NAS)
+      - "1514:1514/tcp" # Remote Syslog TCP
+    command: "run --server.http.listen-addr=0.0.0.0:12345 --storage.path=/var/lib/alloy/data /etc/alloy/config.alloy"
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+    # Só a overlay `monitoring`: nada aqui é roteado pelo Traefik. A porta 1514
+    # é publicada acima diretamente (syslog vem de fora da rede overlay).
+    networks:
+      - monitoring
+
+
+networks:
+  traefik_public:
+    external: true
+  monitoring:
+    driver: overlay
+    name: monitoring

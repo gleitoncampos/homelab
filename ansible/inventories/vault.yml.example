@@ -1,0 +1,245 @@
+---
+# =============================================================================
+# MODELO DO ANSIBLE VAULT — inventories/<env>/group_vars/all/vault.yml
+# =============================================================================
+# Este arquivo é apenas o MODELO. O arquivo real é
+# `inventories/<env>/group_vars/all/vault.yml` — por exemplo
+# `inventories/prod/group_vars/all/vault.yml` e `inventories/dev/group_vars/all/vault.yml`
+# — criptografado com ansible-vault e ignorado pelo git.
+#
+# Por que ficar em `group_vars/all/`:
+#   Ansible carrega TODO arquivo dentro de `group_vars/all/` para TODOS os hosts
+#   daquele inventário. O caminho antigo (`group_vars/vault.yml`) só carregaria
+#   para um grupo de inventário chamado `vault` — que não existe. Por isso nunca
+#   era lido, e todo segredo caía num valor default publicado no repositório.
+#
+# Um vault por ambiente:
+#   Existem DOIS vaults, um por ambiente — `inventories/prod/group_vars/all/vault.yml`
+#   e `inventories/dev/group_vars/all/vault.yml` —, cada um criptografado
+#   separadamente. Os dois abrem com a MESMA senha, guardada em um único
+#   `.ansible_vault_pass` na raiz de `ansible/` (ver `vault_password_file` em
+#   `ansible.cfg`). Isso é seguro porque só o inventário passado em `-i` é
+#   carregado por execução — o vault do outro ambiente nunca entra no play.
+#   O que DEVE diferir entre prod e dev é o VALOR de cada segredo, nunca a
+#   senha do vault: em especial `portainer_admin_password`,
+#   `cloudflare_api_token` e as senhas de banco (`postgres_paperless_password`,
+#   `postgres_vikunja_password`) precisam ser distintas por ambiente — reusar o
+#   valor de prod em dev anula o isolamento entre os dois.
+#
+# Como criar:
+#   cd ansible/
+#   echo 'SUA-SENHA-DO-VAULT' > .ansible_vault_pass && chmod 600 .ansible_vault_pass
+#   cp inventories/vault.yml.example inventories/prod/group_vars/all/vault.yml
+#   cp inventories/vault.yml.example inventories/dev/group_vars/all/vault.yml
+#   # edite os valores reais de cada ambiente (senhas e tokens diferentes!), depois:
+#   ansible-vault encrypt inventories/prod/group_vars/all/vault.yml
+#   ansible-vault encrypt inventories/dev/group_vars/all/vault.yml
+#
+# Uso no dia a dia (a senha vem do .ansible_vault_pass via ansible.cfg):
+#   ansible-vault edit inventories/prod/group_vars/all/vault.yml     # editar prod
+#   ansible-vault view inventories/prod/group_vars/all/vault.yml     # ver prod
+#   ansible-playbook site.yml                                       # roda prod (inventário default do ansible.cfg)
+#   ansible-playbook -i inventories/dev/hosts.ini site.yml          # roda dev (sempre explícito)
+#
+# Gerar valores fortes:
+#   openssl rand -base64 32          # senhas em geral
+#   openssl rand -hex 32             # chaves de assinatura (SECRET_KEY, APP_KEY)
+#
+# REGRAS:
+#   - Nunca commitar `inventories/<env>/group_vars/all/vault.yml` (protegido pelo .gitignore).
+#   - Nunca reintroduzir `| default('...')` em variável de segredo: o default
+#     transforma "segredo ausente" em "senha pública", e falha em silêncio.
+#     Os playbooks validam a presença via `tasks/validate_vault.yml`.
+#   - Toda variável abaixo é obrigatória, exceto onde marcado como opcional.
+# =============================================================================
+
+# --- Domínio -------------------------------------------------------------
+homelab_domain: "TROCAR-seu-dominio.tld"
+# Zona DNS do lab. ÚNICO lugar onde o domínio existe; todo fqdn_* deriva daqui
+# (ver `inventories/_common/all.yml`). Não é segredo criptográfico, mas o
+# repositório é PÚBLICO: domínio em arquivo rastreado entrega a superfície de
+# ataque já mapeada.
+
+# --- Acesso SSH ------------------------------------------------------------
+ssh_public_key: "ssh-ed25519 AAAA...TROCAR... operador@homelab"
+# Chave pública COMPLETA, uma linha. Saiu de `_common/all.yml` porque o valor
+# lá era um placeholder truncado que nunca instalou nada.
+
+# --- Portainer ---------------------------------------------------------------
+# Root-equivalente no cluster (monta o socket do Docker). Mínimo 16 caracteres.
+portainer_admin_password: "TROCAR-openssl-rand-base64-32"
+
+# --- Cloudflare (DNS-01 do Traefik para certificado wildcard) ----------------
+cloudflare_email: "voce@seu-dominio.com"
+# Token de API com escopo Zone:DNS:Edit apenas na zona usada. Não use a Global API Key.
+cloudflare_api_token: "TROCAR-token-cloudflare"
+
+# --- Paperless-ngx -----------------------------------------------------------
+postgres_paperless_password: "TROCAR-openssl-rand-base64-32"
+# Assina sessões e tokens de reset do Django. Trocar invalida todas as sessões.
+paperless_secret_key: "TROCAR-openssl-rand-hex-32"
+
+# --- Vikunja ----------------------------------------------------------------
+postgres_vikunja_password: "TROCAR-openssl-rand-base64-32"
+
+# --- Wi-Fi / OpenWrt (usado por templates/network/openwrt_wireless.j2) ------
+# Só obrigatório ao rodar playbooks/network/02-openwrt-setup.yml.
+wifi_main_ssid: "Homelab-Main"
+wifi_main_password: "TROCAR-psk-main"
+wifi_iot_ssid: "Homelab-IoT"
+wifi_iot_password: "TROCAR-psk-iot"
+wifi_media_ssid: "Homelab-Media"
+wifi_media_password: "TROCAR-psk-media"
+wifi_guest_ssid: "Homelab-Guest"
+wifi_guest_password: "TROCAR-psk-guest"
+
+# --- OPNsense (usado por templates/network/opnsense_config.xml.j2) ----------
+# Só obrigatório ao rodar playbooks/network/01-opnsense-setup.yml.
+#
+# ⚠️ ATENÇÃO AO FORMATO. Este playbook SUBSTITUI o /conf/config.xml inteiro e
+# roda rc.reload_all. Valor no formato errado = firewall sem acesso à GUI e sem
+# WAN. Cada campo abaixo diz o formato exato que o OPNsense espera.
+
+# Hash bcrypt, NÃO a senha em texto. Gerar no próprio firewall:
+#   ssh root@opnsense -- php -r 'echo password_hash("SENHA", PASSWORD_BCRYPT)."\n";'
+# Deve começar com $2y$ ou $2b$. Use aspas simples no YAML (o $ não é interpolado,
+# mas evita surpresa) e cuidado para não quebrar a linha.
+opnsense_root_password_hash: '$2y$11$TROCAR-hash-bcrypt-do-root'
+opnsense_admin_password_hash: '$2y$11$TROCAR-hash-bcrypt-do-usuario-admin'
+
+# Usuário administrativo nomeado (uid 2000, distinto do "root" acima, que fica
+# desabilitado). Nome de usuário real em arquivo rastreado de repo público
+# identifica o operador — trate como dado pessoal (LGPD).
+opnsense_admin_username: "TROCAR-usuario-admin"
+# Opcional. Nome completo exibido na GUI. Default genérico se omitido.
+opnsense_admin_fullname: "Administrator"
+# Opcional. Chave pública SSH em BASE64 para login sem senha nesse usuário
+# (o config.xml guarda authorizedkeys assim). Vazio desativa login por chave
+# para este usuário — a senha acima continua valendo.
+opnsense_admin_authorizedkeys_b64: ""
+
+# Community SNMP v2c somente-leitura. "public" = leitura anônima da topologia.
+# Preferível: desativar o snmpd ou migrar para SNMPv3. Se mantiver v2c, use um
+# valor aleatório e restrinja o acesso à VLAN de gestão pelo firewall.
+opnsense_snmp_ro_community: "TROCAR-community-aleatoria"
+
+# Credencial PPPoE da WAN — é conta do PROVEDOR, não do lab. Rotacionar exige
+# contato com ele.
+opnsense_pppoe_username: "TROCAR-usuario-pppoe"
+# O OPNsense guarda esta senha em BASE64 (não é criptografia, é só encoding).
+# Gerar:  printf '%s' 'SENHA-PPPOE' | base64
+opnsense_pppoe_password_b64: "TROCAR-base64-da-senha-pppoe"
+
+# Certificado TLS da GUI, em BASE64 do PEM inteiro (é como o config.xml guarda).
+# Gerar:  base64 -w0 gui.crt   /   base64 -w0 gui.key
+# A chave privada é o segredo mais sensível deste arquivo. Se ela já vazou,
+# regenere o par em System → Trust → Certificates antes de colocar aqui.
+opnsense_gui_cert_crt_b64: "TROCAR-base64-do-certificado-pem"
+opnsense_gui_cert_key_b64: "TROCAR-base64-da-chave-privada-pem"
+
+dhcp_static_maps: []
+# Reservas DHCP estáticas do OPNsense: MAC + hostname + IP são dado pessoal e
+# mapa da rede. Lista de dicts consumida por opnsense_config.xml.j2, cada item
+# com as chaves mac, ipaddr, hostname, descr.
+
+dns_redirect_bypass_ips: []
+# IPs que ficam de fora do redirecionamento forçado de DNS (alias
+# DNS_REDIRECT_BYPASS, consumida por opnsense_config.xml.j2). Lista simples de
+# strings de IP, uma por linha no config.xml renderizado. Mapa de topologia
+# interna — mesmo motivo do dhcp_static_maps acima.
+
+# O port forward que de fato captura a porta 53. Sem ele, a regra de filtro e o
+# alias acima existem sem efeito. Na produção de hoje esta regra está
+# DESABILITADA: deixe `false` para reproduzir o estado atual, `true` para ligar
+# o DNS forçado que o desenho-alvo pressupõe.
+opnsense_dns_redirect_enabled: true
+# IP para onde a porta 53 é redirecionada — o próprio firewall na LAN.
+opnsense_dns_redirect_target: "198.51.100.1"
+
+unbound_host_overrides_extra: []
+# Overrides de DNS interno ADICIONAIS. O curinga `*.<homelab_domain>` apontando
+# para o manager do Swarm já é gerado automaticamente em
+# inventories/_common/all.yml — não repita aqui.
+#
+# ⚠️ O <hosts> do Unbound é reescrito INTEIRO pelo opnsense_config.xml.j2: o que
+# não estiver aqui (nem no curinga derivado) é APAGADO no primeiro apply, e com
+# ele o acesso interno aos serviços correspondentes. Cada item é um dict com as
+# chaves hostname, domain, server.
+
+# --- Proxmox (usado por playbooks/00-proxmox-setup.yml e monitoring) -------
+proxmox_alert_email: "TROCAR-voce@exemplo.com"
+# E-mail de alerta do Proxmox. Sai do repo por ser dado pessoal (LGPD).
+
+pve_exporter_token_name: "prometheus@pve!exporter"
+pve_exporter_token_value: "TROCAR-uuid-do-token"
+# TOKEN de API do Proxmox para o prometheus-pve-exporter, não senha. Gerar com:
+#   pveum user token add prometheus@pve exporter --privsep 1
+#   pveum acl modify / --tokens 'prometheus@pve!exporter' --roles PVEAuditor
+
+# --- Monitoramento (Grafana) ------------------------------------------------
+grafana_admin_password: "TROCAR-openssl-rand-base64-32"
+# Sem isto o Grafana sobe em admin/admin, exposto pelo Traefik. Mínimo 16 chars.
+
+# --- Utilitários (playbooks/05-stack-utilities.yml) -------------------------
+cronicle_secret_key: "TROCAR-openssl-rand-hex-32"
+# Assina os jobs e a sessão do Cronicle. Trocar invalida sessões abertas.
+
+postgres_linkwarden_password: "TROCAR-openssl-rand-base64-32"
+# Senha do Postgres do Linkwarden. A imagem do Postgres ABORTA se vier vazia,
+# então um valor errado aqui derruba a stack inteira, não só o login.
+
+bytestash_jwt_secret: "TROCAR-openssl-rand-hex-32"
+# Assina os JWT do ByteStash. Sem valor fixo, cada redeploy gera um segredo
+# novo e desloga todo mundo.
+
+# --- Opcional ---------------------------------------------------------------
+# Chave de licença do GeoLite2 no OPNsense (vazio desativa o download).
+geoip_license_key: ""
+
+# Token de telemetria do Emerging Threats Pro, usado pelo IDS do OPNsense.
+# Vazio desativa. O valor anterior esteve em arquivo rastreado por 25 commits:
+# se este repositório já foi clonado por alguém, ROTACIONE no portal da ETPro em
+# vez de reaproveitar.
+opnsense_etpro_telemetry_token: ""
+
+# =============================================================================
+# FQDNs — não existem mais neste arquivo.
+# =============================================================================
+# Os fqdn_* (traefik, portainer, paperless, actualbudget, vikunja etc.) são
+# DERIVADOS de `homelab_domain` em `inventories/_common/all.yml`. Não os
+# reintroduza aqui: `group_vars/all/` faz merge em ordem alfabética, e
+# `vault.yml` carrega DEPOIS de `main.yml`/`00-common.yml` — logo qualquer
+# fqdn_* fixo aqui SOBRESCREVERIA silenciosamente o mapa derivado. Isso já foi
+# bug real neste repositório, não é redundância inofensiva.
+# =============================================================================
+
+# =============================================================================
+# STACKS SEM PLAYBOOK — hoje só no Portainer, ver TODO.md secção 1.2.2
+# =============================================================================
+# Estas stacks já usam `${VAR}` no compose, mas nenhum playbook injeta o valor,
+# então ele é digitado no formulário da stack no Portainer e vive só no BoltDB
+# em /srv/containers/portainer/. Nada vaza no git — mas também não há registro
+# nem rotação.
+#
+# Deixe as chaves abaixo comentadas até a stack ganhar playbook. Descomentar sem
+# o playbook não tem efeito: o vault não tem por onde injetar.
+#
+# Variável do compose  →  chave sugerida no vault
+#
+# zoneminder  ZM_DB_PASSWORD        → zoneminder_db_password
+#             ZM_DB_ROOT_PASSWORD   → zoneminder_db_root_password
+# jdownloader JD_WEB_USERNAME       → jdownloader_web_username
+#             JD_WEB_PASSWORD       → jdownloader_web_password
+# pricebuddy  PB_ADMIN_EMAIL        → pricebuddy_admin_email
+#             PB_ADMIN_PASSWORD     → pricebuddy_admin_password
+#             DB_PASSWORD           → pricebuddy_db_password
+#             DB_ROOT_PASSWORD      → pricebuddy_db_root_password
+# firefly3    APP_KEY               → firefly_app_key            (exatamente 32 caracteres, sem "#")
+#             POSTGRES_PASSWORD     → postgres_firefly_password
+#             SITE_OWNER            → firefly_site_owner
+# linkwarden  NEXTAUTH_SECRET       → linkwarden_nextauth_secret (hoje reusa a senha do Postgres — separar)
+#             ^ o compose do Linkwarden NÃO referencia ${NEXTAUTH_SECRET}: a
+#               chave foi digitada direto no formulário do Portainer e só existe
+#               no BoltDB. O redeploy de 05 preserva (tasks/portainer_stack.yml
+#               mescla o env atual), mas ela continua sem registro nem rotação.
+# =============================================================================

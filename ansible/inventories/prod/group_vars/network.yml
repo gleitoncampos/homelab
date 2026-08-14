@@ -1,0 +1,78 @@
+---
+# Variáveis Globais de Dispositivos de Rede (OPNsense / OpenWrt)
+
+# syslog_server_ip e netflow_collector_ip NÃO ficam aqui: `group_vars/network.yml`
+# tem precedência MAIOR que `group_vars/all/` para hosts do grupo `network`
+# (opnsense, openwrt) — um literal aqui sombrearia silenciosamente a derivação
+# de `inventories/_common/all.yml:106-107` justo para os hosts que a consomem.
+# Só porta/protocolo, que não têm equivalente derivado, ficam neste arquivo.
+syslog_server_port: "1514"
+syslog_protocol: "udp"
+
+# Coletor NetFlow (Akvorado / ElastiFlow)
+netflow_collector_port: "2055"
+
+# Configurações de Fuso Horário e NTP
+network_timezone: "America/Sao_Paulo"
+ntp_servers:
+  - "a.st1.ntp.br"
+  - "b.st1.ntp.br"
+  - "c.st1.ntp.br"
+  - "d.st1.ntp.br"
+
+# -------------------------------------------------------------
+# ARQUITETURA DE SEGMENTAÇÃO DE REDE (VLANs)
+# -------------------------------------------------------------
+parent_interface: "vtnet0" # Interface física pai no OPNsense (Trunk vmbr0 Proxmox)
+passthrough_wan_interface: "enp5s0" # Interface física de rede dedicada via PCIe Pass-through (VT-d) no Proxmox Host
+
+vlans:
+  - tag: 10
+    name: "MGMT"
+    descr: "Gerenciamento de Infraestrutura (OPNsense, Proxmox, Swarm)"
+    ip: "198.18.10.1"
+    subnet: 24
+    dhcp_enabled: false
+
+  - tag: 20
+    name: "HOMELAB"
+    descr: "Servidores, Docker Swarm & Storage NAS"
+    ip: "198.18.20.1"
+    subnet: 24
+    dhcp_enabled: false
+
+  - tag: 30
+    name: "MAIN"
+    descr: "Rede Principal (PCs de Uso Diário, Notebooks, Smartphones)"
+    ip: "198.18.30.1"
+    subnet: 24
+    dhcp_enabled: true
+    dhcp_start: "198.18.30.100"
+    dhcp_end: "198.18.30.254"
+
+  - tag: 40
+    name: "IOT"
+    descr: "Dispositivos Inteligentes, Câmeras NVR & Automação"
+    ip: "198.18.40.1"
+    subnet: 24
+    dhcp_enabled: true
+    dhcp_start: "198.18.40.100"
+    dhcp_end: "198.18.40.254"
+
+  - tag: 50
+    name: "GUEST"
+    descr: "Rede de Visitantes (Apenas Acesso à Internet)"
+    ip: "198.18.50.1"
+    subnet: 24
+    dhcp_enabled: true
+    dhcp_start: "198.18.50.100"
+    dhcp_end: "198.18.50.254"
+
+  - tag: 60
+    name: "MEDIA"
+    descr: "Smart TVs e Dispositivos de Vídeo (Acesso ao Homelab Mídia, QoS Vídeo, 5GHz Exclusivo)"
+    ip: "198.18.60.1"
+    subnet: 24
+    dhcp_enabled: true
+    dhcp_start: "198.18.60.100"
+    dhcp_end: "198.18.60.254"

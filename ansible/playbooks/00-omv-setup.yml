@@ -1,0 +1,269 @@
+---
+- name: "00 - OpenMediaVault (OMV) NAS Host Setup, Hardening e Performance Enterprise"
+  hosts: omv
+  become: true
+  pre_tasks:
+    - name: Validar segredos do Vault exigidos por este play
+      ansible.builtin.include_tasks: "../tasks/validate_vault.yml"
+      vars:
+        required_secrets:
+          - ssh_public_key
+  tasks:
+    - name: Corrigir repositórios oficiais do Debian Bookworm no /etc/apt/sources.list
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list
+        content: |
+          deb https://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
+          deb https://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
+          deb https://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Atualizar cache do APT e pacotes no OMV Host
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: dist
+
+    - name: Instalar pacotes de suporte, microcódigo, Fail2ban, SMART, ZRAM e ferramentas CLI
+      ansible.builtin.apt:
+        name:
+          - intel-microcode
+          - amd64-microcode
+          - fail2ban
+          - smartmontools
+          - cpufrequtils
+          - chrony
+          - zram-tools
+          - btop
+          - ncdu
+          - ripgrep
+          - fzf
+          - tmux
+          - htop
+          - lm-sensors
+          - sysstat
+          - curl
+          - git
+          - rsync
+          - ethtool
+          - hdparm
+        state: present
+      ignore_errors: true
+
+    - name: Configurar Chrony NTP apontando para o Gateway OPNsense (198.18.10.1)
+      ansible.builtin.copy:
+        dest: /etc/chrony/chrony.conf
+        content: |
+          server 198.18.10.1 iburst
+          driftfile /var/lib/chrony/drift
+          makestep 1.0 3
+          rtcsync
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Reiniciar Chrony NTP
+      ansible.builtin.systemd:
+        name: chrony
+        state: restarted
+        enabled: true
+      ignore_errors: true
+
+    - name: Configurar ZRAM Swap Comprimido em RAM com algoritmo lz4
+      ansible.builtin.copy:
+        dest: /etc/default/zramswap
+        content: |
+          ALGO=lz4
+          PERCENT=25
+          PRIORITY=100
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Reiniciar serviço ZRAM Swap
+      ansible.builtin.systemd:
+        name: zramswap
+        state: restarted
+        enabled: true
+      ignore_errors: true
+
+    - name: Configurar Fail2ban para proteção do SSH no OMV
+      ansible.builtin.copy:
+        dest: /etc/fail2ban/jail.d/omv-sshd.conf
+        content: |
+          [sshd]
+          enabled = true
+          port = ssh
+          filter = sshd
+          maxretry = 3
+          findtime = 600
+          bantime = 3600
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Garantir serviço do Fail2ban ativo e habilitado
+      ansible.builtin.systemd:
+        name: fail2ban
+        state: started
+        enabled: true
+      ignore_errors: true
+
+    - name: Configurar CPU Performance Governor no OMV Host
+      ansible.builtin.copy:
+        dest: /etc/default/cpufrequtils
+        content: |
+          GOVERNOR="performance"
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Configurar Blacklist de módulos de Kernel não utilizados (bluetooth, firewire)
+      ansible.builtin.copy:
+        dest: /etc/modprobe.d/blacklist-unused.conf
+        content: |
+          blacklist bluetooth
+          blacklist firewire-core
+          blacklist appletalk
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Configurar Timeout de Shell Ocioso, Aliases QoL e Histórico Bash no OMV
+      ansible.builtin.copy:
+        dest: /etc/profile.d/homelab-qol.sh
+        content: |
+          export TMOUT=900
+          export HISTTIMEFORMAT="%F %T "
+          export HISTSIZE=50000
+          export HISTFILESIZE=100000
+          alias omv-top='btop'
+          alias disk-map='ncdu /'
+          alias zram-stats='zramctl'
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Configurar Sysctl Enterprise do Kernel (swappiness=10, dirty memory, fq_codel, somaxconn, eBPF, suid_dumpable)
+      ansible.builtin.copy:
+        dest: /etc/sysctl.d/99-omv-tuning.conf
+        content: |
+          vm.swappiness = 10
+          vm.vfs_cache_pressure = 50
+          vm.max_map_count = 262144
+          vm.dirty_ratio = 10
+          vm.dirty_background_ratio = 5
+          fs.file-max = 2097152
+          fs.inotify.max_user_watches = 524288
+          fs.suid_dumpable = 0
+          net.core.default_qdisc = fq_codel
+          net.core.somaxconn = 65535
+          net.core.rmem_max = 16777216
+          net.core.wmem_max = 16777216
+          net.core.netdev_max_backlog = 10000
+          net.ipv4.ip_local_port_range = 1024 65535
+          net.ipv4.ip_early_demux = 1
+          net.ipv4.conf.all.accept_source_route = 0
+          net.ipv4.conf.all.accept_redirects = 0
+          net.ipv4.conf.all.send_redirects = 0
+          net.ipv4.icmp_echo_ignore_broadcasts = 1
+          net.ipv6.conf.all.accept_redirects = 0
+          kernel.kptr_restrict = 2
+          kernel.dmesg_restrict = 1
+          kernel.unprivileged_bpf_disabled = 1
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Aplicar sysctl no OMV Host
+      ansible.builtin.command: "sysctl --system"
+      ignore_errors: true
+
+    - name: Configurar Regra de I/O Scheduler para SSDs e HDDs (mq-deadline / bfq)
+      ansible.builtin.copy:
+        dest: /etc/udev/rules.d/60-scheduler.rules
+        content: |
+          ACTION=="add|change", KERNEL=="sd[a-z]|nvme[0-n]n[1-9]", ATTR{queue/scheduler}="mq-deadline"
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Configurar Envio Centralizado de Logs Syslog do OMV para o Grafana Alloy (UDP 1514)
+      ansible.builtin.copy:
+        dest: /etc/rsyslog.d/50-remote-alloy-syslog.conf
+        content: |
+          *.* @{{ syslog_server_ip }}:{{ syslog_server_port | default('1514') }}
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Reiniciar rsyslog no OMV
+      ansible.builtin.systemd:
+        name: rsyslog
+        state: restarted
+        enabled: true
+      ignore_errors: true
+
+    - name: Agendar fstrim semanal nos domingos às 02:00 AM para manutenção dos SSDs
+      ansible.builtin.raw: '(crontab -l 2>/dev/null; echo "0 2 * * 0 /sbin/fstrim -av") | sort -u | crontab -'
+
+    - name: Configurar Otimizações de Desempenho no Samba/CIFS em /etc/samba/smb.conf.d/tuning.conf
+      ansible.builtin.copy:
+        dest: /etc/samba/smb.conf.d/tuning.conf
+        content: |
+          [global]
+          use sendfile = yes
+          aio read size = 16384
+          aio write size = 16384
+          socket options = TCP_NODELAY IPTOS_LOWDELAY SO_RCVBUF=131072 SO_SNDBUF=131072
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Configurar Aumento de Threads do Servidor Kernel NFS (16 Threads) em /etc/nfs.conf
+      ansible.builtin.ini_file:
+        path: /etc/nfs.conf
+        section: nfsd
+        option: threads
+        value: '16'
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Configurar Spin-Down de HDDs Mecânicos (20 minutos) em /etc/hdparm.conf
+      ansible.builtin.copy:
+        dest: /etc/hdparm.conf
+        content: |
+          command_line_options {
+            spindown_time = 240
+          }
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Forçar opções noatime e nodiratime nas partições montadas em /etc/fstab
+      ansible.builtin.shell: |
+        sed -i 's/defaults/defaults,noatime,nodiratime/g' /etc/fstab || true
+      args:
+        executable: /bin/bash
+
+    - name: Configurar Chave SSH Pública do Administrador no OpenMediaVault NAS Host
+      ansible.posix.authorized_key:
+        user: root
+        state: present
+        key: "{{ ssh_public_key }}"
+
+    - name: Exibir confirmação do OMV NAS Host
+      ansible.builtin.debug:
+        msg: "💾 OpenMediaVault (OMV) NAS Host padronizado! Samba aio/sendfile, NFS 16 threads, hdparm spindown, fstab noatime, Chrony em 198.18.10.1, Fail2ban e Syslog Alloy prontos."
