@@ -1,1 +1,0 @@
-Essa pasta contem arquivos de exemplo de configuração do Traefik

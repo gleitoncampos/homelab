@@ -42,7 +42,7 @@
         stack_name: "statping"
         stack_repo_url: "{{ github_repo_url }}"
         stack_repo_ref: "{{ github_repo_branch }}"
-        stack_compose_path: "docker/statping/swarm/compose.yml"
+        stack_compose_path: "docker/_catalog/statping/swarm/compose.yml"
         stack_env:
           - name: "FQDN"
             value: "{{ fqdn_statping }}"

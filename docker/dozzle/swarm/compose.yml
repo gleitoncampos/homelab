@@ -1,0 +1,40 @@
+services:
+  dozzle:
+    image: amir20/dozzle:v10.7.1
+    environment:
+      # Modo agente desligado: um nó só, leitura direta do socket local.
+      DOZZLE_LEVEL: info
+      DOZZLE_NO_ANALYTICS: "true"
+    volumes:
+      # Somente leitura: o Dozzle só precisa ler logs e listar containers.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - traefik_public
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.dozzle.rule=Host(\"${FQDN}\")"
+        - "traefik.http.routers.dozzle.entrypoints=websecure"
+        - "traefik.http.services.dozzle.loadbalancer.server.port=8080"
+        - "traefik.http.routers.dozzle.service=dozzle"
+        - "traefik.http.routers.dozzle.tls.certresolver=cloudflare"
+    healthcheck:
+      test: ["CMD", "/dozzle", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  traefik_public:
+    external: true

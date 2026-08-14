@@ -22,7 +22,7 @@
         stack_name: "paperless"
         stack_repo_url: "{{ github_repo_url }}"
         stack_repo_ref: "{{ github_repo_branch }}"
-        stack_compose_path: "docker/paperless-ngx/swarm/compose.yml"
+        stack_compose_path: "docker/_catalog/paperless-ngx/swarm/compose.yml"
         stack_env:
           - name: "POSTGRES_PASSWORD"
             value: "{{ postgres_paperless_password }}"
@@ -40,7 +40,7 @@
         stack_name: "actualbudget"
         stack_repo_url: "{{ github_repo_url }}"
         stack_repo_ref: "{{ github_repo_branch }}"
-        stack_compose_path: "docker/actual-budget/swarm/compose.yml"
+        stack_compose_path: "docker/_catalog/actual-budget/swarm/compose.yml"
         stack_env:
           - name: "FQDN"
             value: "{{ fqdn_actualbudget }}"
@@ -53,7 +53,7 @@
         stack_name: "vikunja"
         stack_repo_url: "{{ github_repo_url }}"
         stack_repo_ref: "{{ github_repo_branch }}"
-        stack_compose_path: "docker/vikunja/swarm/compose.yml"
+        stack_compose_path: "docker/_catalog/vikunja/swarm/compose.yml"
         stack_env:
           - name: "POSTGRES_PASSWORD"
             value: "{{ postgres_vikunja_password }}"
@@ -69,7 +69,7 @@
         stack_name: "wallos"
         stack_repo_url: "{{ github_repo_url }}"
         stack_repo_ref: "{{ github_repo_branch }}"
-        stack_compose_path: "docker/wallos/swarm/compose.yml"
+        stack_compose_path: "docker/_catalog/wallos/swarm/compose.yml"
         stack_env:
           - name: "FQDN"
             value: "{{ fqdn_wallos }}"
@@ -82,7 +82,7 @@
         stack_name: "thrifty"
         stack_repo_url: "{{ github_repo_url }}"
         stack_repo_ref: "{{ github_repo_branch }}"
-        stack_compose_path: "docker/thrifty/swarm/compose.yml"
+        stack_compose_path: "docker/_catalog/thrifty/swarm/compose.yml"
         # Duas rotas: FQDN é a UI, FQDN2 é a API (LOCAL_API_HOSTNAME).
         stack_env:
           - name: "FQDN"

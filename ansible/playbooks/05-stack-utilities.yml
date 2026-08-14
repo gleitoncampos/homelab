@@ -22,7 +22,7 @@
         stack_name: "cronicle"
         stack_repo_url: "{{ github_repo_url }}"
         stack_repo_ref: "{{ github_repo_branch }}"
-        stack_compose_path: "docker/cronicle/swarm/compose.yml"
+        stack_compose_path: "docker/_catalog/cronicle/swarm/compose.yml"
         stack_env:
           - name: "FQDN"
             value: "{{ fqdn_cronicle }}"
@@ -38,7 +38,7 @@
         stack_name: "linkwarden"
         stack_repo_url: "{{ github_repo_url }}"
         stack_repo_ref: "{{ github_repo_branch }}"
-        stack_compose_path: "docker/linkwarden/swarm/compose.yml"
+        stack_compose_path: "docker/_catalog/linkwarden/swarm/compose.yml"
         stack_env:
           - name: "FQDN"
             value: "{{ fqdn_linkwarden }}"
@@ -54,7 +54,7 @@
         stack_name: "stirling-pdf"
         stack_repo_url: "{{ github_repo_url }}"
         stack_repo_ref: "{{ github_repo_branch }}"
-        stack_compose_path: "docker/stirling-pdf/swarm/compose.yml"
+        stack_compose_path: "docker/_catalog/stirling-pdf/swarm/compose.yml"
         stack_env:
           - name: "FQDN"
             value: "{{ fqdn_stirling }}"
@@ -67,7 +67,7 @@
         stack_name: "bytestash"
         stack_repo_url: "{{ github_repo_url }}"
         stack_repo_ref: "{{ github_repo_branch }}"
-        stack_compose_path: "docker/bytestash/swarm/compose.yml"
+        stack_compose_path: "docker/_catalog/bytestash/swarm/compose.yml"
         stack_env:
           - name: "FQDN"
             value: "{{ fqdn_bytestash }}"
@@ -83,7 +83,7 @@
         stack_name: "it-tools"
         stack_repo_url: "{{ github_repo_url }}"
         stack_repo_ref: "{{ github_repo_branch }}"
-        stack_compose_path: "docker/it-tools/swarm/compose.yml"
+        stack_compose_path: "docker/_catalog/it-tools/swarm/compose.yml"
         stack_env:
           - name: "FQDN"
             value: "{{ fqdn_ittools }}"
