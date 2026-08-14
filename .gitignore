@@ -53,7 +53,14 @@ stacks.txt
 
 # --- Snapshot da produção ---------------------------------------------------
 # Arquivos REAIS copiados dos hosts, para diff contra o repo. Nunca commitar.
-prod-snapshot/
+# Os DADOS coletados da produção ficam fora do git; os SCRIPTS que os coletam
+# são código e entram. A regra precisa ser `prod-snapshot/*` e não
+# `prod-snapshot/`: o Git não desce em diretório excluído, então uma negação
+# dentro dele nunca seria avaliada.
+prod-snapshot/*
+!prod-snapshot/collect.sh
+!prod-snapshot/discover.sh
+!prod-snapshot/README.md
 
 # --- Relatórios internos de auditoria ---------------------------------------
 SECURITY-AUDIT.local.md
