@@ -103,7 +103,10 @@ Este arquivo estabelece os princípios de arquitetura, padrões de projeto, conv
 ├── .editorconfig           # Convenções de espaço e fim de linha
 ├── .githooks/              # Gate de qualidade; ativar com core.hooksPath
 ├── .gitignore              # vault.yml, hosts.ini, .tfvars, .tfstate, .local/
-├── .local/                 # IGNORADO. Notas, coleta da produção, descoberta de rede
+├── .local/                 # IGNORADO. Diretório padrão de documentação de trabalho
+│   ├── README.local.md     # Índice comentado, com o estado de cada documento
+│   ├── memoria/            # Symlinks para a memória de longo prazo (~/.claude)
+│   └── snapshot/           # Coleta da produção e o levantamento do que roda
 ├── .renovaterc.json        # Atualização automática de versão de imagem
 ├── docs/
 │   ├── ROADMAP.md          # Backlog por fase
@@ -150,6 +153,27 @@ Ao acrescentar uma ferramenta:
 2. Se ela guarda estado ou credencial (`*.tfstate`, `*.tfvars`, inventário real),
    acrescente a regra ao `.gitignore` **antes** do primeiro arquivo existir.
 3. Atualize esta árvore e a tabela do [`README.md`](./README.md).
+
+### Regra: documento de trabalho vive em `.local/`
+
+`.local/` é o **diretório padrão de documentação** deste repositório. Análise,
+auditoria, levantamento da produção, plano de execução e qualquer texto que cite
+dado real entram lá — nunca na raiz, nunca em `docs/`. O índice comentado, com o
+estado de cada documento, está em `.local/README.local.md`.
+
+A divisão:
+
+| onde | o que | versionado |
+|---|---|---|
+| `README.md`, `CLAUDE.md`, `docs/` | o que o sistema **deve ser**: permanente, público, sem dado real | sim |
+| `.local/` | o que **aconteceu**: datado, com hostname, IP e trecho de segredo | não (`.gitignore`) |
+| `.local/memoria/` | symlinks para `~/.claude/.../memory/` — o que precisa estar em contexto antes da próxima conversa | não |
+
+Regra de decisão: **se o documento perde sentido depois de resolvido, ou cita
+dado real, é `.local/`.** Todo documento novo leva **data no cabeçalho** — sem
+ela, em três meses não há como saber se descreve o estado atual. Documento que
+ficou obsoleto é marcado como tal no índice, não apagado: o raciocínio de por que
+uma decisão foi tomada sobrevive ao fato de ela já ter sido executada.
 
 ---
 
