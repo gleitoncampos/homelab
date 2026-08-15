@@ -99,10 +99,29 @@ Este arquivo estabelece os princípios de arquitetura, padrões de projeto, conv
 .
 ├── AGENTS.md               # Regras de estilo para assistentes (CLAUDE.md é symlink)
 ├── CLAUDE.md               # Este arquivo (diretrizes e premissas do repositório)
+├── CONTRIBUTING.md         # Para quem vem de fora; aponta para cá, não duplica
+├── LICENSE                 # MIT
+├── Makefile                # Entrada única: make hooks, make check, make secrets
 ├── README.md               # Porta de entrada: o que é o projeto e como subir
-├── .editorconfig           # Convenções de espaço e fim de linha
+├── SECURITY.md             # Como reportar, e o que NÃO é vulnerabilidade aqui
+├── .ansible-lint           # Perfil production fixado (bump de versão não muda o gate)
+├── .editorconfig           # Convenções de espaço e fim de linha (no editor)
+├── .gitattributes          # Convenções de fim de linha (no git, valem sempre)
+├── .github/
+│   ├── CODEOWNERS          # Revisão do mantenedor em tudo
+│   ├── ISSUE_TEMPLATE/     # bug, nova-stack; issue em branco desativada
+│   ├── PULL_REQUEST_TEMPLATE.md
+│   └── workflows/ci.yml    # Chama o Makefile; não repete os comandos
 ├── .githooks/              # Gate de qualidade; ativar com core.hooksPath
+│   ├── pre-commit          # Vazamento, referências, sintaxe, linters
+│   ├── commit-msg          # Conventional Commits + varredura da mensagem
+│   ├── lib.sh              # Leitura dos padrões, compartilhada pelos hooks
+│   ├── scan-refs.sh        # stack_compose_path e links (usado por make links)
+│   ├── scan-tree.sh        # Árvore inteira (usado por make secrets e pela CI)
+│   ├── secret-patterns.txt # Genérico; VERSIONADO e público
+│   └── secret-patterns.local.txt.example  # Sua topologia; a cópia é ignorada
 ├── .gitignore              # vault.yml, hosts.ini, .tfvars, .tfstate, .local/
+├── .yamllint               # Estilo de YAML; `yes`/`no` truthy é erro
 ├── .local/                 # IGNORADO. Diretório padrão de documentação de trabalho
 │   ├── README.local.md     # Índice comentado, com o estado de cada documento
 │   ├── memoria/            # Symlinks para a memória de longo prazo (~/.claude)
@@ -196,35 +215,64 @@ Ao adicionar uma nova aplicação ao repositório, siga o checklist:
 
 ---
 
-## ✅ Gate de qualidade (`.githooks/`)
+## ✅ Gate de qualidade
+
+Três camadas, com alcances diferentes de propósito:
+
+| camada | alcance | quando |
+|---|---|---|
+| `pre-commit` | só as linhas **adicionadas** no índice | a cada commit |
+| `make check` / `make secrets` | a **árvore inteira** rastreada | antes do PR |
+| CI (`.github/workflows/ci.yml`) | idem, mas **não pulável** | em todo push e PR |
+
+O hook é incremental de propósito: rápido, e não pune você por problema que já
+estava lá. A varredura de árvore é o complemento — foi ela que achou um IP de
+gateway literal em dois playbooks, escrito antes de o gate existir e portanto
+invisível para o hook. E a CI existe porque hook é local: `--no-verify` some com
+ele, e num PR de terceiro nem chega a rodar.
 
 Ativar uma vez por clone — o Git não compartilha `.git/hooks/`:
 
 ```bash
-git config core.hooksPath .githooks
+make hooks     # equivale a: git config core.hooksPath .githooks
+make check     # o mesmo conjunto que a CI roda
 ```
 
 ### `pre-commit`
 
-Roda só sobre o que está no índice, na ordem em que os problemas custam caro:
+Na ordem em que os problemas custam caro:
 
 1. **Vazamento.** Compara as linhas *adicionadas* contra
-   [`.githooks/secret-patterns.txt`](./.githooks/secret-patterns.txt): chave
-   privada, chave SSH real, hash de senha, token de 64 hex, senha literal,
-   e-mail pessoal, MAC, IP privado, hostname de dispositivo e domínio real.
-   Também barra nome de arquivo proibido mesmo que o `.gitignore` falhe.
+   [`secret-patterns.txt`](./.githooks/secret-patterns.txt) **e**
+   `secret-patterns.local.txt`. Também barra nome de arquivo proibido mesmo que
+   o `.gitignore` falhe.
 2. **Referências.** Todo `stack_compose_path` aponta para arquivo existente, e
    todo link relativo de markdown resolve. As duas já quebraram de verdade nesta
    base, ao mover stacks para `_catalog/` e ao criar `docs/`.
-3. **Sintaxe.** `docker stack config` nos composes alterados, YAML parseável,
-   `ansible-playbook --syntax-check`.
+3. **Sintaxe.** Compose validado com **duas réguas**: o que está no ar passa por
+   `docker stack config`, que é o schema que o Portainer vai aplicar; o catálogo
+   passa por `docker compose config`, porque estar lá significa que a definição
+   ainda não foi adequada. Mais `yamllint` e `ansible-playbook --syntax-check`.
 4. **Linters.** `ansible-lint`, `shellcheck`, `terraform fmt`. Ausente do
    sistema, o linter é pulado com aviso em vez de falhar.
 
-Os padrões são **deste** repositório, não uma lista genérica: ferramenta de
-prateleira pega chave da AWS, não pega o hostname do seu hypervisor. Ao mudar
-hostname, domínio ou faixa de rede, atualize o arquivo de padrões — um padrão
-desatualizado é pior que padrão nenhum, porque dá a sensação de proteção.
+### Os dois arquivos de padrões
+
+⚠️ `secret-patterns.txt` é **versionado e público**, e por isso guarda só o
+genérico — chave, hash, token, IP privado, MAC. Hostname e domínio vão em
+`secret-patterns.local.txt`, gitignorado: uma lista de termos proibidos
+publicada no repositório entrega o esquema de nomes e confirma quais nomes
+importam, protegendo contra o vazamento acidental ao custo de facilitar o
+deliberado.
+
+Sem o arquivo local o gate ainda roda, com o genérico, e **avisa em amarelo**.
+Aviso e não falha, porque em clone de terceiro ele legitimamente não existe —
+mas visível, porque proteção que existe e não roda foi o modo de falha do
+`core.hooksPath`.
+
+⚠️ Ao mudar hostname, domínio ou faixa de rede, atualize o arquivo local. Como
+ele não é versionado, nada além do `.example` vai lembrar você — guarde uma
+cópia junto do backup do vault.
 
 O terceiro campo de cada padrão isenta caminhos onde o valor é legítimo: o plano
 de VLANs precisa declarar gateways, os templates de rede descrevem a topologia
@@ -232,17 +280,26 @@ atual, e os `.example` existem para mostrar o formato.
 
 ### `commit-msg`
 
-Conventional Commits: `<tipo>(<escopo>): <descrição>`, com `!` antes dos dois
-pontos para mudança incompatível. Tipos aceitos: `feat`, `fix`, `docs`, `style`,
-`refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`, `security`.
-Assunto até 72 caracteres — acima disso o GitHub trunca justamente onde estaria
-a informação. Descrição no particípio ("adicionado") gera aviso, não bloqueio.
+Duas checagens:
+
+1. **Vazamento na mensagem**, contra os mesmos padrões. Mensagem é publicada
+   junto com o diff e não tem conserto sem reescrever o histórico — é o pior
+   lugar para um dado real cair. Sem isenção por caminho: mensagem não tem
+   caminho. Quando o commit precisa falar de um host, descreva o papel ("o nó
+   manager", "o firewall"), não o nome.
+2. **Conventional Commits**: `<tipo>(<escopo>): <descrição>`, com `!` antes dos
+   dois pontos para mudança incompatível. Tipos aceitos: `feat`, `fix`, `docs`,
+   `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`,
+   `security`. Assunto até 72 caracteres — acima disso o GitHub trunca
+   justamente onde estaria a informação. Particípio ("adicionado") gera aviso,
+   não bloqueio.
 
 ### Escapar do gate
 
 `git commit --no-verify` funciona e às vezes é o certo. Quando usar, escreva o
 motivo no corpo da mensagem — o hook existe para tornar a exceção visível, não
-impossível.
+impossível. Num PR, `--no-verify` sem justificativa volta para revisão, e a CI
+pega de qualquer forma.
 
 ---
 
@@ -256,11 +313,12 @@ mensagem do commit.
 ### 1. Ativar o gate, uma vez por clone
 
 ```bash
-git config core.hooksPath .githooks
+make hooks
 ```
 
-O Git não versiona `.git/hooks/`. Sem esse comando os hooks existem no
-repositório e não rodam — é o modo de falha silencioso mais comum aqui.
+Ativa `core.hooksPath` e cria o `secret-patterns.local.txt` a partir do
+`.example`. O Git não versiona `.git/hooks/`: sem esse passo os hooks existem no
+repositório e não rodam — o modo de falha silencioso mais comum aqui.
 
 ### 2. Modelo de branches
 
@@ -290,10 +348,19 @@ sem proteger.
 
 ### 4. Linter limpo é o estado normal, não a meta
 
-`ansible-lint` deve fechar em **zero**. Achado que não dá para resolver vira
-`# noqa: <regra>` com a justificativa escrita na linha de cima — nunca uma
-supressão global no `.ansible-lint`. `shellcheck -S warning`, `terraform fmt` e
-`docker stack config` seguem a mesma regra.
+`make check` fecha em **zero** antes de qualquer PR. Achado que não dá para
+resolver vira `# noqa: <regra>` com a justificativa escrita na linha de cima —
+nunca uma supressão global no [`.ansible-lint`](./.ansible-lint), cujo `profile:
+production` está fixado justamente para que um bump de versão do linter não
+mude o gate sozinho.
+
+⚠️ **Lint limpo não é o mesmo que correto.** Ao normalizar a indentação dos
+composes, dois arquivos foram quebrados de um jeito que o yamllint aprovou:
+dedentar até o fim arrastou o bloco `networks:` de topo, transformando
+`traefik_public` em chave de topo e `networks` em chave nula — e o resultado
+continuava consistentemente indentado, portanto sem erro. Depois de
+reformatação em massa, **compare a estrutura parseada**, antes e depois, em vez
+de confiar no linter.
 
 ⚠️ `ignore_errors: true` só entra quando a falha é **esperada por definição** —
 por exemplo `kldload coretemp` contra `amdtemp`, em que um dos dois sempre falha

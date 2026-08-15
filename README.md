@@ -115,7 +115,7 @@ Os serviços estão organizados por domínio funcional dentro da pasta [`docker/
 Do control node, com o inventário preenchido:
 
 ```bash
-cd ansible
+cd IaC/ansible
 ansible-galaxy collection install -r requirements.yml
 ansible-playbook -i inventories/prod/hosts.ini playbooks/01-bootstrap-os.yml
 ```
@@ -164,29 +164,40 @@ do `CLAUDE.md` — que é a fonte única lida também pelos assistentes de IA
 **Antes de qualquer coisa, num clone novo:**
 
 ```bash
-git config core.hooksPath .githooks
+make hooks     # ativa core.hooksPath e cria o arquivo de padrões local
+make check     # o mesmo conjunto que a CI roda
 ```
 
-O Git não versiona `.git/hooks/`. Sem esse comando os hooks existem no
-repositório e simplesmente não rodam.
+O Git não versiona `.git/hooks/`. Sem `make hooks` o gate existe no repositório
+e simplesmente não roda — é o modo de falha silencioso mais provável aqui.
 
 | o que | como é garantido |
 |---|---|
-| **Nenhum dado sensível versionado** | `pre-commit` varre as linhas *adicionadas* contra [`.githooks/secret-patterns.txt`](./.githooks/secret-patterns.txt): chave privada, hash de senha, token, e-mail pessoal, MAC, IP interno, hostname de equipamento e domínio real. São os padrões **deste** homelab — ferramenta de prateleira pega chave da AWS, não pega o hostname do seu hypervisor |
+| **Nenhum dado sensível versionado** | Três alcances: o `pre-commit` varre as linhas *adicionadas*, `make secrets` varre a **árvore inteira**, e a CI repete sem poder ser pulada. Padrões em [`.githooks/secret-patterns.txt`](./.githooks/secret-patterns.txt) — os **deste** homelab, já que ferramenta de prateleira pega chave da AWS e não pega o hostname do seu hypervisor |
+| **A mensagem de commit também** | O `commit-msg` varre a mensagem contra os mesmos padrões. Mensagem é publicada com o diff e não tem conserto sem reescrever o histórico |
 | **Referências que resolvem** | todo `stack_compose_path` aponta para arquivo existente e todo link relativo de markdown resolve. As duas já quebraram de verdade aqui |
-| **Sintaxe válida** | `docker stack config` nas stacks alteradas, YAML parseável, `ansible-playbook --syntax-check` |
-| **Linters limpos** | `ansible-lint` em zero, `shellcheck`, `terraform fmt`. Ausente do sistema, o linter é pulado com aviso em vez de falhar |
-| **Histórico legível** | [Conventional Commits](https://www.conventionalcommits.org/pt-br/) validados pelo hook `commit-msg`, assunto até 72 caracteres |
-| **Formatação uniforme** | [`.editorconfig`](./.editorconfig) — UTF-8, LF, 2 espaços |
-| **Dependências em dia** | [`.renovaterc.json`](./.renovaterc.json) abre PR de atualização de imagem; bump manual de tag exige motivo escrito no commit |
+| **Sintaxe válida** | Compose com duas réguas — `docker stack config` no que está no ar, `docker compose config` no catálogo — mais `yamllint` e `ansible-playbook --syntax-check` |
+| **Linters limpos** | `ansible-lint` em zero com [`profile: production`](./.ansible-lint) fixado, `yamllint`, `shellcheck`, `terraform fmt`. Ausente do sistema, o linter é pulado com aviso em vez de falhar |
+| **Histórico legível** | [Conventional Commits](https://www.conventionalcommits.org/pt-br/) validados no hook e revalidados na CI, commit a commit, em cada PR |
+| **Formatação uniforme** | [`.editorconfig`](./.editorconfig) no editor e [`.gitattributes`](./.gitattributes) no próprio git — o primeiro só vale em editor que o honra |
+| **Dependências em dia** | [`.renovaterc.json`](./.renovaterc.json): agrupa por stack, segura major de banco e o catálogo inteiro atrás de aprovação, e deixa CVE furar a fila |
+
+⚠️ **Dois arquivos de padrões.** O versionado guarda só o genérico; hostname e
+domínio ficam em `secret-patterns.local.txt`, que é gitignorado. Publicar a
+lista de termos proibidos entregaria o esquema de nomes e confirmaria quais
+nomes importam.
 
 Exemplos usam as faixas de documentação da RFC 5737 (`192.0.2.0/24`,
 `198.51.100.0/24`, `203.0.113.0/24`) e domínios `.example`. Ao mudar hostname,
-domínio ou faixa de rede, o arquivo de padrões é atualizado **no mesmo commit** —
-padrão desatualizado dá sensação de proteção sem proteger.
+domínio ou faixa de rede, o arquivo local é atualizado junto — padrão
+desatualizado dá sensação de proteção sem proteger.
 
 `git commit --no-verify` funciona e às vezes é o certo. Quando usar, o motivo vai
 no corpo da mensagem: o gate existe para tornar a exceção visível, não impossível.
+
+Contribuições são bem-vindas — ver [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+Falha de segurança vai por [`SECURITY.md`](./SECURITY.md), **nunca** por issue
+pública. Licença [MIT](./LICENSE).
 
 ---
 
