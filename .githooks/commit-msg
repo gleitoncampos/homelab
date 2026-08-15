@@ -11,7 +11,45 @@
 
 set -uo pipefail
 
+REPO="$(git rev-parse --show-toplevel)"
 MSG_FILE="$1"
+
+# ---------------------------------------------------------------------------
+# Vazamento na MENSAGEM
+# ---------------------------------------------------------------------------
+# A mensagem é publicada junto com o diff e, ao contrário do arquivo, não tem
+# como ser corrigida depois sem reescrever o histórico. Varrer só o conteúdo dos
+# arquivos era meia proteção: este hook nasceu porque um hostname real foi
+# escrito numa mensagem descrevendo justamente a varredura de hostnames.
+#
+# Sem isenção por caminho aqui — mensagem não tem caminho, e não existe motivo
+# legítimo para um segredo aparecer numa.
+# shellcheck source=.githooks/lib.sh
+. "$REPO/.githooks/lib.sh"
+
+BODY="$(grep -vE '^[[:space:]]*#' "$MSG_FILE")"
+leaked=0
+while IFS= read -r line; do
+  split_pattern "$line" || continue
+  hits="$(grep -iE -e "$P_REGEX" <<<"$BODY" || true)"
+  if [[ -n "$hits" ]]; then
+    printf '\n\033[31m✗\033[0m Dado sensível na mensagem de commit: %s\n' "$P_LABEL" >&2
+    printf '%s\n' "$hits" | head -2 | cut -c1-110 | sed 's/^/      /' >&2
+    leaked=1
+  fi
+done < <(pattern_lines "$REPO")
+
+if (( leaked )); then
+  cat >&2 <<'TXT'
+
+  A mensagem vai para o histórico público junto com o diff, e corrigi-la depois
+  exige reescrever o histórico. Reescreva a mensagem sem o termo — descreva o
+  papel do host ("o nó manager", "o firewall") em vez do nome.
+
+TXT
+  exit 1
+fi
+
 # Ignora comentários e a mensagem gerada por merge/revert/fixup.
 SUBJECT="$(grep -vE '^[[:space:]]*#' "$MSG_FILE" | grep -vE '^[[:space:]]*$' | head -1)"
 

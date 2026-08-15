@@ -37,43 +37,32 @@ staged_matching() { # staged_matching <regex-de-caminho>
 step "Varredura de dado sensível"
 
 PATTERNS_FILE="$REPO/.githooks/secret-patterns.txt"
-LOCAL_PATTERNS="$REPO/.githooks/secret-patterns.local.txt"
+# shellcheck source=.githooks/lib.sh
+. "$REPO/.githooks/lib.sh"
 
-# Os padrões da topologia (hostname, domínio, faixa própria) vivem no arquivo
-# local, que é gitignorado — publicar a lista de termos proibidos entregaria o
-# esquema de nomes. Sem ele o gate ainda roda, mas só com o genérico, e isso
-# precisa aparecer: um aviso silencioso aqui repetiria o modo de falha do
-# `core.hooksPath`, em que a proteção existe e não roda.
-if [[ ! -f "$LOCAL_PATTERNS" ]]; then
-  printf '  \033[33m!\033[0m %s\n' "sem $(basename "$LOCAL_PATTERNS") — hostname e domínio NÃO estão sendo verificados"
-  printf '      cp .githooks/secret-patterns.local.txt.example .githooks/secret-patterns.local.txt\n'
-fi
+warn_missing_local "$REPO"
 
 if [[ ! -f "$PATTERNS_FILE" ]]; then
   bad "não achei $PATTERNS_FILE — a varredura de segredo é obrigatória"
 else
   leaked=0
-  # Separador `%%` e não `|`, porque os regex usam `|` para alternância.
   while IFS= read -r line; do
-    [[ -z "${line// }" || "$line" == \#* ]] && continue
-    label="${line%%\%\%*}"; rest="${line#*%%}"
-    regex="${rest%%\%\%*}"; exempt="${rest#*%%}"
-    [[ "$exempt" == "$rest" ]] && exempt=""
+    split_pattern "$line" || continue
     for f in "${STAGED[@]}"; do
       # Isenção por caminho: o plano de VLANs precisa declarar gateways, os
       # `.example` existem para mostrar o formato, e este diretório contém os
       # próprios padrões. Ver o cabeçalho de secret-patterns.txt.
-      [[ -n "${exempt// }" ]] && grep -qE "$exempt" <<<"$f" && continue
+      [[ -n "${P_EXEMPT// }" ]] && grep -qE "$P_EXEMPT" <<<"$f" && continue
       # Só as linhas ADICIONADAS deste arquivo.
       hits="$(git diff --cached -U0 --diff-filter=ACMR -- "$f" \
-              | grep -E '^\+[^+]' | grep -iE -e "$regex" || true)"
+              | grep -E '^\+[^+]' | grep -iE -e "$P_REGEX" || true)"
       if [[ -n "$hits" ]]; then
-        bad "$label — em $f"
+        bad "$P_LABEL — em $f"
         printf '%s\n' "$hits" | head -2 | cut -c1-110 | sed 's/^/      /'
         leaked=1
       fi
     done
-  done < <(cat "$PATTERNS_FILE" "$LOCAL_PATTERNS" 2>/dev/null)
+  done < <(pattern_lines "$REPO")
   (( leaked )) || ok "nenhum padrão sensível nas linhas adicionadas"
 fi
 
