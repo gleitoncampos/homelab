@@ -1,30 +1,33 @@
 ---
-# Backup da VM que roda o Swarm.
+# Backup dos convidados do Proxmox que sustentam o Swarm.
 #
 # Existe porque `CLAUDE.md` promete reprodutibilidade "a partir das definições
 # deste repositório E do diretório /srv/containers" — e a segunda metade não
 # tinha backup nenhum. `docker service rollback` NÃO restaura bind mount: ele
 # restaura a ServiceSpec. Este playbook é o único ponto de retorno real.
 #
-# Backup de VM inteira, e não restic por diretório, por ser a opção mais
-# aditiva: não toca em serviço nenhum e entrega rollback de máquina completa.
+# Backup de convidado inteiro, e não restic por diretório, por ser a opção
+# mais aditiva: não toca em serviço nenhum e entrega rollback de máquina
+# completa.
 #
 #   ansible-playbook playbooks/06-backup.yml
-- name: Configurar backup agendado da VM do Swarm
+- name: Configurar backup agendado dos convidados do Swarm
   hosts: proxmox
   # Nenhuma task deste play usa fact de host — pular a coleta é só velocidade.
   gather_facts: false
 
   pre_tasks:
-    - name: "Abortar se backup_vmid_swarm não estiver no inventário"
+    - name: "Abortar se backup_vmids não estiver no inventário"
       ansible.builtin.assert:
         that:
-          - backup_vmid_swarm is defined
-          - backup_vmid_swarm | string | length > 0
+          - backup_vmids is defined
+          - backup_vmids | length > 0
         fail_msg: >-
-          backup_vmid_swarm não está definido. Sem ele o vzdump salvaria a VM
-          errada e reportaria sucesso. Defina em [all:vars] no hosts.ini do
-          ambiente — ver hosts.ini.example.
+          backup_vmids não está definido, ou está vazio. É uma LISTA de
+          VMIDs — sem ela não há como saber quais convidados proteger, e uma
+          lista chutada faria o job apontar para o convidado errado e
+          reportar sucesso. Defina em [all:vars] no hosts.ini do ambiente
+          — ver hosts.ini.example.
 
     - name: "Abortar se backup_storage não estiver no inventário"
       ansible.builtin.assert:
@@ -55,17 +58,40 @@
           Storage {{ backup_storage }} não está ativo. Um job de backup
           apontando para storage inativo falha silenciosamente todo dia.
 
-    - name: Conferir que a VM alvo existe neste nó
+    - name: Levantar os convidados existentes no cluster (QEMU e LXC)
       ansible.builtin.command:
-        cmd: "qm config {{ backup_vmid_swarm }}"
-      register: vm_config
+        cmd: "pvesh get /cluster/resources --type vm --output-format json"
+      register: cluster_guests
       changed_when: false
-      failed_when: false
-      # Mesmo motivo da task acima: consulta somente-leitura, precisa rodar
-      # em --check para a task de agendamento decidir changed/skipped certo.
+      # Consulta somente-leitura, mesmo motivo do `pvesm status` acima.
       check_mode: false
+      # NÃO é `qm config`: esse comando é exclusivo de convidado QEMU e
+      # retorna código de erro contra um CT LXC. A topologia-alvo
+      # (IaC/terraform/proxmox/main.tf) usa LXC para os nós do Swarm — com
+      # `qm config`, a task de agendamento abaixo seria pulada em silêncio
+      # contra o alvo, o playbook reportaria sucesso, e nenhum job de backup
+      # existiria. `/cluster/resources --type vm` devolve QEMU e LXC juntos
+      # (o nome do filtro é enganoso, mas é o comportamento documentado do
+      # endpoint) e é cluster-wide: o resultado é o mesmo não importa de
+      # qual nó a consulta roda, por isso só precisa rodar uma vez.
+      run_once: true
 
-    - name: Agendar o job de backup
+    - name: "Guardar os VMIDs existentes no cluster"
+      ansible.builtin.set_fact:
+        cluster_existing_vmids: >-
+          {{ (cluster_guests.stdout | from_json) | map(attribute='vmid') | list }}
+      run_once: true
+
+    - name: "Abortar se algum VMID de backup_vmids não existir no cluster"
+      ansible.builtin.assert:
+        that: (backup_vmids | difference(cluster_existing_vmids)) | length == 0
+        fail_msg: >-
+          {{ backup_vmids | difference(cluster_existing_vmids) }} de
+          backup_vmids não existe em nenhum nó do cluster. Agendar backup
+          para um convidado inexistente falha silenciosamente todo dia.
+      run_once: true
+
+    - name: "Agendar o job de backup (um job só, cobrindo todos os backup_vmids)"
       ansible.builtin.command:
         argv:
           - pvesh
@@ -74,18 +100,24 @@
           - --id=homelab-swarm-backup
           - --schedule={{ backup_schedule }}
           - --storage={{ backup_storage }}
-          - --vmid={{ backup_vmid_swarm }}
+          - --vmid={{ backup_vmids | join(',') }}
           - --mode=snapshot
           - --compress=zstd
           - --enabled=1
           - --notes-template=homelab-swarm-{{ '{{' }} guestname {{ '}}' }}
           - --prune-backups=keep-daily={{ backup_keep_daily }},keep-weekly={{ backup_keep_weekly }}
-      # --id fixo é o que torna a idempotência real: o campo `id` do endpoint
-      # /cluster/backup é opcional e AUTOGERADO quando omitido — sem um valor
-      # determinístico, cada execução cria um job novo (nunca colide), o
-      # 'already exists' do failed_when abaixo nunca aparece, e rodar o
-      # playbook duas vezes agenda o mesmo backup duas vezes em silêncio.
-      when: vm_config.rc == 0
+      # --vmid aceita lista separada por vírgula (formato `pve-vmid-list` da
+      # API do Proxmox, o mesmo usado por vzdump.conf) — um job só cobrindo
+      # N convidados preserva o --id fixo e a idempotência conquistada na
+      # rodada anterior. N jobs separados exigiriam N ids e reabririam o
+      # problema do job duplicado. Não confirmado contra este cluster real
+      # — ver PENDENCIAS-VALIDACAO.md.
+      #
+      # run_once: true pelo mesmo motivo da consulta de convidados acima —
+      # /cluster/backup é configuração replicada entre nós (pmxcfs), então
+      # criar de um nó só é suficiente e evita `already exists` desnecessário
+      # no segundo nó.
+      run_once: true
       register: backup_job
       changed_when: backup_job.rc == 0
       # Já existir não é erro: o playbook é idempotente por natureza aqui, e o

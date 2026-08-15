@@ -170,10 +170,14 @@ ntp_servers: >-
      + ntp_servers_public }}
 
 # --- Backup ------------------------------------------------------------------
-# VMID da VM que roda o Swarm inteiro. Sem default: um VMID errado faria o
-# vzdump salvar a máquina errada e reportar sucesso, que é o pior desfecho
-# possível para um mecanismo cuja única função é ser confiável.
-# Definir em `hosts.ini` do ambiente ([all:vars] backup_vmid_swarm=NNN).
+# Lista de VMIDs dos convidados do Proxmox (VM QEMU e CT LXC) que entram no
+# backup agendado — na topologia-alvo (IaC/terraform/proxmox/main.tf) isso
+# inclui os nós do Swarm, o CT de dev e o NAS, cada um podendo viver em nós
+# físicos diferentes. Sem default: uma lista errada faria o vzdump salvar o
+# convidado errado e reportar sucesso, que é o pior desfecho possível para um
+# mecanismo cuja única função é ser confiável.
+# Definir em `hosts.ini` do ambiente ([all:vars] backup_vmids=[VMID,VMID,...],
+# com colchetes — é a sintaxe de lista que o parser INI do Ansible aceita).
 
 # Nome do storage do Proxmox com `content backup` (verificar com
 # `pvesm status`). Sem default, e de propósito: os dois nós Proxmox hoje

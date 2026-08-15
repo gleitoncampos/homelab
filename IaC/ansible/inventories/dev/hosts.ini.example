@@ -45,10 +45,13 @@ openwrt
 # não dá erro, derrapa devagar até virar falha de TLS semanas depois.
 # ntp_server_internal=<IP-DO-FIREWALL>
 
-# VMID da VM que roda o Swarm inteiro (playbooks/06-backup.yml). OBRIGATÓRIO
-# para esse playbook — sem default de propósito: um VMID errado faria o
-# vzdump salvar a máquina errada e reportar sucesso.
-# backup_vmid_swarm=<VMID-DA-VM-DO-SWARM>
+# Lista de VMIDs dos convidados do Proxmox (VM QEMU e CT LXC) que entram no
+# backup agendado (playbooks/06-backup.yml). OBRIGATÓRIO para esse playbook
+# — sem default de propósito: uma lista errada faria o vzdump salvar o
+# convidado errado e reportar sucesso. Formato de lista em colchetes — o
+# parser INI do Ansible interpreta como lista Python de verdade, não como
+# string; sem os colchetes vira uma string só, não uma lista.
+# backup_vmids=[<VMID-1>,<VMID-2>,<VMID-3>]
 
 # Nome do storage do Proxmox com `content backup` (verificar com
 # `pvesm status`). OBRIGATÓRIO para playbooks/06-backup.yml — sem default
