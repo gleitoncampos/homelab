@@ -1,0 +1,50 @@
+# Normalização de fim de linha, no próprio git.
+#
+# O `.editorconfig` só vale em editor que o honra — quem editar pelo GitHub web,
+# por outra IDE ou por script passa por cima dele. Este arquivo age no
+# checkout/commit, então vale para todo mundo.
+#
+# LF em tudo. Um CRLF que escape aqui quebra shebang de script e vira ruído de
+# diff em arquivo inteiro.
+* text=auto eol=lf
+
+# Scripts e configuração precisam de LF sob qualquer sistema: um `.sh` com CRLF
+# falha com "bad interpreter: /usr/bin/env bash^M", erro cujo sintoma não diz
+# nada sobre a causa.
+*.sh        text eol=lf
+*.bash      text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.j2        text eol=lf
+*.tf        text eol=lf
+*.hcl       text eol=lf
+*.json      text eol=lf
+*.md        text eol=lf
+*.ini       text eol=lf
+*.cfg       text eol=lf
+Makefile    text eol=lf
+.githooks/* text eol=lf
+
+# Binário: nunca normalizar nem tentar diff textual.
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.pdf       binary
+*.gz        binary
+*.tgz       binary
+*.zip       binary
+*.tar       binary
+
+# Estatística de linguagem do GitHub. Sem isto o repositório aparece como
+# "Jinja" ou "HCL", porque os templates de rede são os maiores arquivos —
+# e o que ele é, de fato, é infraestrutura declarada em YAML.
+*.j2                linguist-language=Jinja
+docker/_catalog/**  linguist-documentation
+docs/**             linguist-documentation
+
+# `git diff` mais legível: mostra o nome da task/serviço no cabeçalho do hunk.
+*.yml  diff=yaml
+*.yaml diff=yaml
+*.md   diff=markdown
