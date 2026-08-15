@@ -1,0 +1,29 @@
+# Perfil e regras explícitos.
+#
+# Sem este arquivo o ansible-lint roda o perfil default da versão instalada, e
+# um bump de versão muda o conjunto de regras sozinho: o gate passa a falhar (ou
+# a passar) sem ninguém ter tocado em código, e o culpado não aparece no diff.
+#
+# `production` é o perfil mais estrito. Foi o alvo da faxina que levou os 101
+# achados a zero; baixar daqui seria desfazer aquele trabalho por conveniência.
+profile: production
+
+exclude_paths:
+  - .local/
+  - .ansible/
+  - .githooks/
+  - docker/_catalog/
+
+# O yamllint tem arquivo próprio (`.yamllint`) e roda separado no `make lint`.
+# Rodar embutido aqui duplicaria o relatório e faria as duas configurações
+# divergirem.
+skip_list:
+  - yaml
+
+# Vale para os playbooks que executam contra host real.
+mock_roles: []
+mock_modules: []
+
+# Torna aviso em erro: aviso que ninguém lê é ruído, e este repositório fecha
+# em zero.
+strict: true

@@ -79,40 +79,12 @@ fi
 # ---------------------------------------------------------------------------
 step "Referências"
 
-# stack_compose_path é caminho relativo ao repositório: o Portainer clona do Git
-# e resolve a partir da raiz. Um caminho errado só aparece no deploy.
-missing=0
-while read -r p; do
-  [[ -z "$p" ]] && continue
-  [[ -f "$p" ]] || { bad "stack_compose_path aponta para arquivo inexistente: $p"; missing=1; }
-done < <(git grep -hoE 'stack_compose_path: "[^"]+"' -- 'IaC/ansible/playbooks/*.yml' 2>/dev/null \
-         | sed -E 's/.*"(.*)"/\1/' | sort -u)
-(( missing )) || ok "todo stack_compose_path resolve"
-
-# Links relativos de markdown.
-if command -v python3 >/dev/null; then
-  broken="$(python3 - <<'PY'
-import re, pathlib
-out = []
-for f in pathlib.Path('.').rglob('*.md'):
-    s = str(f)
-    if '/.local/' in s or '/.git/' in s or s.startswith('.local/'):
-        continue
-    try:
-        txt = f.read_text(errors='ignore')
-    except OSError:
-        continue
-    for m in re.finditer(r'\]\((\.{1,2}/[^)#]+)', txt):
-        if not (f.parent / m.group(1)).resolve().exists():
-            out.append(f"{f}: {m.group(1)}")
-print('\n'.join(out))
-PY
-)"
-  if [[ -n "$broken" ]]; then
-    bad "link relativo quebrado:"; printf '%s\n' "$broken" | head -5 | sed 's/^/      /'
-  else
-    ok "links relativos de markdown resolvem"
-  fi
+# A checagem vive em `scan-refs.sh`, para que hook, `make links` e CI rodem
+# exatamente o mesmo código. Uma cópia no workflow acabaria divergindo.
+if out="$(bash "$REPO/.githooks/scan-refs.sh" 2>&1)"; then
+  ok "referências resolvem"
+else
+  bad "referências:"; printf '%s\n' "$out" | grep -v '^✓' | head -6 | sed 's/^/      /'
 fi
 
 # ---------------------------------------------------------------------------
@@ -124,7 +96,20 @@ if compose="$(staged_matching '^docker/.*compose\.ya?ml$')" && [[ -n "$compose" 
   if command -v docker >/dev/null; then
     while read -r f; do
       [[ -f "$f" ]] || continue
-      if err="$(docker stack config -c "$f" 2>&1 >/dev/null)"; then
+      # Duas réguas, de propósito. O que está no ar tem de passar no schema do
+      # Swarm — é literalmente o que o Portainer vai aplicar. O catálogo, não:
+      # estar lá significa justamente que a definição ainda não foi adequada
+      # (zoneminder ainda declara `version: 2`, que o Swarm recusa). Cobrar a
+      # régua estrita ali travaria todo commit no diretório cuja função é
+      # guardar rascunho, então vale a checagem frouxa, que ainda pega YAML
+      # quebrado e chave inexistente.
+      if [[ "$f" == docker/_catalog/* ]]; then
+        if err="$(docker compose -f "$f" config 2>&1 >/dev/null)"; then
+          ok "compose config (catálogo): $f"
+        else
+          bad "compose config (catálogo): $f"; printf '      %s\n' "$(head -1 <<<"$err")"
+        fi
+      elif err="$(docker stack config -c "$f" 2>&1 >/dev/null)"; then
         ok "docker stack config: $f"
       else
         bad "docker stack config: $f"; printf '      %s\n' "$(head -1 <<<"$err")"
@@ -135,14 +120,29 @@ if compose="$(staged_matching '^docker/.*compose\.ya?ml$')" && [[ -n "$compose" 
   fi
 fi
 
-if yamls="$(staged_matching '\.ya?ml$')" && [[ -n "$yamls" ]] && command -v python3 >/dev/null; then
-  bads=0
-  while read -r f; do
-    [[ -f "$f" ]] || continue
-    python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1]))" "$f" 2>/dev/null \
-      || { bad "YAML inválido: $f"; bads=1; }
-  done <<<"$yamls"
-  (( bads )) || ok "YAML parseável"
+if yamls="$(staged_matching '\.ya?ml$')" && [[ -n "$yamls" ]]; then
+  if command -v yamllint >/dev/null; then
+    # Sem `-s`: aviso (comprimento de linha, `---` ausente) sai 0, erro sai 1.
+    # A configuração está em `.yamllint`, na raiz.
+    mapfile -t yl < <(printf '%s\n' "$yamls" | while read -r f; do [[ -f "$f" ]] && echo "$f"; done)
+    if (( ${#yl[@]} )); then
+      if out="$(yamllint -f parsable "${yl[@]}" 2>&1)"; then
+        ok "yamllint limpo"
+      else
+        bad "yamllint:"; printf '%s\n' "$out" | head -5 | sed 's/^/      /'
+      fi
+    fi
+  elif command -v python3 >/dev/null; then
+    # Sem yamllint, ao menos garante que o arquivo parseia. Aceita `yes`/`no`
+    # truthy e indentação inconsistente — por isso é o modo degradado.
+    bads=0
+    while read -r f; do
+      [[ -f "$f" ]] || continue
+      python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1]))" "$f" 2>/dev/null \
+        || { bad "YAML inválido: $f"; bads=1; }
+    done <<<"$yamls"
+    (( bads )) || skip "yamllint ausente; só a checagem de parse rodou"
+  fi
 fi
 
 if staged_matching '^IaC/ansible/(playbooks|site)' | grep -q . ; then

@@ -1,0 +1,93 @@
+---
+# CI — o que o hook local não consegue garantir.
+#
+# Hook é local e `--no-verify` some com ele; num PR de terceiro nem existe.
+# Por isso a CI é a única garantia real de que o gate rodou.
+#
+# Os passos CHAMAM O MAKEFILE em vez de repetir os comandos. Duplicar aqui
+# recriaria, dentro do workflow, o mesmo problema de cópias divergentes que o
+# repositório já teve com as regras de estilo.
+
+name: CI
+
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+    branches: [main, development]
+  workflow_dispatch:
+
+# Um push novo cancela a execução anterior do mesmo ref: PR em sequência não
+# fica com dez jobs na fila validando commit já superado.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Só leitura. A CI valida; ela não escreve no repositório nem publica nada.
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Lint e validação
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # `git ls-files` no Makefile precisa do índice, que o checkout raso
+          # já entrega. Histórico completo não é necessário aqui.
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Instalar ferramentas
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible-core ansible-lint yamllint
+          ansible-galaxy collection install -r IaC/ansible/requirements.yml
+          sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Lint e validação
+        run: make check
+
+      # Roda por último e separado: é o passo cuja falha exige ação diferente
+      # das outras — não é "corrija o estilo", é "isto não pode ser publicado".
+      #
+      # ⚠️ Limite conhecido: `secret-patterns.local.txt` é gitignorado, então
+      # aqui só os padrões genéricos rodam. Hostname e domínio ficam por conta
+      # do hook local. Para fechar, guarde os padrões da topologia num secret e
+      # escreva o arquivo antes deste passo.
+      - name: Varredura de dado sensível na árvore
+        run: make secrets
+
+  commits:
+    name: Conventional Commits
+    runs-on: ubuntu-latest
+    # Só em PR: em push direto os commits já passaram pelo hook local, e aqui
+    # não há base estável contra a qual enumerá-los.
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Validar mensagem de cada commit do PR
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          fail=0
+          while read -r sha; do
+            [ -z "$sha" ] && continue
+            msg="$(mktemp)"
+            git log -1 --format=%B "$sha" > "$msg"
+            if ! .githooks/commit-msg "$msg"; then
+              echo "::error::commit $sha reprovado"
+              fail=1
+            fi
+          done < <(git rev-list "$BASE..$HEAD")
+          exit $fail
