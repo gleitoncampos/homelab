@@ -1,0 +1,71 @@
+name: Nova stack
+description: Propor um serviço para o catálogo
+labels: ["stack"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Stack nova entra em `docker/_catalog/`, não em `docker/` — este último
+        contém só o que está de fato no ar. Promover uma stack é decisão de
+        operação, tomada depois.
+
+        O checklist técnico do compose está no
+        [CLAUDE.md](https://github.com/gleitoncampos/homelab/blob/main/CLAUDE.md).
+
+  - type: input
+    id: servico
+    attributes:
+      label: Serviço
+      placeholder: "Nome e link do projeto upstream"
+    validations:
+      required: true
+
+  - type: input
+    id: imagem
+    attributes:
+      label: Imagem e tag
+      description: Tag de versão fixada. `:latest` não entra.
+      placeholder: "ghcr.io/org/app:1.4.2"
+    validations:
+      required: true
+
+  - type: textarea
+    id: porque
+    attributes:
+      label: Que problema resolve
+      description: |
+        Se substitui um serviço proprietário, diga qual — soberania de dados é
+        o critério principal do projeto.
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencias
+    attributes:
+      label: Dependências
+      description: Banco, cache, fila. Cada um precisa de subpasta própria em `/srv/containers/<servico>/`.
+      placeholder: "PostgreSQL 16, Redis 7"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: requisitos
+    attributes:
+      label: Requisitos atendidos
+      options:
+        - label: Roteia pelo Traefik, sem porta publicada no host
+        - label: Labels em `deploy.labels` (o provider swarm ignora `labels:` solto)
+        - label: Volumes sob `/srv/containers/<servico>/`
+        - label: Segredos como `${VARIAVEL}`, nenhum valor literal
+        - label: "`deploy.resources.limits` definidos"
+
+  - type: textarea
+    id: recursos
+    attributes:
+      label: Consumo esperado
+      description: |
+        ⚠️ Relevante: o nó manager atual é uma VM pequena. Serviço que pede
+        vários GB precisa ser dimensionado antes, não depois.
+      placeholder: "~256M em repouso, picos de 1G durante indexação"
+    validations:
+      required: false

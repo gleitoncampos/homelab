@@ -1,0 +1,22 @@
+# Revisão obrigatória do mantenedor em tudo.
+#
+# Repositório de infraestrutura pessoal: não há time, e a revisão existe para
+# que nada entre em `main` — que é deploy de produção — sem passar pelos olhos
+# de quem opera o cluster.
+* @gleitoncampos
+
+# Os arquivos abaixo já causaram incidente ou governam o gate. Estão listados
+# separadamente não por dono diferente, mas para que o motivo fique escrito
+# onde o revisor olha.
+
+# Gate de qualidade: mudar um padrão daqui altera o que consegue ser commitado.
+/.githooks/    @gleitoncampos
+
+# Contrato lido por pessoas e por assistentes de IA (AGENTS.md é symlink).
+/CLAUDE.md     @gleitoncampos
+
+# Segredos, inventário e o que roda contra a infraestrutura real.
+/IaC/          @gleitoncampos
+
+# `docker/` é o que está no ar; alteração aqui muda serviço em execução.
+/docker/       @gleitoncampos

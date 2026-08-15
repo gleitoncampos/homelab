@@ -1,0 +1,17 @@
+# Issue em branco desativada: sem um formulário, o relato chega sem o caminho
+# do arquivo, sem a mensagem de erro e — o que importa mais aqui — sem o aviso
+# de anonimizar dado antes de colar log.
+blank_issues_enabled: false
+
+contact_links:
+  - name: Falha de segurança
+    url: https://github.com/gleitoncampos/homelab/security/advisories/new
+    about: Relato privado. Nunca abra issue pública para vulnerabilidade.
+
+  - name: Dúvida sobre como usar
+    url: https://github.com/gleitoncampos/homelab/discussions
+    about: Discussions, não issue. Issue é para defeito ou proposta concreta.
+
+  - name: Regras técnicas e padrões do projeto
+    url: https://github.com/gleitoncampos/homelab/blob/main/CLAUDE.md
+    about: Swarm, Traefik, volumes, segredos e o contrato de contribuição.

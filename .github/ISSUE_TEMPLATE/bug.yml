@@ -1,0 +1,65 @@
+name: Bug
+description: Algo neste repositório não funciona como descrito
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **Não use este formulário para falha de segurança.**
+        Vá em *Security* → *Report a vulnerability*, ou veja
+        [SECURITY.md](https://github.com/gleitoncampos/homelab/blob/main/SECURITY.md). Issue é indexada por buscador
+        em minutos.
+
+        ⚠️ **Nenhum dado real no relato.** Anonimize IP, domínio, hostname e
+        token antes de colar log ou configuração. Exemplos usam RFC 5737
+        (`192.0.2.0/24`) e `exemplo.com`.
+
+  - type: input
+    id: onde
+    attributes:
+      label: Onde
+      description: Caminho do arquivo, stack ou playbook envolvido.
+      placeholder: IaC/ansible/playbooks/03-deploy-stacks.yml
+    validations:
+      required: true
+
+  - type: textarea
+    id: esperado
+    attributes:
+      label: O que deveria acontecer
+      description: Cite a linha da documentação que promete esse comportamento, se houver.
+    validations:
+      required: true
+
+  - type: textarea
+    id: aconteceu
+    attributes:
+      label: O que acontece
+      description: |
+        Inclua a mensagem de erro **exata** — a mais curta que já identifique o
+        problema. Log inteiro raramente ajuda e costuma vazar dado.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduzir
+    attributes:
+      label: Como reproduzir
+      placeholder: |
+        1. ansible-playbook -i inventories/dev/hosts.ini playbooks/03-...
+        2. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: ambiente
+    attributes:
+      label: Ambiente
+      value: |
+        - SO do control node:
+        - ansible-core:
+        - Docker:
+        - Modo: Swarm / Compose
+    validations:
+      required: false

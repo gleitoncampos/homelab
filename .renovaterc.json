@@ -1,6 +1,79 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
-  ]
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits"
+  ],
+  "timezone": "America/Sao_Paulo",
+  "schedule": ["* 0-6 * * 6"],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "labels": ["dependencies"],
+  "commitMessagePrefix": "build(deps):",
+  "separateMajorMinor": true,
+  "separateMinorPatch": false,
+  "rangeStrategy": "pin",
+  "packageRules": [
+    {
+      "description": "Catálogo não está no ar: só vira PR depois de você aprovar no dashboard. São 22 stacks paradas, e PR de serviço que não roda é o ruído que faz a lista inteira ser ignorada.",
+      "matchFileNames": ["docker/_catalog/**"],
+      "dependencyDashboardApproval": true,
+      "labels": ["dependencies", "catalogo"]
+    },
+    {
+      "description": "Stacks no ar: agrupa por serviço, para que app e banco da mesma stack subam no mesmo PR e sejam testados juntos.",
+      "matchFileNames": ["docker/traefik/**"],
+      "groupName": "traefik"
+    },
+    {
+      "matchFileNames": ["docker/portainer/**"],
+      "groupName": "portainer"
+    },
+    {
+      "matchFileNames": ["docker/monitoring/**"],
+      "groupName": "monitoring (LGTM)"
+    },
+    {
+      "matchFileNames": ["docker/dozzle/**"],
+      "groupName": "dozzle"
+    },
+    {
+      "description": "Major em serviço no ar exige leitura das notas de versão: nunca agrupa, para que o PR carregue o changelog de um só.",
+      "matchFileNames": ["docker/**"],
+      "matchUpdateTypes": ["major"],
+      "groupName": null,
+      "labels": ["dependencies", "major"],
+      "minimumReleaseAge": "7 days"
+    },
+    {
+      "description": "Imagem de banco de dados nunca sobe sozinha: major de PostgreSQL ou MariaDB pede dump e migração, não redeploy.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": [
+        "/postgres/",
+        "/mariadb/",
+        "/mysql/",
+        "/redis/",
+        "/valkey/"
+      ],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true,
+      "labels": ["dependencies", "banco", "migracao"]
+    },
+    {
+      "description": "GitHub Actions por digest, não por tag: tag é mutável e uma action comprometida é execução arbitrária no runner com o token do repositório.",
+      "matchManagers": ["github-actions"],
+      "pinDigests": true,
+      "groupName": "github actions"
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "description": "CVE fura a janela semanal e a aprovação do dashboard.",
+    "enabled": true,
+    "schedule": null,
+    "dependencyDashboardApproval": false,
+    "minimumReleaseAge": null,
+    "labels": ["dependencies", "security"],
+    "prPriority": 10
+  }
 }
