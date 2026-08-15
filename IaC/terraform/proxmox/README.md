@@ -149,6 +149,9 @@ Guarde o `token-id` (`terraform@pve!terraform`) e o `secret-value` gerado - o se
 
 ```bash
 cd /home/nuvidio/git/homelab/terraform/proxmox
+# Atalho: `make bootstrap` (na raiz) gera este arquivo já preenchido, a partir
+# da mesma fonte que produz o inventário do Ansible — ver IaC/bootstrap/README.md.
+# Manualmente:
 cp terraform.tfvars.example terraform.tfvars
 ```
 

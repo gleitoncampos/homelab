@@ -24,6 +24,10 @@ make hooks                                  # faz os dois passos acima
 Sem `core.hooksPath`, os hooks existem no repositório e simplesmente não rodam.
 É o modo de falha mais provável — a CI pega depois, mas você descobre tarde.
 
+> `make bootstrap` é para quem vai **operar** um homelab a partir deste
+> repositório: gera vault, inventário e `tfvars`. Para contribuir com código não
+> é necessário — `make check` roda sem nada disso.
+
 O `secret-patterns.local.txt` guarda hostnames e domínios da **sua** topologia.
 Se você não hospeda nada disto, não precisa dele; o hook avisa em amarelo e
 segue com os padrões genéricos.

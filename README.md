@@ -47,7 +47,7 @@ que já aconteceu entre os dois arquivos.
 
 | diretório | o que guarda |
 |---|---|
-| `IaC/` | **toda** ferramenta de infraestrutura como código. Hoje `ansible/` (sistema, cluster e stacks) e `terraform/` (VMs e containers no Proxmox); amanhã Packer, Vagrant ou o que vier — sempre como subdiretório, nunca solto na raiz |
+| `IaC/` | **toda** ferramenta de infraestrutura como código. Hoje `bootstrap/` (gera as entradas das outras duas), `ansible/` (sistema, cluster e stacks) e `terraform/` (VMs e containers no Proxmox); amanhã Packer, Vagrant ou o que vier — sempre como subdiretório, nunca solto na raiz |
 | `docker/` | as stacks que estão **no ar**. As demais ficam em `docker/_catalog/` |
 | `prod-snapshot/` | ferramentas que coletam o estado real da produção para comparar com o que está descrito aqui |
 | `docs/` | roadmap e pré-requisitos de publicação |
@@ -109,10 +109,56 @@ Os serviços estão organizados por domínio funcional dentro da pasta [`docker/
 
 ---
 
+## 🚀 Ponto de partida
+
+Num clone novo, três comandos antes de qualquer outra coisa:
+
+```bash
+git config core.hooksPath .githooks   # ou: make hooks
+make bootstrap                        # gera vault, inventário, tfvars e chave SSH
+make check                            # valida o repositório
+```
+
+O [`make bootstrap`](./IaC/bootstrap/) é o que transforma um clone em algo
+executável. Ele **não provisiona nada** — produz as *entradas* que o Terraform e
+o Ansible consomem, e para aí:
+
+```
+IaC/homelab.local.yml  ──┬──▶  inventories/{prod,dev}/hosts.ini
+   (fonte única,         ├──▶  inventories/*/group_vars/all/vault.yml (cifrado)
+    gitignorada)         ├──▶  terraform/proxmox/terraform.tfvars
+                         └──▶  .githooks/secret-patterns.local.txt
+```
+
+Existe porque o mesmo valor era pedido em vários arquivos — a chave SSH pública
+em dois, os IPs dos nós em dois, hostname e domínio ainda alimentando o gate.
+Divergência entre inventário e `tfvars` não produz erro: produz comportamento
+errado, que é pior. Com uma fonte só, **rodar de novo não repergunta nada**;
+para corrigir um IP, edite uma linha e rode outra vez.
+
+Dos 36 segredos, **15 são gerados sem pergunta alguma** e 9 são pedidos com a URL
+do console impressa ao lado. Segredo que já existe no vault é preservado —
+rotação é decisão, não efeito colateral de rodar um comando.
+
+⚠️ **Ele pergunta dois conjuntos de endereços, e não é redundância.** O
+inventário recebe os IPs de **hoje**, porque é por eles que o Ansible alcança os
+hosts; o `tfvars` e o plano de VLANs recebem os IPs-**alvo**, porque o Terraform
+cria as VMs já onde elas devem ficar. Enquanto a migração de rede não acontece, é
+esperado que sejam diferentes.
+
+Detalhes, garantias de escrita e o tratamento de cada tipo de segredo em
+[`IaC/bootstrap/README.md`](./IaC/bootstrap/README.md).
+
+---
+
 ## 🚀 Guia Rápidos de Implantação
 
+A ordem é **`make bootstrap` → Terraform → Ansible**: o primeiro gera as
+entradas, o segundo cria as VMs e os CTs, o terceiro configura sistema, cluster e
+stacks.
+
 ### 1. Provisionamento do Host (Debian 12/13)
-Do control node, com o inventário preenchido:
+Do control node, com o inventário já gerado pelo bootstrap:
 
 ```bash
 cd IaC/ansible

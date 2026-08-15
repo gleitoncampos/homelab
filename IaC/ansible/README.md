@@ -111,6 +111,24 @@ cd ansible/
 ansible-galaxy collection install -r requirements.yml
 ```
 
+### Caminho curto: `make bootstrap`
+
+Da raiz do repositório, um comando faz tudo o que esta seção descreve — gera a
+senha do vault, os segredos, os dois vaults cifrados, os dois `hosts.ini` e a
+chave SSH:
+
+```bash
+make bootstrap
+```
+
+Ele pede só o que não tem como ser gerado (tokens de Cloudflare e Proxmox) e
+preserva segredo que já exista. Ver [`IaC/bootstrap/README.md`](../bootstrap/README.md).
+
+O resto desta seção descreve o **caminho manual**, que continua válido e é o que
+o bootstrap automatiza. Vale ler para entender o que ele faz — e é o caminho a
+seguir quando só um valor precisa mudar, já que `ansible-vault edit` é mais
+direto que regenerar tudo.
+
 ### Criar o vault (uma vez por ambiente)
 
 ```bash
@@ -168,6 +186,13 @@ vault não basta para travar a automação — perder o `hosts.ini` também trav
 `ansible-playbook` sem inventário real não sabe contra qual host conectar.
 
 ### Criar o `hosts.ini` real num clone novo
+
+`make bootstrap` gera os dois, com os IPs de HOJE — que é o que importa aqui,
+porque é por eles que o Ansible alcança os hosts. O plano de VLANs descreve o
+destino e vive em `group_vars/network.yml`; confundir os dois produz timeout de
+SSH, cujo sintoma não diz nada sobre a causa.
+
+Manualmente:
 
 ```bash
 cd ansible/
