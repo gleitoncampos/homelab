@@ -175,8 +175,12 @@ ntp_servers: >-
 # possível para um mecanismo cuja única função é ser confiável.
 # Definir em `hosts.ini` do ambiente ([all:vars] backup_vmid_swarm=NNN).
 
-# Storage do Proxmox com `content backup`. Verificar com `pvesm status`.
-backup_storage: "NAS_BACKUP"
+# Nome do storage do Proxmox com `content backup` (verificar com
+# `pvesm status`). Sem default, e de propósito: os dois nós Proxmox hoje
+# referenciam o mesmo share por nomes diferentes (ver ROADMAP, secção 2.3) —
+# um valor genérico aqui esconderia essa divergência em vez de forçar cada
+# ambiente a declarar o nome que o seu nó realmente enxerga.
+# Definir em `hosts.ini` do ambiente ([all:vars] backup_storage=NOME).
 
 # 02:30 diário. Fora da janela de rotação de log e do fstrim semanal (03:00 dom).
 backup_schedule: "02:30"

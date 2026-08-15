@@ -12,7 +12,8 @@
 #   ansible-playbook playbooks/06-backup.yml
 - name: Configurar backup agendado da VM do Swarm
   hosts: proxmox
-  gather_facts: true
+  # Nenhuma task deste play usa fact de host — pular a coleta é só velocidade.
+  gather_facts: false
 
   pre_tasks:
     - name: "Abortar se backup_vmid_swarm não estiver no inventário"
@@ -25,6 +26,16 @@
           errada e reportaria sucesso. Defina em [all:vars] no hosts.ini do
           ambiente — ver hosts.ini.example.
 
+    - name: "Abortar se backup_storage não estiver no inventário"
+      ansible.builtin.assert:
+        that:
+          - backup_storage is defined
+          - backup_storage | string | length > 0
+        fail_msg: >-
+          backup_storage não está definido. Sem ele não há como saber qual
+          storage do Proxmox recebe o backup. Defina em [all:vars] no
+          hosts.ini do ambiente — ver hosts.ini.example.
+
   tasks:
     - name: Conferir que o storage de backup existe e aceita backup
       ansible.builtin.command:
@@ -32,6 +43,10 @@
       register: storage_status
       changed_when: false
       failed_when: storage_status.rc != 0
+      # Consulta somente-leitura: sem isto, o `command` é pulado em
+      # --check (skipping), storage_status.stdout fica indefinido, e o
+      # assert seguinte falha SEMPRE em check mode — mesmo com o storage são.
+      check_mode: false
 
     - name: "Abortar se o storage não estiver ativo"
       ansible.builtin.assert:
@@ -46,6 +61,9 @@
       register: vm_config
       changed_when: false
       failed_when: false
+      # Mesmo motivo da task acima: consulta somente-leitura, precisa rodar
+      # em --check para a task de agendamento decidir changed/skipped certo.
+      check_mode: false
 
     - name: Agendar o job de backup
       ansible.builtin.command:
@@ -53,6 +71,7 @@
           - pvesh
           - create
           - /cluster/backup
+          - --id=homelab-swarm-backup
           - --schedule={{ backup_schedule }}
           - --storage={{ backup_storage }}
           - --vmid={{ backup_vmid_swarm }}
@@ -61,6 +80,11 @@
           - --enabled=1
           - --notes-template=homelab-swarm-{{ '{{' }} guestname {{ '}}' }}
           - --prune-backups=keep-daily={{ backup_keep_daily }},keep-weekly={{ backup_keep_weekly }}
+      # --id fixo é o que torna a idempotência real: o campo `id` do endpoint
+      # /cluster/backup é opcional e AUTOGERADO quando omitido — sem um valor
+      # determinístico, cada execução cria um job novo (nunca colide), o
+      # 'already exists' do failed_when abaixo nunca aparece, e rodar o
+      # playbook duas vezes agenda o mesmo backup duas vezes em silêncio.
       when: vm_config.rc == 0
       register: backup_job
       changed_when: backup_job.rc == 0

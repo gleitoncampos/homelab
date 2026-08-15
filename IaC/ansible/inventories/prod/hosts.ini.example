@@ -32,3 +32,14 @@ openwrt
 # inventories/_common/all.yml). Ter as duas é de propósito: relógio sem fonte
 # não dá erro, derrapa devagar até virar falha de TLS semanas depois.
 # ntp_server_internal=<IP-DO-FIREWALL>
+
+# VMID da VM que roda o Swarm inteiro (playbooks/06-backup.yml). OBRIGATÓRIO
+# para esse playbook — sem default de propósito: um VMID errado faria o
+# vzdump salvar a máquina errada e reportar sucesso.
+# backup_vmid_swarm=<VMID-DA-VM-DO-SWARM>
+
+# Nome do storage do Proxmox com `content backup` (verificar com
+# `pvesm status`). OBRIGATÓRIO para playbooks/06-backup.yml — sem default
+# porque os dois nós Proxmox hoje referenciam o mesmo share por nomes
+# diferentes; ver docs/ROADMAP.md, secção 2.3.
+# backup_storage=<NOME-DO-STORAGE-DE-BACKUP>
