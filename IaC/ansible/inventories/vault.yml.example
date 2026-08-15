@@ -186,6 +186,17 @@ pve_exporter_token_value: "TROCAR-uuid-do-token"
 grafana_admin_password: "TROCAR-openssl-rand-base64-32"
 # Sem isto o Grafana sobe em admin/admin, exposto pelo Traefik. Mínimo 16 chars.
 
+# --- Dozzle ------------------------------------------------------------------
+# Hash bcrypt para o basicauth do Dozzle, com os `$` JÁ DOBRADOS.
+# Gerar: htpasswd -nbB admin 'SENHA' | sed -e 's/\$/\$\$/g'
+# Sem escape, o Docker interpola o `$` e o hash truncado aceita qualquer senha.
+#
+# ⚠️ O Dozzle ainda não tem playbook de deploy (é importado manualmente pelo
+# Portainer — ver seção "STACKS SEM PLAYBOOK" ao final deste arquivo). Este
+# valor não chega ao container por automação nenhuma: copie-o à mão para o
+# campo DOZZLE_BASICAUTH no formulário de variáveis da stack no Portainer.
+dozzle_basicauth_hash: 'SUBSTITUIR'
+
 # --- Utilitários (playbooks/05-stack-utilities.yml) -------------------------
 cronicle_secret_key: "TROCAR-openssl-rand-hex-32"
 # Assina os jobs e a sessão do Cronicle. Trocar invalida sessões abertas.
@@ -232,6 +243,9 @@ opnsense_etpro_telemetry_token: ""
 #
 # Variável do compose  →  chave sugerida no vault
 #
+# dozzle      DOZZLE_BASICAUTH      → dozzle_basicauth_hash (já declarada acima,
+#             ^ pois é secreto de verdade, não só nome de variável — mas sem
+#               playbook, segue sendo digitada à mão no formulário da stack)
 # zoneminder  ZM_DB_PASSWORD        → zoneminder_db_password
 #             ZM_DB_ROOT_PASSWORD   → zoneminder_db_root_password
 # jdownloader JD_WEB_USERNAME       → jdownloader_web_username

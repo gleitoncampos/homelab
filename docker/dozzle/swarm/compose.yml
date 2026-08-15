@@ -29,6 +29,11 @@ services:
         - "traefik.http.services.dozzle.loadbalancer.server.port=8080"
         - "traefik.http.routers.dozzle.service=dozzle"
         - "traefik.http.routers.dozzle.tls.certresolver=cloudflare"
+        - "traefik.http.routers.dozzle.middlewares=dozzle-auth"
+        - "traefik.http.middlewares.dozzle-auth.basicauth.users=${DOZZLE_BASICAUTH}"
+        # O Dozzle lê o log de TODO container, e log de container carrega token
+        # que vaza em mensagem de erro. Sem autenticação, quem alcança a rota lê
+        # tudo que qualquer serviço já registrou.
     healthcheck:
       test: ["CMD", "/dozzle", "healthcheck"]
       interval: 30s
