@@ -1,0 +1,63 @@
+---
+# Regras na chain DOCKER-USER.
+#
+# Por que não UFW: o publish de porta do Docker faz DNAT em nat/PREROUTING, que
+# roda ANTES da chain filter onde o UFW atua. Uma regra `ufw deny 9000` parece
+# aplicada e não tem efeito nenhum sobre porta publicada — modo de falha
+# silencioso, já documentado em docker/portainer/swarm/compose.yml:34-40.
+#
+# DOCKER-USER é a chain que o Docker cria e NÃO limpa entre reinícios, e é
+# consultada antes das regras que ele gera.
+#
+# Espera: `mgmt_allowed_cidr`.
+
+- name: "Abortar se mgmt_allowed_cidr não estiver definida"
+  ansible.builtin.assert:
+    that:
+      - mgmt_allowed_cidr is defined
+      - mgmt_allowed_cidr | length > 0
+    fail_msg: >-
+      mgmt_allowed_cidr não definida. Sem ela estas regras bloqueariam TODO
+      acesso às portas administrativas, inclusive o seu.
+
+- name: Instalar iptables-persistent para que as regras sobrevivam ao boot
+  ansible.builtin.apt:
+    name: iptables-persistent
+    state: present
+  register: iptables_pkg
+
+- name: "Permitir a faixa de gerência nas portas administrativas"
+  ansible.builtin.iptables:
+    chain: DOCKER-USER
+    source: "{{ mgmt_allowed_cidr }}"
+    protocol: "{{ item.proto }}"
+    destination_port: "{{ item.port }}"
+    jump: RETURN
+    action: insert
+    rule_num: 1
+    comment: "homelab: gerencia autorizada {{ item.port }}/{{ item.proto }}"
+    state: present
+  loop:
+    - { port: "9000", proto: "tcp" }
+    - { port: "1514", proto: "tcp" }
+    - { port: "1514", proto: "udp" }
+
+- name: "Recusar o resto nas portas administrativas"
+  ansible.builtin.iptables:
+    chain: DOCKER-USER
+    protocol: "{{ item.proto }}"
+    destination_port: "{{ item.port }}"
+    jump: DROP
+    action: append
+    comment: "homelab: fecha {{ item.port }}/{{ item.proto }}"
+    state: present
+  loop:
+    - { port: "9000", proto: "tcp" }
+    - { port: "1514", proto: "tcp" }
+    - { port: "1514", proto: "udp" }
+
+- name: Persistir as regras
+  community.general.iptables_state:
+    state: saved
+    path: /etc/iptables/rules.v4
+  when: iptables_pkg is succeeded

@@ -225,3 +225,17 @@
         name: "syncthing@{{ system_user }}"
         state: started
         enabled: true
+
+    # --- Firewall (DOCKER-USER) ---
+    # Complementar ao UFW acima, não substituto: o UFW continua responsável por
+    # toda porta que NÃO é publicada pelo Docker (SSH, cluster do Swarm etc.).
+    # Para porta publicada via `ports:` de um serviço Swarm, o DNAT do Docker em
+    # nat/PREROUTING roda antes da chain filter onde o UFW decide — por isso a
+    # 9000 (Portainer) e a 1514 (syslog do Alloy) só ficam de fato restritas com
+    # uma regra em DOCKER-USER, consultada antes das regras que o próprio Docker
+    # gera nessa mesma chain.
+    - name: Aplicar regras DOCKER-USER nas portas administrativas
+      ansible.builtin.include_tasks: ../tasks/docker_user_rules.yml
+      # noqa: no-relative-paths
+      # O caminho é relativo porque `tasks/` é irmão de `playbooks/`, e o
+      # repositório não usa roles — mesma convenção de tasks/portainer_stack.yml.

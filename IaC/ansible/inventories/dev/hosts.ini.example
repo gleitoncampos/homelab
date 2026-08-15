@@ -55,3 +55,9 @@ openwrt
 # porque os dois nós Proxmox hoje referenciam o mesmo share por nomes
 # diferentes; ver docs/ROADMAP.md, secção 2.3.
 # backup_storage=<NOME-DO-STORAGE-DE-BACKUP>
+
+# Faixa autorizada a alcançar as portas administrativas publicadas pelo Docker
+# (9000 do Portainer, 1514 do syslog). O UFW NÃO fecha essas portas: o publish
+# faz DNAT em nat/PREROUTING, antes da chain filter. O fecho é em DOCKER-USER.
+# Exemplo com faixa de documentação; use a sua.
+# mgmt_allowed_cidr=192.0.2.0/24
