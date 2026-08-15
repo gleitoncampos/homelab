@@ -16,6 +16,28 @@
   # Nenhuma task deste play usa fact de host — pular a coleta é só velocidade.
   gather_facts: false
 
+  vars:
+    # Id fixo, não autogerado pela API: é o que torna o job endereçável. Sem
+    # ele, cada execução criaria um job novo, e não haveria como um `set`
+    # posterior saber qual atualizar.
+    backup_job_id: homelab-swarm-backup
+
+    # Um lugar só para os parâmetros do job, consumidos pelo `create` E pelo
+    # `set`. Repeti-los nas duas tasks criaria duas verdades que precisam ser
+    # mantidas iguais à mão — e a que ficasse para trás só apareceria em
+    # produção, na forma de um job que muda de comportamento conforme tenha
+    # sido criado ou atualizado.
+    backup_prune_spec: "keep-daily={{ backup_keep_daily }},keep-weekly={{ backup_keep_weekly }}"
+    backup_job_params:
+      - "--schedule={{ backup_schedule }}"
+      - "--storage={{ backup_storage }}"
+      - "--vmid={{ backup_vmids | join(',') }}"
+      - "--mode=snapshot"
+      - "--compress=zstd"
+      - "--enabled=1"
+      - "--notes-template=homelab-swarm-{{ '{{' }} guestname {{ '}}' }}"
+      - "--prune-backups={{ backup_prune_spec }}"
+
   pre_tasks:
     - name: "Abortar se backup_vmids não estiver no inventário"
       ansible.builtin.assert:
@@ -91,38 +113,76 @@
           para um convidado inexistente falha silenciosamente todo dia.
       run_once: true
 
-    - name: "Agendar o job de backup (um job só, cobrindo todos os backup_vmids)"
+    # Create-or-update de verdade, em vez de `create` + engolir o erro
+    # "already exists". Engolir o erro fazia a PRIMEIRA execução criar o job e
+    # toda execução seguinte ser um no-op reportado como `ok`: mudar
+    # `backup_vmids`, `backup_schedule`, `backup_keep_daily` ou
+    # `backup_storage` no inventário não alterava nada em produção, e nada
+    # avisava. O repositório passava a descrever um job que o cluster não
+    # tinha.
+    #
+    # `/cluster/backup` TEM update — `pvesh set /cluster/backup/<id>`, o PUT
+    # do endpoint, com o mesmo esquema de parâmetros do create. O comentário
+    # anterior afirmava o contrário, e era essa afirmação que justificava o
+    # no-op.
+    - name: "Levantar os jobs de backup já configurados no cluster"
       ansible.builtin.command:
-        argv:
-          - pvesh
-          - create
-          - /cluster/backup
-          - --id=homelab-swarm-backup
-          - --schedule={{ backup_schedule }}
-          - --storage={{ backup_storage }}
-          - --vmid={{ backup_vmids | join(',') }}
-          - --mode=snapshot
-          - --compress=zstd
-          - --enabled=1
-          - --notes-template=homelab-swarm-{{ '{{' }} guestname {{ '}}' }}
-          - --prune-backups=keep-daily={{ backup_keep_daily }},keep-weekly={{ backup_keep_weekly }}
-      # --vmid aceita lista separada por vírgula (formato `pve-vmid-list` da
-      # API do Proxmox, o mesmo usado por vzdump.conf) — um job só cobrindo
-      # N convidados preserva o --id fixo e a idempotência conquistada na
-      # rodada anterior. N jobs separados exigiriam N ids e reabririam o
-      # problema do job duplicado. Não confirmado contra este cluster real
-      # — ver PENDENCIAS-VALIDACAO.md, item "Confirmar que o job cobre TODOS
-      # os VMIDs da lista".
-      #
-      # run_once: true pelo mesmo motivo da consulta de convidados acima —
-      # /cluster/backup é configuração replicada entre nós (pmxcfs), então
-      # criar de um nó só é suficiente e evita `already exists` desnecessário
-      # no segundo nó.
+        cmd: "pvesh get /cluster/backup --output-format json"
+      register: existing_backup_jobs
+      changed_when: false
+      # Consulta somente-leitura: sem isto ela é pulada em --check e as tasks
+      # abaixo decidiriam sobre um resultado indefinido. Mesmo motivo do
+      # `pvesm status` no topo do play.
+      check_mode: false
+      # /cluster/backup é configuração replicada entre nós pelo pmxcfs: a
+      # resposta é a mesma de qualquer nó, e criar/atualizar de um só basta.
       run_once: true
-      register: backup_job
-      changed_when: backup_job.rc == 0
-      # Já existir não é erro: o playbook é idempotente por natureza aqui, e o
-      # pvesh não tem create-or-update para /cluster/backup.
-      failed_when:
-        - backup_job.rc != 0
-        - "'already exists' not in (backup_job.stderr | default(''))"
+
+    - name: "Separar o job deste playbook, se ele já existir"
+      ansible.builtin.set_fact:
+        existing_backup_job: >-
+          {{ (existing_backup_jobs.stdout | from_json)
+             | selectattr('id', 'defined')
+             | selectattr('id', 'equalto', backup_job_id)
+             | list | first | default({}) }}
+      run_once: true
+
+    # Só decide o `changed`, não decide se aplica: o `set` abaixo roda sempre
+    # que o job existe. É de propósito — uma comparação incompleta aqui erra
+    # para o lado de reaplicar o estado declarado (barulho no relatório), e
+    # nunca para o lado de deixar produção divergente em silêncio.
+    - name: "Comparar o job existente com o estado declarado"
+      ansible.builtin.set_fact:
+        backup_job_drift: >-
+          {{ existing_backup_job | length == 0
+             or existing_backup_job.get('schedule') != backup_schedule
+             or existing_backup_job.get('storage') != backup_storage
+             or existing_backup_job.get('mode') != 'snapshot'
+             or existing_backup_job.get('compress') != 'zstd'
+             or (existing_backup_job.get('enabled', 0) | int) != 1
+             or existing_backup_job.get('prune-backups', '') != backup_prune_spec
+             or ((existing_backup_job.get('vmid', '') | string).split(',') | map('trim') | sort)
+                != (backup_vmids | map('string') | sort) }}
+      run_once: true
+
+    # --vmid aceita lista separada por vírgula (formato `pve-vmid-list` da API
+    # do Proxmox, o mesmo usado por vzdump.conf) — um job só cobrindo N
+    # convidados mantém o id fixo endereçável. N jobs separados exigiriam N
+    # ids. Não confirmado contra este cluster real — ver
+    # PENDENCIAS-VALIDACAO.md, item "Confirmar que o job cobre TODOS os VMIDs
+    # da lista".
+    - name: "Criar o job de backup (ainda não existe no cluster)"
+      ansible.builtin.command:
+        argv: "{{ ['pvesh', 'create', '/cluster/backup', '--id=' ~ backup_job_id] + backup_job_params }}"
+      when: existing_backup_job | length == 0
+      run_once: true
+      register: backup_job_created
+      changed_when: backup_job_created.rc == 0
+
+    - name: "Reescrever o job de backup existente com o estado declarado"
+      ansible.builtin.command:
+        argv: "{{ ['pvesh', 'set', '/cluster/backup/' ~ backup_job_id] + backup_job_params }}"
+      when: existing_backup_job | length > 0
+      run_once: true
+      register: backup_job_updated
+      changed_when: backup_job_drift | bool

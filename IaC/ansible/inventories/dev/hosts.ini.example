@@ -54,15 +54,19 @@ openwrt
 # backup_vmids=[<VMID-1>,<VMID-2>,<VMID-3>]
 
 # Nome do storage do Proxmox com `content backup` (verificar com
-# `pvesm status`). OBRIGATÓRIO para playbooks/06-backup.yml — sem default
-# porque os dois nós Proxmox hoje referenciam o mesmo share por nomes
-# diferentes; ver docs/ROADMAP.md, secção 2.3.
+# `pvesm status`). OBRIGATÓRIO para playbooks/06-backup.yml E para
+# playbooks/00-proxmox-setup.yml, que escreve o storage.cfg — é o mesmo id
+# nas duas pontas, de propósito: o playbook agenda o vzdump contra o id que
+# o template acabou de declarar. Sem default porque os dois nós Proxmox hoje
+# referenciam o mesmo share por nomes diferentes; ver docs/ROADMAP.md,
+# secção 2.3.
 # backup_storage=<NOME-DO-STORAGE-DE-BACKUP>
 
 # Nome do compartilhamento CIFS no NAS (campo `share` do storage.cfg).
-# OBRIGATÓRIO para templates/proxmox/proxmox_storage.j2 — sem default pelo
-# mesmo motivo do backup_storage acima: valor específico do NAS de cada
-# ambiente.
+# OBRIGATÓRIO para playbooks/00-proxmox-setup.yml, que renderiza
+# templates/proxmox/proxmox_storage.j2 — sem default pelo mesmo motivo do
+# backup_storage acima: valor específico do NAS de cada ambiente. O playbook
+# aborta por `assert` se faltar.
 # proxmox_backup_share=<NOME-DO-COMPARTILHAMENTO-CIFS>
 
 # Faixa autorizada a alcançar as portas administrativas publicadas pelo Docker

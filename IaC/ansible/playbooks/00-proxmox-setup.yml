@@ -9,6 +9,28 @@
         required_secrets:
           - ssh_public_key
           - proxmox_alert_email
+
+    # As duas alimentam `templates/proxmox/proxmox_storage.j2`, que este play
+    # escreve por cima de /etc/pve/storage.cfg. Sem assert, uma variável
+    # ausente vira string vazia no arquivo renderizado: o storage do NAS sai
+    # com id vazio ou share vazio, o Proxmox deixa de enxergar o destino de
+    # backup, e o vzdump falha toda noite — longe daqui, e sem que este
+    # playbook tenha reportado erro nenhum.
+    - name: "Abortar se as variáveis do storage de backup não estiverem no inventário"
+      ansible.builtin.assert:
+        that:
+          - backup_storage is defined
+          - backup_storage | string | length > 0
+          - proxmox_backup_share is defined
+          - proxmox_backup_share | string | length > 0
+        fail_msg: >-
+          backup_storage e/ou proxmox_backup_share não estão definidos.
+          `backup_storage` é o ID do storage no Proxmox (o nome que
+          `pvesm status` mostra) e precisa ser o MESMO valor usado por
+          playbooks/06-backup.yml — este play escreve o storage.cfg com ele, e
+          o outro agenda o vzdump contra ele. `proxmox_backup_share` é o nome
+          do compartilhamento CIFS no NAS (campo `share`). Defina os dois em
+          [all:vars] no hosts.ini do ambiente — ver hosts.ini.example.
   tasks:
     # Coletado uma vez para condicionar as tasks que mexem em serviços que podem
     # não existir neste host. Antes elas carregavam `ignore_errors: true`, o que

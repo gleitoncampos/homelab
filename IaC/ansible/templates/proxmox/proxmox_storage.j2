@@ -7,8 +7,18 @@ lvmthin: local-lvm
 	vgname pve
 	content images,rootdir
 
-cifs: NAS_STORAGE
-	path /mnt/pve/NAS_STORAGE
+{# O id do storage vem de `backup_storage`, o MESMO nome que
+   playbooks/06-backup.yml passa em `--storage` ao criar o job de vzdump.
+   Antes o id estava literal aqui (`NAS_STORAGE`) enquanto o playbook lia a
+   variável: o operador que declarasse `backup_storage` com o nome que o
+   `pvesm status` mostra — que é o que a documentação do inventário manda
+   fazer — reescrevia o storage.cfg com um id e agendava o backup contra
+   outro. O `vzdump` então falharia toda noite contra storage inexistente,
+   longe de qualquer execução de playbook que pudesse denunciar a causa.
+   `path` acompanha o id porque é assim que o PVE monta um storage CIFS:
+   /mnt/pve/<id>. -#}
+cifs: {{ backup_storage }}
+	path /mnt/pve/{{ backup_storage }}
 	server {{ hostvars[groups['omv'][0]].ansible_host }}
 	share {{ proxmox_backup_share }}
 	content backup,vztmpl,iso
