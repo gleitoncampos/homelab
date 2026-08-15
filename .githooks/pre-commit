@@ -37,6 +37,18 @@ staged_matching() { # staged_matching <regex-de-caminho>
 step "Varredura de dado sensível"
 
 PATTERNS_FILE="$REPO/.githooks/secret-patterns.txt"
+LOCAL_PATTERNS="$REPO/.githooks/secret-patterns.local.txt"
+
+# Os padrões da topologia (hostname, domínio, faixa própria) vivem no arquivo
+# local, que é gitignorado — publicar a lista de termos proibidos entregaria o
+# esquema de nomes. Sem ele o gate ainda roda, mas só com o genérico, e isso
+# precisa aparecer: um aviso silencioso aqui repetiria o modo de falha do
+# `core.hooksPath`, em que a proteção existe e não roda.
+if [[ ! -f "$LOCAL_PATTERNS" ]]; then
+  printf '  \033[33m!\033[0m %s\n' "sem $(basename "$LOCAL_PATTERNS") — hostname e domínio NÃO estão sendo verificados"
+  printf '      cp .githooks/secret-patterns.local.txt.example .githooks/secret-patterns.local.txt\n'
+fi
+
 if [[ ! -f "$PATTERNS_FILE" ]]; then
   bad "não achei $PATTERNS_FILE — a varredura de segredo é obrigatória"
 else
@@ -61,7 +73,7 @@ else
         leaked=1
       fi
     done
-  done < "$PATTERNS_FILE"
+  done < <(cat "$PATTERNS_FILE" "$LOCAL_PATTERNS" 2>/dev/null)
   (( leaked )) || ok "nenhum padrão sensível nas linhas adicionadas"
 fi
 

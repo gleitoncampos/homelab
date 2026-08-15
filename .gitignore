@@ -74,3 +74,6 @@ SECURITY-AUDIT.local.md
 
 # Diretório de runtime do ansible-galaxy (roles, collections, módulos em cache).
 .ansible/
+
+# Padrões de varredura específicos desta topologia — ver .githooks/secret-patterns.txt
+.githooks/secret-patterns.local.txt
