@@ -111,7 +111,8 @@
       # N convidados preserva o --id fixo e a idempotência conquistada na
       # rodada anterior. N jobs separados exigiriam N ids e reabririam o
       # problema do job duplicado. Não confirmado contra este cluster real
-      # — ver PENDENCIAS-VALIDACAO.md.
+      # — ver PENDENCIAS-VALIDACAO.md, item "Confirmar que o job cobre TODOS
+      # os VMIDs da lista".
       #
       # run_once: true pelo mesmo motivo da consulta de convidados acima —
       # /cluster/backup é configuração replicada entre nós (pmxcfs), então
