@@ -65,3 +65,12 @@ prod-snapshot/*
 # --- Relatórios internos de auditoria ---------------------------------------
 SECURITY-AUDIT.local.md
 *.local.md
+
+# Tudo que é local e nunca vai para o repositório: notas de análise, coleta da
+# produção, saída de descoberta. Um endereço só — fica óbvio o que backupear e
+# o que jamais compartilhar. Os scripts de prod-snapshot/ escrevem aqui e se
+# recusam a rodar se esta linha sumir.
+.local/
+
+# Diretório de runtime do ansible-galaxy (roles, collections, módulos em cache).
+.ansible/

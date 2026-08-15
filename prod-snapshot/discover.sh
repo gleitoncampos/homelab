@@ -20,13 +20,15 @@
 #   ./discover.sh --no-probe         # não abre conexão nenhuma, só lista o ARP
 #
 # ⚠️ Só aponte para a SUA rede. A saída tem IP, MAC e hostname reais: fica em
-# prod-snapshot/_discovery/, que é gitignorado, e não pode ser commitada nem
-# colada em chat/issue.
+# `.local/snapshot/_discovery/`, fora do controle de versão, e não pode ser
+# commitada nem colada em chat/issue.
 
 set -euo pipefail
 
-SNAP="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO="$(cd "$SNAP/.." && pwd)"
+# Ferramenta versionada em prod-snapshot/, saída em .local/snapshot/ (ignorado).
+BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="$(cd "$BASE/.." && pwd)"
+SNAP="$REPO/.local/snapshot"
 OUT="$SNAP/_discovery"
 
 INVENTORY="$REPO/ansible/inventories/prod/hosts.ini"
@@ -49,7 +51,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Mesma guarda do collect.sh: se a pasta deixar de ser ignorada, isto vaza
+# Mesma guarda do collect.sh: se `.local/` deixar de ser ignorada, isto vaza
 # topologia interna num repositório PÚBLICO. Falha antes de escrever nada.
 if ! git -C "$REPO" check-ignore -q "$SNAP/.canary"; then
   echo "ABORTADO: $SNAP não está sendo ignorada pelo git." >&2
@@ -305,7 +307,7 @@ PY
 chmod -R go-rwx "$OUT" 2>/dev/null || true
 
 echo
-echo "Saída em prod-snapshot/_discovery/ (gitignorada):"
+echo "Saída em .local/snapshot/_discovery/ (gitignorada):"
 ls -1 "$OUT" | sed 's/^/  /'
 echo
 echo "Confira o palpite antes de colar em ansible/inventories/prod/hosts.ini."
@@ -313,6 +315,6 @@ echo "Depois: ansible -i inventories/prod/hosts.ini all -m ping"
 
 if [[ -n "$(git -C "$REPO" status --porcelain -- "$SNAP" 2>/dev/null)" ]]; then
   echo
-  echo "⚠️  git status mostra arquivos em prod-snapshot/. NÃO COMMITE."
+  echo "⚠️  git status mostra arquivos em .local/. NÃO COMMITE."
   exit 1
 fi

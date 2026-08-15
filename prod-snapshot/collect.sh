@@ -25,13 +25,18 @@
 #
 # ⚠️ O que este script traz é dado REAL: senhas em texto puro no Env das stacks
 # do Portainer, hashes de senha e chaves no config.xml da OPNsense, IPs e
-# hostnames internos. Nada aqui pode ser commitado nem colado em chat/issue.
-# A pasta inteira é gitignorada e o script se recusa a rodar se não for.
+# hostnames internos. A saída vai para `.local/snapshot/`, fora do controle de
+# versão; o script se recusa a rodar se esse caminho não estiver ignorado.
 
 set -euo pipefail
 
-SNAP="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO="$(cd "$SNAP/.." && pwd)"
+# O script vive em prod-snapshot/ (versionado), mas escreve em .local/snapshot/
+# (ignorado). Separar os dois é o que permite versionar a ferramenta sem nunca
+# arriscar versionar o que ela coleta.
+BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="$(cd "$BASE/.." && pwd)"
+SNAP="$REPO/.local/snapshot"
+mkdir -p "$SNAP"
 
 INVENTORY="$REPO/ansible/inventories/prod/hosts.ini"
 ONLY_HOSTS=""
@@ -58,12 +63,12 @@ done
 # Guardas
 # ---------------------------------------------------------------------------
 
-# Guarda mais importante do script: se prod-snapshot/ deixar de ser ignorada, o
+# Guarda mais importante do script: se `.local/` deixar de ser ignorada, o
 # próximo `git add -A` vaza tudo isto num repositório PÚBLICO. Falha antes de
 # escrever o primeiro byte, não depois.
 if ! git -C "$REPO" check-ignore -q "$SNAP/.canary"; then
   echo "ABORTADO: $SNAP não está sendo ignorada pelo git." >&2
-  echo "Conserte o .gitignore (linha 'prod-snapshot/') antes de coletar." >&2
+  echo "Conserte o .gitignore (linha '.local/') antes de coletar." >&2
   exit 1
 fi
 
@@ -548,10 +553,8 @@ fi
 
 if (( ! DRY_RUN )); then
   # Tudo que veio de produção é sensível por padrão. 600/700 em toda a coleta.
-  find "$SNAP" -mindepth 1 -name '*.sh' -prune -o -type f -exec chmod 600 {} + 2>/dev/null || true
+  find "$SNAP" -mindepth 1 -type f -exec chmod 600 {} + 2>/dev/null || true
   find "$SNAP" -mindepth 1 -type d -exec chmod 700 {} + 2>/dev/null || true
-  chmod 644 "$SNAP/README.md" 2>/dev/null || true
-  chmod 755 "$SNAP/collect.sh" 2>/dev/null || true
 
   note ""
   note "# coleta terminada em $(date -Is)"
@@ -564,8 +567,8 @@ fi
 # Última guarda: prova de que nada disto entrou no controle de versão.
 say ""
 if [[ -n "$(git -C "$REPO" status --porcelain -- "$SNAP" 2>/dev/null)" ]]; then
-  say "⚠️  ATENÇÃO: git status mostra arquivos em prod-snapshot/. NÃO COMMITE."
+  say "⚠️  ATENÇÃO: git status mostra arquivos em .local/. NÃO COMMITE."
   say "    Conserte o .gitignore antes de qualquer git add."
   exit 1
 fi
-say "✅ git status limpo em prod-snapshot/ — nada disto será commitado."
+say "✅ git status limpo — nada disto será commitado."

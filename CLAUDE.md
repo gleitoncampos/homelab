@@ -89,7 +89,7 @@ Este arquivo estabelece os princípios de arquitetura, padrões de projeto, conv
 ### 6. Imagens Docker & Atualizações
 - **Tag Fixa**: Sempre fixar a versão da imagem (ex: `image: postgres:16-alpine` ou `image: ghcr.io/paperless-ngx/paperless-ngx:2.14.0`).
 - ❌ **Proibido em Produção**: Evitar o uso da tag `:latest` sem controle de versão.
-- **Automação**: O bot **Renovate** ([`renovate.json`](./renovate.json)) é responsável por abrir Pull Requests automáticos de atualização de versão das imagens.
+- **Automação**: O bot **Renovate** ([`.renovaterc.json`](./.renovaterc.json)) é responsável por abrir Pull Requests automáticos de atualização de versão das imagens.
 
 ---
 
@@ -100,8 +100,9 @@ Este arquivo estabelece os princípios de arquitetura, padrões de projeto, conv
 ├── AGENTS.md               # Regras de estilo para assistentes (CLAUDE.md é symlink)
 ├── CLAUDE.md               # Este arquivo (diretrizes e premissas do repositório)
 ├── README.md               # Porta de entrada: o que é o projeto e como subir
-├── renovate.json           # Atualização automática de versão de imagem
-├── .gitignore              # vault.yml, hosts.ini, .tfvars, .tfstate, dados coletados
+├── .gitignore              # vault.yml, hosts.ini, .tfvars, .tfstate, .local/
+├── .local/                 # IGNORADO. Notas, coleta da produção, descoberta de rede
+├── .renovaterc.json        # Atualização automática de versão de imagem
 ├── docs/
 │   ├── ROADMAP.md          # Backlog por fase
 │   └── PRE-DEPLOY.md       # Pré-requisitos do primeiro push público
@@ -115,7 +116,7 @@ Este arquivo estabelece os princípios de arquitetura, padrões de projeto, conv
 │   └── playbooks/          # 00-node-bootstrap, 01-05, network/
 ├── terraform/              # IaC do hardware virtual (Proxmox VE — VMs e CTs LXC)
 │   └── proxmox/            # Provider bpg/proxmox; runbook de import no README de lá
-├── prod-snapshot/          # Coleta do estado real da produção; os dados são ignorados
+├── prod-snapshot/          # Ferramentas de coleta do estado real (só os scripts)
 │   ├── collect.sh          # Coleta config por host, conforme o grupo do inventário
 │   └── discover.sh         # Descobre hosts na rede e sugere o hosts.ini
 └── docker/                 # Stacks de serviço

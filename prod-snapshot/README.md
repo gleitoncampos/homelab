@@ -1,8 +1,10 @@
-# prod-snapshot — arquivos REAIS da produção
+# prod-snapshot — ferramentas de coleta do estado real
 
-Esta pasta é **ignorada pelo git** (`prod-snapshot/` no `.gitignore`) e existe
-para uma coisa só: comparar o que **de fato roda** nos hosts com o que está no
-repositório.
+Aqui ficam só os **scripts**, versionados. O que eles coletam vai para
+`.local/snapshot/`, fora do controle de versão.
+
+Existem para uma coisa: comparar o que **de fato roda** nos hosts com o que está
+descrito no repositório.
 
 O motivo: os arquivos de config em `docker/monitoring/swarm/` nunca foram
 implantados por automação nenhuma. O `docker/monitoring/swarm/prometheus.yml`
@@ -11,9 +13,9 @@ no repositório inteiro: zero. Logo o arquivo que o Prometheus lê hoje no host 
 outro, e não existe no git. Templatar a partir da cópia do repo seria templatar
 ficção.
 
-**Nada aqui deve ser commitado.** Se um arquivo coletado for interessante como
-referência, ele entra no repo já **sanitizado** e por caminho normal, nunca por
-esta pasta.
+**Nada do que é coletado deve ser commitado.** Se um arquivo for interessante
+como referência, ele entra no repositório já **sanitizado** e por caminho normal,
+nunca copiado direto de `.local/`.
 
 ---
 
@@ -37,7 +39,7 @@ servir prod e dev.
 | `-n` | dry-run |
 | `--no-portainer` | pula a parte de API |
 
-Cada host vira um diretório próprio (`prod-snapshot/node1/`, `.../opnsense/`) e
+Cada host vira um diretório próprio em `.local/snapshot/` (`node1/`, `opnsense/`) e
 o que é coletado depende do grupo a que ele pertence no inventário:
 
 | grupo | o que vem | como |
@@ -47,7 +49,7 @@ o que é coletado depende do grupo a que ele pertence no inventário:
 | `omv` | `config.xml` do OMV, `smb.conf`, `exports`, `fstab`, `blkid`, `lsblk` | ssh |
 | `opnsense` | `/conf/config.xml`, `ifconfig`, regras do `pfctl` | ssh **ou** API |
 | `openwrt` | `/etc/config/` inteiro, `ubus call system board`, `iwinfo` | ssh (scp/tar) |
-| — | `_portainer/stacks.json`, `endpoints.json`, `env-keys.txt` | API |
+| — | `.local/snapshot/_portainer/stacks.json`, `endpoints.json`, `env-keys.txt` | API |
 
 Ausência é informação: caminho que não existe vira `AUSENTE` no `MANIFEST.txt`,
 não erro.
@@ -59,7 +61,7 @@ O Docker materializa diretório quando o bind mount aponta para caminho
 inexistente. Onde isso já aconteceu, o módulo `template` da Fase 3 falha com
 `Destination is a directory` e a fase trava até o diretório sair.
 
-**`_portainer/stacks.json`** é o item de maior valor da coleta: é onde vivem os
+**`.local/snapshot/_portainer/stacks.json`** é o item de maior valor da coleta: é onde vivem os
 **FQDNs reais** e os segredos digitados no formulário da stack — classe B, só no
 BoltDB em `/srv/containers/portainer/`, fora do git, sem registro nem rotação.
 Sem ele não dá para saber quais chaves o vault precisa de verdade, só as que dá
@@ -89,7 +91,7 @@ compartilhar quais chaves existem sem expor valor, use o arquivo que o próprio
 script gera:
 
 ```bash
-cat _portainer/env-keys.txt     # só nomes de chave, seguro
+cat ../.local/snapshot/_portainer/env-keys.txt   # só nomes de chave, seguro
 ```
 
 É essa saída que fecha o conteúdo dos templates da Fase 3 e a lista de chaves do
@@ -97,8 +99,8 @@ cat _portainer/env-keys.txt     # só nomes de chave, seguro
 
 ## Guardas
 
-O script se recusa a rodar se `prod-snapshot/` não estiver sendo ignorada pelo
-git — a checagem acontece **antes** de escrever o primeiro byte. Ao terminar,
-ele roda `git status` na pasta e sai com erro se algo aparecer. Se isso
+O script se recusa a rodar se `.local/` não estiver sendo ignorada pelo git — a
+checagem acontece **antes** de escrever o primeiro byte. Ao terminar, ele roda
+`git status` e sai com erro se algo aparecer. Se isso
 acontecer, o `.gitignore` está errado e o próximo `git add -A` vazaria arquivos
 reais num repositório público: pare e conserte antes de commitar.
