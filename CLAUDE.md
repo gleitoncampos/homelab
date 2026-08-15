@@ -11,6 +11,45 @@ Este arquivo estabelece os princípios de arquitetura, padrões de projeto, conv
   - **Soberania de Dados**: Substituição de serviços de nuvem proprietários (Google Photos/Drive, 1Password, etc.) por alternativas *self-hosted* auto-hospedadas.
   - **Privacidade & Segurança**: Roteamento 100% criptografado (HTTPS/TLS), isolamento de redes e ausência de segredos commitados no repositório.
   - **Reprodutibilidade**: Qualquer serviço deve poder ser recriado do zero a partir das definições deste repositório e do diretório de dados persistentes `/srv/containers/`.
+  - **IaC é a fonte da verdade**: o estado descrito aqui vence o estado que existe no equipamento. Ver a seção abaixo.
+
+---
+
+## 🧨 IaC é a fonte da verdade — divergência é destruída, não preservada
+
+Este repositório **não** descreve o que está configurado nos equipamentos. Ele
+**define** o que deve estar. Quando os dois divergem, quem cede é o equipamento.
+
+⚠️ **Consequência direta, e ela é destrutiva:** qualquer configuração feita à mão
+— pela GUI do OPNsense, pelo LuCI do OpenWrt, pela interface do Proxmox, pelo
+Portainer, por `ssh` no host — que não tenha sido parametrizada no IaC **DEVE ser
+perdida** na próxima execução. Isso não é um efeito colateral a ser mitigado: é o
+mecanismo. Um playbook que preserva ajuste manual não está sendo cuidadoso, está
+sendo inútil, porque o repositório deixa de responder pela configuração real no
+exato momento em que alguém mexe fora dele.
+
+Por isso a substituição total é o padrão aceito onde ela existe: o playbook do
+OPNsense escreve `/conf/config.xml` **inteiro**, e não faz merge com o que estava
+lá. O mesmo vale para `docker stack deploy`, que reconcilia o serviço contra o
+compose, e para os templates de `/etc/network/interfaces` do Proxmox.
+
+**O contrato que isso cria:**
+
+1. Mudança de configuração começa **no repositório**, nunca no equipamento.
+2. Se você precisou mexer na GUI para resolver algo agora — está certo, resolva
+   agora. Mas o ajuste só existe de verdade quando virar variável ou template no
+   mesmo dia. Até lá ele é dívida, e a próxima execução a cobra.
+3. Descobrir o que se perdeu é trabalho de arqueologia. **Descobrir antes** é
+   `--check --diff`: rode-o quando suspeitar que o equipamento andou divergindo.
+4. Nada que é **estado** entra nessa regra — dado de aplicação, banco, mídia,
+   log e certificado emitido vivem em `/srv/containers/` e em volume, jamais em
+   arquivo de configuração renderizado.
+
+O que **não** é dispensa desta regra: "é só um ajuste pequeno", "eu anoto
+depois", "ninguém mais mexe nesse equipamento". Foi exatamente assim que
+`opnsense_config.xml.j2` nasceu — um dump de 3.8 MB do `/conf/config.xml` vivo,
+commitado para não perder o que havia sido feito à mão, carregando junto senha,
+chave privada e a topologia inteira.
 
 ---
 
