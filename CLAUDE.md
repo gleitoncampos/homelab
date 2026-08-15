@@ -202,6 +202,30 @@ ela, em três meses não há como saber se descreve o estado atual. Documento qu
 ficou obsoleto é marcado como tal no índice, não apagado: o raciocínio de por que
 uma decisão foi tomada sobrevive ao fato de ela já ter sido executada.
 
+#### Documento que enumera fraqueza não corrigida NUNCA é versionado
+
+⚠️ Lista de pendências de segurança, inventário do que ainda está aberto, plano
+de hardening em andamento, runbook de rotação de credencial comprometida — todos
+vivem em `.local/`, sem exceção e independentemente de quão útil pareça
+publicá-los.
+
+O critério é este: **se o documento ajuda um atacante mais do que ajuda um
+contribuidor, ele não é público.** Um repositório público publica o que o sistema
+**deve ser**; nunca a lista do que ainda não é. As duas coisas parecem
+documentação e se lêem parecido, mas só uma delas é segura de abrir.
+
+O erro concreto que originou a regra: um arquivo de pendências com 15 itens do
+tipo *"isto ainda não está protegido"*, cada um com o comando pronto para
+verificar, foi versionado num repositório destinado a ser público — junto de um
+roadmap que continha uma senha literal em texto puro. Somados, os dois eram um
+checklist de invasão para o homelab de uma pessoa nomeada.
+
+⚠️ **O gate cobre `docs/` como cobre qualquer outro diretório.** Não existe
+isenção por ser documentação: já existiu em
+[`.githooks/secret-patterns.txt`](./.githooks/secret-patterns.txt), e foi
+exatamente por ela que a senha passou. Ao adicionar padrão novo, nunca isente um
+diretório inteiro — isente o caminho específico onde o valor é legítimo.
+
 ---
 
 ## ⚙️ Workflow de Implementação de Novas Stacks
