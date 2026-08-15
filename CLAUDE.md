@@ -222,6 +222,91 @@ impossível.
 
 ---
 
+## 🧭 Contrato de contribuição (obrigatório)
+
+As seções acima descrevem *como as coisas são*. Esta descreve *o que precisa ser
+verdade antes de cada commit*. Vale para pessoas e para assistentes de IA, sem
+exceção — quando uma delas precisar ser quebrada, a exceção vai escrita na
+mensagem do commit.
+
+### 1. Ativar o gate, uma vez por clone
+
+```bash
+git config core.hooksPath .githooks
+```
+
+O Git não versiona `.git/hooks/`. Sem esse comando os hooks existem no
+repositório e não rodam — é o modo de falha silencioso mais comum aqui.
+
+### 2. Modelo de branches
+
+| branch | papel |
+|---|---|
+| `main` | o que o Portainer de **produção** clona (`refs/heads/main`) |
+| `development` | trabalho corrente; base de todo commit novo |
+| `backup` | histórico antigo com dados reais. **Local. Nunca empurrar.** |
+
+Consequência prática: `main` não é uma branch de integração, é um **deploy**.
+Merge para `main` publica. O primeiro push é sempre explícito
+(`git push -u origin main`), **nunca** `git push --all`, que arrastaria `backup`
+junto.
+
+### 3. Nenhum dado real em arquivo versionado
+
+Exemplos usam as faixas de documentação da RFC 5737 (`192.0.2.0/24`,
+`198.51.100.0/24`, `203.0.113.0/24`), o MAC de documentação da IANA
+(faixa `00:00:5e:00:53:xx`) e domínios `.example`. Hostname de equipamento, faixa
+interna, e-mail pessoal e chave SSH real ficam em `.local/`, no vault ou no
+inventário gitignorado.
+
+⚠️ **Ao mudar hostname, domínio ou faixa de rede, atualizar
+[`.githooks/secret-patterns.txt`](./.githooks/secret-patterns.txt) no mesmo
+commit.** Padrão desatualizado é pior que padrão nenhum: dá sensação de proteção
+sem proteger.
+
+### 4. Linter limpo é o estado normal, não a meta
+
+`ansible-lint` deve fechar em **zero**. Achado que não dá para resolver vira
+`# noqa: <regra>` com a justificativa escrita na linha de cima — nunca uma
+supressão global no `.ansible-lint`. `shellcheck -S warning`, `terraform fmt` e
+`docker stack config` seguem a mesma regra.
+
+⚠️ `ignore_errors: true` só entra quando a falha é **esperada por definição** —
+por exemplo `kldload coretemp` contra `amdtemp`, em que um dos dois sempre falha
+conforme o fabricante da CPU. Nesse caso, use `failed_when:` com a condição
+exata e escreva o motivo ao lado. Ignorar erro em bloco foi o que escondeu 53
+falhas potenciais nesta base.
+
+### 5. Conventional Commits
+
+Formato e tipos aceitos estão na seção do `commit-msg` acima. O que o hook não
+verifica e ainda assim vale: o **corpo** explica *por que*, não *o que* — o
+diff já diz o que mudou. Escopo é o diretório afetado (`ansible`, `docker`,
+`githooks`, `terraform`, `readme`).
+
+### 6. Documentação acompanha o código, no mesmo commit
+
+Stack nova ou movida entre `docker/` e `docker/_catalog/` atualiza a tabela do
+[`README.md`](./README.md) e o [`docker/README.md`](./docker/README.md).
+Diretório novo atualiza a árvore desta seção. Os dois já divergiram do real
+nesta base, e o hook passou a checar `stack_compose_path` e links relativos
+justamente por isso.
+
+### 7. Formatação delegada ao `.editorconfig`
+
+UTF-8, LF, 2 espaços, sem espaço no fim da linha, newline final.
+Markdown e `.j2` ficam de fora do `trim_trailing_whitespace`: no primeiro os dois
+espaços finais são quebra de linha significativa, no segundo a indentação
+pertence ao formato de destino (XML, UCI, INI) e reformatar destrói.
+
+### 8. Versão de imagem sobe por Pull Request do Renovate
+
+Bump manual de tag só quando houver um motivo escrito no commit — CVE, quebra de
+compatibilidade, funcionalidade específica. Fora isso, deixe o bot abrir o PR:
+é ele quem mantém o rastro de quando e por que cada versão mudou.
+
+---
+
 ## 🗣️ Estilo de resposta dos assistentes
 
 Este arquivo é a fonte única: `AGENTS.md` é um symlink para cá, de modo que

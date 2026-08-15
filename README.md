@@ -154,6 +154,42 @@ docker network create --driver=overlay traefik_public
 
 ---
 
+## ✅ Qualidade & Convenções de Contribuição
+
+As regras completas, com o motivo de cada uma, estão no
+[**contrato de contribuição**](./CLAUDE.md#-contrato-de-contribuição-obrigatório)
+do `CLAUDE.md` — que é a fonte única lida também pelos assistentes de IA
+(`AGENTS.md` é um symlink para lá). O resumo:
+
+**Antes de qualquer coisa, num clone novo:**
+
+```bash
+git config core.hooksPath .githooks
+```
+
+O Git não versiona `.git/hooks/`. Sem esse comando os hooks existem no
+repositório e simplesmente não rodam.
+
+| o que | como é garantido |
+|---|---|
+| **Nenhum dado sensível versionado** | `pre-commit` varre as linhas *adicionadas* contra [`.githooks/secret-patterns.txt`](./.githooks/secret-patterns.txt): chave privada, hash de senha, token, e-mail pessoal, MAC, IP interno, hostname de equipamento e domínio real. São os padrões **deste** homelab — ferramenta de prateleira pega chave da AWS, não pega o hostname do seu hypervisor |
+| **Referências que resolvem** | todo `stack_compose_path` aponta para arquivo existente e todo link relativo de markdown resolve. As duas já quebraram de verdade aqui |
+| **Sintaxe válida** | `docker stack config` nas stacks alteradas, YAML parseável, `ansible-playbook --syntax-check` |
+| **Linters limpos** | `ansible-lint` em zero, `shellcheck`, `terraform fmt`. Ausente do sistema, o linter é pulado com aviso em vez de falhar |
+| **Histórico legível** | [Conventional Commits](https://www.conventionalcommits.org/pt-br/) validados pelo hook `commit-msg`, assunto até 72 caracteres |
+| **Formatação uniforme** | [`.editorconfig`](./.editorconfig) — UTF-8, LF, 2 espaços |
+| **Dependências em dia** | [`.renovaterc.json`](./.renovaterc.json) abre PR de atualização de imagem; bump manual de tag exige motivo escrito no commit |
+
+Exemplos usam as faixas de documentação da RFC 5737 (`192.0.2.0/24`,
+`198.51.100.0/24`, `203.0.113.0/24`) e domínios `.example`. Ao mudar hostname,
+domínio ou faixa de rede, o arquivo de padrões é atualizado **no mesmo commit** —
+padrão desatualizado dá sensação de proteção sem proteger.
+
+`git commit --no-verify` funciona e às vezes é o certo. Quando usar, o motivo vai
+no corpo da mensagem: o gate existe para tornar a exceção visível, não impossível.
+
+---
+
 ## 📌 Próximos Passos
 
 O backlog completo, por fase, está em [`docs/ROADMAP.md`](./docs/ROADMAP.md).
