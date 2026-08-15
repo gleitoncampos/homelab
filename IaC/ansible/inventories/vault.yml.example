@@ -69,6 +69,12 @@ ssh_public_key: "ssh-ed25519 AAAA...TROCAR... operador@homelab"
 # Root-equivalente no cluster (monta o socket do Docker). Mínimo 16 caracteres.
 portainer_admin_password: "TROCAR-openssl-rand-base64-32"
 
+# Segredo compartilhado entre o portainer e o portainer-agent. Sem ele o agent
+# aceita QUALQUER cliente que alcance a porta 9001 — e ele monta o socket do
+# Docker em escrita, o que equivale a root no host.
+# Gerar: openssl rand -hex 32
+portainer_agent_secret: 'SUBSTITUIR'
+
 # --- Cloudflare (DNS-01 do Traefik para certificado wildcard) ----------------
 cloudflare_email: "voce@seu-dominio.com"
 # Token de API com escopo Zone:DNS:Edit apenas na zona usada. Não use a Global API Key.

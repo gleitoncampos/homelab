@@ -3,11 +3,19 @@ services:
     # ":lts" é tag flutuante — CLAUDE.md §6 proíbe em produção. "lts" aponta
     # hoje para 2.39.5; o Renovate abre PR quando ela mudar.
     image: portainer/agent:2.39.5
+    environment:
+      # Sem isto o agent aceita qualquer cliente que alcance a 9001 — e ele
+      # monta o socket do Docker em escrita. É a porta dos fundos que anula
+      # qualquer socket proxy feito nos outros serviços.
+      AGENT_SECRET: "${PORTAINER_AGENT_SECRET}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/docker/volumes:/var/lib/docker/volumes
     networks:
-      - traefik_public
+      # Overlay dedicada: `traefik_public` é alcançável por TODO serviço
+      # roteado, o que torna a autenticação a única barreira. Com rede própria,
+      # são duas.
+      - portainer_internal
     deploy:
       mode: global
       placement:
@@ -22,6 +30,8 @@ services:
   portainer:
     image: portainer/portainer-ce:2.39.5
     command: -H tcp://tasks.portainer-agent:9001 --tlsskipverify
+    environment:
+      AGENT_SECRET: "${PORTAINER_AGENT_SECRET}"
     # Esta porta existe por um motivo só: os playbooks 02/03/04/05 chamam a API
     # em "http://localhost:9000" a partir do próprio manager. O Traefik alcança
     # o container pela overlay `traefik_public` (label abaixo), não por aqui. A
@@ -46,6 +56,7 @@ services:
       - /srv/containers/portainer:/data
     networks:
       - traefik_public
+      - portainer_internal
     deploy:
       mode: replicated
       replicas: 1
@@ -68,3 +79,6 @@ services:
 networks:
   traefik_public:
     external: true
+  portainer_internal:
+    driver: overlay
+    # Não `attachable`: nada além destes dois serviços precisa entrar.

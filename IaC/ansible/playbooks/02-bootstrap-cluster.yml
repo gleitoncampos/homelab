@@ -56,6 +56,7 @@
       vars:
         required_secrets:
           - portainer_admin_password
+          - portainer_agent_secret
           - cloudflare_email
           - cloudflare_api_token
           - homelab_domain
@@ -91,6 +92,12 @@
         state: present
       environment:
         FQDN: "{{ fqdn_portainer }}"
+        # Consumida pelo portainer-agent e pelo portainer no mesmo compose.
+        # Sem ela o agent aceita qualquer cliente na overlay, ver compose.
+        PORTAINER_AGENT_SECRET: "{{ portainer_agent_secret }}"
+      # O valor do segredo entra em `environment`, que o módulo pode expor em
+      # log de erro — mesmo tratamento que os outros consumidores de vault.
+      no_log: true
 
     - name: Aguardar o Portainer ficar pronto para conexões de API
       ansible.builtin.uri:
