@@ -174,7 +174,6 @@ services:
     networks:
       - monitoring
 
-
 networks:
   traefik_public:
     external: true

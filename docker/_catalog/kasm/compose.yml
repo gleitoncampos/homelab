@@ -36,4 +36,3 @@ networks:
     driver: bridge
   #traefik_proxy:
   #  external: true
-

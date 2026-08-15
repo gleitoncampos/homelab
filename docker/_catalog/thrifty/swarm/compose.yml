@@ -6,15 +6,15 @@ services:
       LOCAL_API_HOSTNAME: "${FQDN2}"
       LOCAL_API_PORT: 443
     deploy:
-        placement:
-          constraints: [node.role == manager]
-        labels:
-          - "traefik.enable=true"
-          - "traefik.http.routers.thrifty-ui.rule=Host(\"${FQDN}\")" #Define in POrtainer
-          - "traefik.http.routers.thrifty-ui.entrypoints=websecure"
-          - "traefik.http.services.thrifty-ui.loadbalancer.server.port=8080"
-          - "traefik.http.routers.thrifty-ui.service=thrifty-ui"
-          - "traefik.http.routers.thrifty-ui.tls.certresolver=cloudflare"
+      placement:
+        constraints: [node.role == manager]
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.thrifty-ui.rule=Host(\"${FQDN}\")" #Define in POrtainer
+        - "traefik.http.routers.thrifty-ui.entrypoints=websecure"
+        - "traefik.http.services.thrifty-ui.loadbalancer.server.port=8080"
+        - "traefik.http.routers.thrifty-ui.service=thrifty-ui"
+        - "traefik.http.routers.thrifty-ui.tls.certresolver=cloudflare"
     networks:
       - traefik_public
       - thrifty

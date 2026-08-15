@@ -11,4 +11,3 @@ datasources:
     type: loki
     access: proxy
     url: http://tasks.monitoring_loki:3100
-

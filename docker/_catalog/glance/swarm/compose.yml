@@ -20,7 +20,7 @@ services:
         - "traefik.http.routers.glance.service=glance"
         - "traefik.http.routers.glance.tls.certresolver=cloudflare"
     networks:
-        - traefik_public
+      - traefik_public
 
 networks:
   traefik_public:

@@ -35,7 +35,7 @@ services:
       - --entryPoints.web.http.redirections.entrypoint.permanent=true
     environment:
       - CF_DNS_API_TOKEN=${CLOUDFLARE_TOKEN} ## Passar essa env no Portainer
-  
+
     ports:
       - 80:80
       - 443:443

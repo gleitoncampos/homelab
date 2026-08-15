@@ -1,0 +1,75 @@
+# Estilo de YAML.
+#
+# O gate antes só fazia `yaml.safe_load`, que aceita indentação inconsistente e
+# `yes`/`no` como booleano — a armadilha clássica em playbook, porque YAML 1.1
+# converte `no` para `False` e um `dns: no` vira desligado quando você quis a
+# string "no".
+#
+# Regras deliberadamente frouxas onde a rigidez não paga: comprimento de linha
+# e indentação de comentário rendem ruído, não defeito.
+
+extends: default
+
+ignore: |
+  .local/
+  .ansible/
+  .github/ISSUE_TEMPLATE/
+
+rules:
+  # Ansible e Compose usam listas com recuo, que é o estilo dominante aqui.
+  indentation:
+    spaces: 2
+    indent-sequences: consistent
+    check-multi-line-strings: false
+
+  # A regra que justifica o arquivo: `yes`/`no`/`on`/`off` viram booleano em
+  # YAML 1.1 e mudam o sentido calado. Só `true`/`false`.
+  truthy:
+    allowed-values: ["true", "false"]
+    check-keys: false
+
+  # Comprimento: aviso, não erro. Label do Traefik e comando de healthcheck são
+  # longos por natureza, e quebrar linha neles piora a leitura.
+  line-length:
+    max: 120
+    level: warning
+    allow-non-breakable-words: true
+    allow-non-breakable-inline-mappings: true
+
+  # `---` no topo: exigido em playbook por convenção do Ansible, dispensável em
+  # compose. Aviso mantém a consistência sem barrar.
+  document-start:
+    present: true
+    level: warning
+
+  # Comentário: exigir dois espaços antes do `#` inline é ruído puro.
+  comments:
+    require-starting-space: true
+    min-spaces-from-content: 1
+
+  comments-indentation: disable
+
+  # `{{ variavel }}` é a convenção do Ansible e do Compose, e o yamllint conta
+  # os espaços do Jinja como espaço dentro de chave. Um espaço é o correto.
+  braces:
+    max-spaces-inside: 1
+    min-spaces-inside: 0
+
+  # Chave duplicada é sempre defeito: a segunda vence em silêncio.
+  key-duplicates: enable
+
+  # Espaço no fim de linha quebra bloco literal (`|`) sem aviso.
+  trailing-spaces: enable
+
+  # Linha em branco no fim: uma só.
+  empty-lines:
+    max: 1
+    max-start: 0
+    max-end: 1
+
+  # Aspas: livre. Forçar um estilo em compose com `${VAR}` gera troca inútil.
+  quoted-strings: disable
+
+  # Ansible usa `octal` em `mode:` e a regra reclama de `0644` corretamente
+  # citado. O ansible-lint já cobre isso com contexto melhor.
+  octal-values: disable
