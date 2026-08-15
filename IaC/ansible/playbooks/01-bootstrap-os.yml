@@ -78,13 +78,77 @@
       when: ssh_public_key is defined and ssh_public_key != ""
 
     # --- Estrutura de Diretórios de Dados (/srv/containers) ---
+    # 0750, e não 0755: o mesmo modo que a varredura de remediação abaixo
+    # aplica. Com 0755 aqui, as duas tasks brigavam pelo mesmo caminho a cada
+    # execução — esta punha 0755, a varredura tirava o "outros", e ambas
+    # reportavam `changed` para sempre. Nada precisa atravessar este diretório
+    # como "outros": o dono é {{ system_user }}, o grupo é docker, e o daemon
+    # do Docker resolve os bind mounts como root.
     - name: Criar diretório base de dados /srv/containers
       ansible.builtin.file:
         path: "{{ containers_base_dir }}"
         state: directory
         owner: "{{ system_user }}"
         group: docker
-        mode: '0755'
+        mode: '0750'
+
+    # Remediação: os 82 de 87 caminhos em 777 encontrados na coleta de
+    # produção incluem subdiretórios que os PRÓPRIOS CONTAINERS criam em
+    # runtime (cache, media, uploads — ex.: paperless-ngx/data/media,
+    # nextcloud/config/data), que não aparecem em nenhum `loop:` abaixo. As
+    # tasks seguintes usam `ansible.builtin.file` com `state: directory`, que
+    # é idempotente mas só atua nos caminhos que cada loop lista — não alcança
+    # o que foi criado por fora dele, seja por um `chmod -R` manual, seja por
+    # uma imagem que cria sua própria subpasta na primeira escrita. Sem uma
+    # task que varra a árvore inteira, esses caminhos continuam em 777 para
+    # sempre, porque nada nunca os visita de novo.
+    #
+    # Escolhido `recurse: yes` em vez de `find` + loop: o volume de dados de
+    # cada serviço já vive inteiro sob um path só (`{{ containers_base_dir }}`),
+    # então uma árvore recursiva cobre tudo numa task idempotente só.
+    #
+    # Só MODE, sem owner/group: aplicar owner recursivamente reatribuiria tudo
+    # ao mesmo dono, e um serviço que grava como UID próprio (ex.:
+    # Grafana/472, Loki/10001, ver task adiante) quebraria no próximo start.
+    # Mode não tem esse efeito colateral: restringe quem pode ler/escrever,
+    # não muda quem já tem acesso ao que já é seu.
+    #
+    # Notação simbólica `u=rwX,g=rX,o=`, não octal (`0750`): `recurse: yes`
+    # com mode octal aplicaria o MESMO modo a arquivos e diretórios — um
+    # binário ou script executável dentro de `/srv/containers` perderia o bit
+    # de execução, e ficaria não-executável até o próximo `chmod` manual. O
+    # `X` maiúsculo só liga execução em diretórios e em arquivos que já eram
+    # executáveis; `o=` remove leitura/escrita/execução de "outros" em tudo,
+    # que é o defeito real.
+    #
+    # ⚠️ Roda ANTES das tasks específicas, não depois. `g=rX` é ATRIBUIÇÃO, não
+    # máscara: aplicada sobre um diretório em 0700 ela ELEVA o modo para 0750,
+    # e um arquivo em 0600 (o acme.json do Traefik, com as chaves privadas dos
+    # certificados) para 0640. Enquanto esta varredura rodava por último, ela
+    # desfazia em silêncio o endurecimento que as tasks abaixo tinham acabado
+    # de aplicar — e o comentário que estava aqui garantia o contrário,
+    # afirmando que "0700 e 0750 já satisfazem `o=`". Rodando primeiro, cada
+    # task específica aplica seu valor final DEPOIS da varredura, e o valor
+    # final é o que fica.
+    #
+    # ⚠️ Desligada por padrão. Não é variável de topologia (que este
+    # repositório exige declarar sem `default()`), é interruptor de uma
+    # operação destrutiva: a varredura mexe na árvore de dados de TODO serviço
+    # de uma vez, incluindo subpasta criada por container em runtime, e é a
+    # mudança de maior risco desta fase. O item do runbook que manda rodar
+    # este mesmo play para aplicar as regras de firewall não pode carregá-la
+    # de carona. Ligar explicitamente, seguindo o item próprio do runbook
+    # (docs/runbooks/PENDENCIAS-VALIDACAO.md), serviço por serviço:
+    #
+    #   ansible-playbook playbooks/01-bootstrap-os.yml \
+    #     -e srv_permissions_remediation=true
+    - name: "Remediar recursivamente qualquer diretório/arquivo com escrita para outros dentro de /srv/containers"
+      ansible.builtin.file:
+        path: "{{ containers_base_dir }}"
+        state: directory
+        recurse: true
+        mode: u=rwX,g=rX,o=
+      when: srv_permissions_remediation | default(false) | bool
 
     - name: Criar diretório de manifestos das stacks (compose.yml copiado pelo Portainer antes do deploy)
       ansible.builtin.file:
@@ -143,6 +207,28 @@
         group: root
         mode: '0700'
 
+    # O modo do acme.json passa a ser declarado, e não herdado do que o
+    # Traefik criou. A varredura recursiva acima aplica `g=rX` a arquivos
+    # também: sem esta task, uma execução com a remediação ligada deixaria o
+    # arquivo das chaves privadas dos certificados em 0640 — legível pelo
+    # grupo — e nada nunca o traria de volta a 0600, porque a task acima só
+    # trata o diretório. `state: file` condicionado ao stat porque em host
+    # novo o arquivo ainda não existe (o Traefik o cria no primeiro ACME), e
+    # `state: file` contra caminho ausente é erro.
+    - name: Conferir se o acme.json do Traefik já existe
+      ansible.builtin.stat:
+        path: "{{ containers_base_dir }}/traefik/data/acme.json"
+      register: traefik_acme_file
+
+    - name: Restringir o acme.json a 0600 (chaves privadas dos certificados)
+      ansible.builtin.file:
+        path: "{{ containers_base_dir }}/traefik/data/acme.json"
+        state: file
+        owner: root
+        group: root
+        mode: '0600'
+      when: traefik_acme_file.stat.exists
+
     # Ownership dedicado dos volumes de dados de monitoring/observabilidade,
     # no lugar do antigo workaround "chmod 777" que ainda aparece como
     # comentário no compose.yml da stack monitoring. Os UIDs abaixo são os
@@ -167,52 +253,6 @@
         - { path: "influxdb/db", owner: "1000", group: "docker", mode: "0750" }
       loop_control:
         label: "{{ item.path }}"
-
-    # Remediação: os 82 de 87 caminhos em 777 encontrados na coleta de
-    # produção incluem subdiretórios que os PRÓPRIOS CONTAINERS criam em
-    # runtime (cache, media, uploads — ex.: paperless-ngx/data/media,
-    # nextcloud/config/data), que não aparecem em nenhum `loop:` acima. As
-    # tasks anteriores usam `ansible.builtin.file` com `state: directory`,
-    # que é idempotente mas só atua nos caminhos que cada loop lista — não
-    # alcança o que foi criado por fora dele, seja por um `chmod -R`
-    # manual, seja por uma imagem que cria sua própria subpasta na primeira
-    # escrita. Sem uma task que varra a árvore inteira, esses caminhos
-    # continuam em 777 para sempre, porque nada nunca os visita de novo.
-    #
-    # Escolhido `recurse: yes` em vez de `find` + loop: o volume de dados
-    # de cada serviço já vive inteiro sob um path só (`{{
-    # containers_base_dir }}`), então uma árvore recursiva cobre tudo numa
-    # task idempotente só, sem precisar listar module `find` + parsear
-    # resultado + loop sobre ele — mais YAML para o mesmo resultado, com
-    # mais uma chance de escapar algo do padrão de exclusão.
-    #
-    # Só MODE, sem owner/group: aplicar owner recursivamente reatribuiria
-    # tudo ao mesmo dono, e um serviço que grava como UID próprio (ex.:
-    # Grafana/472, Loki/10001, ver task acima) quebraria no próximo start
-    # — o mesmo risco que o topo deste play avisa para o chown
-    # serviço-a-serviço. Mode não tem esse efeito colateral: só restringe
-    # quem pode ler/escrever, não muda quem já tem acesso ao que já é seu.
-    #
-    # Notação simbólica `u=rwX,g=rX,o=`, não octal (`0750`): `recurse: yes`
-    # com mode octal aplicaria o MESMO modo a arquivos e diretórios — um
-    # binário ou script executável dentro de `/srv/containers` perderia o
-    # bit de execução, e ficaria não-executável até o próximo `chmod`
-    # manual. O `X` maiúsculo só liga execução em diretórios e em arquivos
-    # que já eram executáveis, preservando o que já era binário; `o=`
-    # remove leitura/escrita/execução de "outros" em tudo, que é o defeito
-    # real (777 → dono e grupo mantêm o que tinham, outros perdem acesso).
-    #
-    # Roda por último no bloco: as tasks específicas acima (traefik/data em
-    # 0700, monitoring com owner dedicado) já aplicaram o valor exato que
-    # cada uma precisa — esta varredura só fecha o que sobrou fora delas,
-    # e por rodar depois não desfaz o que elas configuraram (0700 e 0750
-    # já satisfazem `o=`, então a varredura é um no-op nesses caminhos).
-    - name: "Remediar recursivamente qualquer diretório/arquivo com escrita para outros dentro de /srv/containers"
-      ansible.builtin.file:
-        path: "{{ containers_base_dir }}"
-        state: directory
-        recurse: true
-        mode: u=rwX,g=rX,o=
 
     # --- Firewall & Hardening (UFW & Fail2ban) ---
     # ATENÇÃO ao limite do UFW no Docker Swarm: o routing mesh do Swarm faz
