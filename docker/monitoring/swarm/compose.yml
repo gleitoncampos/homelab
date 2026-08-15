@@ -50,7 +50,15 @@ services:
     image: gcr.io/cadvisor/cadvisor:v0.52.1
     volumes:
       - /:/rootfs:ro
-      - /var/run:/var/run:rw
+      # Só o socket, somente-leitura — não `/var/run` inteiro em rw, que era o
+      # que estava aqui. Em Debian /var/run é symlink para /run, onde vive o
+      # docker.sock: o mount antigo dava API do Docker em escrita ao cAdvisor.
+      #
+      # ⚠️ O `:ro` NÃO protege a API — socket é endpoint, não arquivo, e
+      # `connect(2)` não é bloqueado por MS_RDONLY. Ele impede apenas que o
+      # container substitua o arquivo de socket. A proteção real vem do socket
+      # proxy, em fase posterior.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
     deploy:
