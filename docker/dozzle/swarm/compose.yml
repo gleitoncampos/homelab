@@ -34,6 +34,13 @@ services:
         # O Dozzle lê o log de TODO container, e log de container carrega token
         # que vaza em mensagem de erro. Sem autenticação, quem alcança a rota lê
         # tudo que qualquer serviço já registrou.
+        #
+        # ⚠️ O hash bcrypt entra em DOZZLE_BASICAUTH SEM os `$` dobrados.
+        # Dobrar é a fuga da interpolação do Compose, e vale para hash escrito
+        # literalmente aqui; o que vem de variável não é reinterpolado, então
+        # `$$2y$$05$$...` chegaria assim mesmo ao Traefik — não é bcrypt
+        # válido, e o middleware passaria a negar toda senha, inclusive a
+        # certa. Gerar com `htpasswd -nbB admin 'SENHA'`, sem `sed`.
     healthcheck:
       test: ["CMD", "/dozzle", "healthcheck"]
       interval: 30s

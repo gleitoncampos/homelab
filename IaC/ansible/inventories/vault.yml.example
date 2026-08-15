@@ -187,9 +187,16 @@ grafana_admin_password: "TROCAR-openssl-rand-base64-32"
 # Sem isto o Grafana sobe em admin/admin, exposto pelo Traefik. Mínimo 16 chars.
 
 # --- Dozzle ------------------------------------------------------------------
-# Hash bcrypt para o basicauth do Dozzle, com os `$` JÁ DOBRADOS.
-# Gerar: htpasswd -nbB admin 'SENHA' | sed -e 's/\$/\$\$/g'
-# Sem escape, o Docker interpola o `$` e o hash truncado aceita qualquer senha.
+# Hash bcrypt para o basicauth do Dozzle, SEM dobrar os `$`.
+# Gerar: htpasswd -nbB admin 'SENHA'
+#
+# ⚠️ Dobrar os `$` (`| sed -e 's/\$/\$\$/g'`) só é correto quando o hash está
+# LITERAL dentro do compose — ali o `$$` é a fuga da interpolação do Compose.
+# Aqui o valor chega por `${DOZZLE_BASICAUTH}`, e valor vindo de variável não é
+# reinterpolado: o conteúdo da variável vai inteiro para o label. Dobrado, o
+# Traefik receberia `$$2y$$05$$...`, que não é hash bcrypt válido, e negaria
+# toda senha — inclusive a certa. Falha fechada, não buraco de segurança, mas
+# o sintoma (401 mesmo com a credencial correta) parece senha errada.
 #
 # ⚠️ O Dozzle ainda não tem playbook de deploy (é importado manualmente pelo
 # Portainer — ver seção "STACKS SEM PLAYBOOK" ao final deste arquivo). Este
