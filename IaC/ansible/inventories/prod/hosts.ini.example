@@ -47,6 +47,12 @@ openwrt
 # diferentes; ver docs/ROADMAP.md, secção 2.3.
 # backup_storage=<NOME-DO-STORAGE-DE-BACKUP>
 
+# Nome do compartilhamento CIFS no NAS (campo `share` do storage.cfg).
+# OBRIGATÓRIO para templates/proxmox/proxmox_storage.j2 — sem default pelo
+# mesmo motivo do backup_storage acima: valor específico do NAS de cada
+# ambiente.
+# proxmox_backup_share=<NOME-DO-COMPARTILHAMENTO-CIFS>
+
 # Faixa autorizada a alcançar as portas administrativas publicadas pelo Docker
 # (9000 do Portainer, 1514 do syslog). O UFW NÃO fecha essas portas: o publish
 # faz DNAT em nat/PREROUTING, antes da chain filter. O fecho é em DOCKER-USER.

@@ -186,10 +186,24 @@ ntp_servers: >-
 # ambiente a declarar o nome que o seu nó realmente enxerga.
 # Definir em `hosts.ini` do ambiente ([all:vars] backup_storage=NOME).
 
+# Nome do compartilhamento CIFS no NAS, consumido por
+# `templates/proxmox/proxmox_storage.j2` (campo `share`). Sem default, mesmo
+# motivo do `backup_storage` acima: o valor real do compartilhamento é
+# específico do NAS de cada ambiente, e um genérico aqui mascararia o nome
+# errado em vez de forçar a declaração correta.
+# Definir em `hosts.ini` do ambiente ([all:vars] proxmox_backup_share=NOME).
+
 # 02:30 diário. Fora da janela de rotação de log e do fstrim semanal (03:00 dom).
 backup_schedule: "02:30"
 
-# Retenção. O storage está com `keep-all=1`, que nunca poda e enche o disco.
+# Retenção consumida tanto por este playbook quanto pelo template
+# `proxmox_storage.j2` (`prune-backups keep-daily=...,keep-weekly=...`) — uma
+# variável só, para as duas pontas nunca divergirem entre si.
+# ⚠️ O storage de produção está hoje com `keep-all=1` (nunca poda, enche o
+# disco do NAS). Aplicar o template com os valores abaixo PODA de fato
+# backups antigos que hoje são retidos para sempre — confirmar antes de
+# rodar `00-proxmox-setup.yml` contra produção (ver
+# docs/runbooks/PENDENCIAS-VALIDACAO.md).
 backup_keep_daily: 7
 backup_keep_weekly: 4
 

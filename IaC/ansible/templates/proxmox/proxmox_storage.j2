@@ -10,7 +10,7 @@ lvmthin: local-lvm
 cifs: NAS_STORAGE
 	path /mnt/pve/NAS_STORAGE
 	server {{ hostvars[groups['omv'][0]].ansible_host }}
-	share NAS_BACKUP
+	share {{ proxmox_backup_share }}
 	content backup,vztmpl,iso
-	prune-backups keep-all=1
+	prune-backups keep-daily={{ backup_keep_daily }},keep-weekly={{ backup_keep_weekly }}
 	username smb
