@@ -194,7 +194,7 @@ docker network create --driver=overlay traefik_public
 - **Segredos e Variáveis de Ambiente**: Arquivos `.env` contendo senhas, chaves de API Cloudflare e tokens são mantidos fora do controle de versão via `.gitignore`.
 - **Ansible Vault como fonte única, um por ambiente**: Os segredos consumidos pela automação vivem em dois arquivos criptografados — `IaC/ansible/inventories/prod/group_vars/all/vault.yml` e `IaC/ansible/inventories/dev/group_vars/all/vault.yml` (ambos gitignorados). O Ansible injeta os valores no campo `env` da API do Portainer, que resolve os `${VAR}` do `compose.yml` — assim nenhum segredo entra no repositório. Setup em [`IaC/ansible/README.md`](./IaC/ansible/README.md) → **Passo 0**. Variável de segredo **nunca** usa `| default('...')`: os playbooks abortam via `tasks/validate_vault.yml` se um segredo faltar, em vez de provisionar com valor público.
 - **Split produção/desenvolvimento**: o inventário Ansible tem dois ambientes independentes, `IaC/ansible/inventories/prod/` e `IaC/ansible/inventories/dev/`, cada um com seu próprio inventário, variáveis e vault. O Portainer de **produção** acompanha a branch `main` deste repositório (`github_repo_branch: refs/heads/main`); o Portainer de **dev** acompanha a branch `develop` (`refs/heads/develop`). Isso significa que uma mudança em `compose.yml` só chega a cada ambiente depois do `push` para a branch correspondente — ver assimetria abaixo.
-- **Assimetria push vs. Ansible**: mudar um `compose.yml` (ou qualquer arquivo dentro de `docker/`) é invisível para a stack já em execução até o commit ser enviado ao GitHub — é de lá que o Portainer clona via GitOps. Já uma mudança num arquivo de config *sidecar* (ex.: `docker/monitoring/swarm/loki-config.yml`, listado em `monitoring_sidecar_files` em `inventories/_common/all.yml`) chega ao host pelo **working tree local** via Ansible (`ansible.builtin.template`/`copy`) na próxima execução do playbook, e **não depende de push**. ⚠️ O sidecar `prometheus.yml.j2` referenciado em `monitoring_sidecar_files` **ainda não existe** — o `prometheus.yml` atual do repo é sintaxe Alloy River, não YAML do Prometheus; templatá-lo é trabalho pendente (ver [`docs/ROADMAP.md`](./docs/ROADMAP.md)). Confundir os dois caminhos é o erro mais comum ao editar uma stack já rodando.
+- **Assimetria push vs. Ansible**: mudar um `compose.yml` (ou qualquer arquivo dentro de `docker/`) é invisível para a stack já em execução até o commit ser enviado ao GitHub — é de lá que o Portainer clona via GitOps. Já uma mudança num arquivo de config *sidecar* (ex.: `docker/monitoring/swarm/loki-config.yml`, listado em `monitoring_sidecar_files` em `inventories/_common/all.yml`) chega ao host pelo **working tree local** via Ansible (`ansible.builtin.template`/`copy`) na próxima execução do playbook, e **não depende de push**. ⚠️ O sidecar `prometheus.yml.j2` referenciado em `monitoring_sidecar_files` **ainda não existe** — o `prometheus.yml` atual do repo é sintaxe Alloy River, não YAML do Prometheus; templatá-lo é trabalho pendente. Confundir os dois caminhos é o erro mais comum ao editar uma stack já rodando.
 - **Roteamento HTTPS**: Nenhum serviço é exposto em HTTP puro. O Traefik força o redirecionamento automático para HTTPS com TLS 1.2/1.3.
 - **Persistência de Dados**: Os dados persistentes de cada aplicação devem ser armazenados sob a pasta padrão `/srv/containers/<nome-do-servico>`.
 
@@ -249,8 +249,10 @@ pública. Licença [MIT](./LICENSE).
 
 ## 📌 Próximos Passos
 
-O backlog completo, por fase, está em [`docs/ROADMAP.md`](./docs/ROADMAP.md).
-Antes do primeiro push público, veja [`docs/PRE-DEPLOY.md`](./docs/PRE-DEPLOY.md).
+O backlog por fase e o checklist de pré-publicação são mantidos **fora do
+versionamento**: os dois enumeram o que ainda não está protegido, e num
+repositório aberto essa lista serve mais a um atacante do que a um contribuidor.
+Quem opera este lab os encontra no diretório local de trabalho.
 
 ---
 

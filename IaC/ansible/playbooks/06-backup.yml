@@ -168,9 +168,8 @@
     # --vmid aceita lista separada por vírgula (formato `pve-vmid-list` da API
     # do Proxmox, o mesmo usado por vzdump.conf) — um job só cobrindo N
     # convidados mantém o id fixo endereçável. N jobs separados exigiriam N
-    # ids. Não confirmado contra este cluster real — ver
-    # PENDENCIAS-VALIDACAO.md, item "Confirmar que o job cobre TODOS os VMIDs
-    # da lista".
+    # ids. Ainda não confirmado contra este cluster real: validar que o job
+    # criado cobre TODOS os VMIDs da lista antes de confiar nele.
     - name: "Criar o job de backup (ainda não existe no cluster)"
       ansible.builtin.command:
         argv: "{{ ['pvesh', 'create', '/cluster/backup', '--id=' ~ backup_job_id] + backup_job_params }}"

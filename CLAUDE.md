@@ -124,12 +124,13 @@ Este arquivo estabelece os princípios de arquitetura, padrões de projeto, conv
 ├── .yamllint               # Estilo de YAML; `yes`/`no` truthy é erro
 ├── .local/                 # IGNORADO. Diretório padrão de documentação de trabalho
 │   ├── README.local.md     # Índice comentado, com o estado de cada documento
+│   ├── docs/               # Backlog, pré-publicação, pendências, plano de hardening
 │   ├── memoria/            # Symlinks para a memória de longo prazo (~/.claude)
 │   └── snapshot/           # Coleta da produção e o levantamento do que roda
 ├── .renovaterc.json        # Atualização automática de versão de imagem
 ├── docs/
-│   ├── ROADMAP.md          # Backlog por fase
-│   └── PRE-DEPLOY.md       # Pré-requisitos do primeiro push público
+│   └── runbooks/           # Procedimento operacional genérico, sem dado real
+│       └── restauracao.md  # Verificação e recuperação do backup dos convidados
 ├── IaC/                    # TODA ferramenta de infraestrutura como código
 │   ├── bootstrap/          # Gera as ENTRADAS que as duas ferramentas consomem
 │   │   ├── bootstrap.py    # Fonte única -> vault, hosts.ini, tfvars, padrões

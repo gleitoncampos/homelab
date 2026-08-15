@@ -46,8 +46,7 @@ openwrt
 # playbooks/00-proxmox-setup.yml, que escreve o storage.cfg — é o mesmo id
 # nas duas pontas, de propósito: o playbook agenda o vzdump contra o id que
 # o template acabou de declarar. Sem default porque os dois nós Proxmox hoje
-# referenciam o mesmo share por nomes diferentes; ver docs/ROADMAP.md,
-# secção 2.3.
+# referenciam o mesmo share por nomes diferentes.
 # backup_storage=<NOME-DO-STORAGE-DE-BACKUP>
 
 # Nome do compartilhamento CIFS no NAS (campo `share` do storage.cfg).

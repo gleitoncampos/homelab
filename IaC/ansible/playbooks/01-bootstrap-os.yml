@@ -137,8 +137,7 @@
     # de uma vez, incluindo subpasta criada por container em runtime, e é a
     # mudança de maior risco desta fase. O item do runbook que manda rodar
     # este mesmo play para aplicar as regras de firewall não pode carregá-la
-    # de carona. Ligar explicitamente, seguindo o item próprio do runbook
-    # (docs/runbooks/PENDENCIAS-VALIDACAO.md), serviço por serviço:
+    # de carona. Ligar explicitamente, serviço por serviço:
     #
     #   ansible-playbook playbooks/01-bootstrap-os.yml \
     #     -e srv_permissions_remediation=true

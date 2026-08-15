@@ -41,8 +41,8 @@ Para poupar seu tempo e o meu:
   estão implantadas — são definições guardadas, e várias precisam de ajuste
   antes de subir. Só `docker/` descreve o que roda.
 - **Ausência de hardening que o próprio README já lista como pendente.** O
-  backlog está em [`docs/ROADMAP.md`](./docs/ROADMAP.md); item conhecido não
-  vira advisory.
+  backlog de hardening é mantido fora do versionamento, justamente por
+  enumerar o que ainda não está protegido; item conhecido não vira advisory.
 - **Resultado de scanner sem impacto demonstrado.** Relato gerado por
   ferramenta, sem caminho de exploração descrito, será fechado.
 

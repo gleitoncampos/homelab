@@ -32,8 +32,7 @@ services:
     # --tlsskipverify: cobre só a criptografia do canal com o agent, não a
     # autenticação do certificado do outro lado — AGENT_SECRET acima autentica
     # o cliente, mas nada aqui valida quem apresenta o certificado. Emitir
-    # mTLS de verdade para o agent é trabalho separado, registrado no ROADMAP
-    # (docs/ROADMAP.md, secção 2.2).
+    # mTLS de verdade para o agent é trabalho separado, ainda pendente.
     command: -H tcp://tasks.portainer-agent:9001 --tlsskipverify
     environment:
       AGENT_SECRET: "${PORTAINER_AGENT_SECRET}"

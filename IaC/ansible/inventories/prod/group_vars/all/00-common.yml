@@ -181,7 +181,7 @@ ntp_servers: >-
 
 # Nome do storage do Proxmox com `content backup` (verificar com
 # `pvesm status`). Sem default, e de propósito: os dois nós Proxmox hoje
-# referenciam o mesmo share por nomes diferentes (ver ROADMAP, secção 2.3) —
+# referenciam o mesmo share por nomes diferentes —
 # um valor genérico aqui esconderia essa divergência em vez de forçar cada
 # ambiente a declarar o nome que o seu nó realmente enxerga.
 # Definir em `hosts.ini` do ambiente ([all:vars] backup_storage=NOME).
@@ -201,9 +201,8 @@ backup_schedule: "02:30"
 # variável só, para as duas pontas nunca divergirem entre si.
 # ⚠️ O storage de produção está hoje com `keep-all=1` (nunca poda, enche o
 # disco do NAS). Aplicar o template com os valores abaixo PODA de fato
-# backups antigos que hoje são retidos para sempre — confirmar antes de
-# rodar `00-proxmox-setup.yml` contra produção (ver
-# docs/runbooks/PENDENCIAS-VALIDACAO.md).
+# backups antigos que hoje são retidos para sempre — confirmar o efeito no
+# storage antes de rodar `00-proxmox-setup.yml` contra produção.
 backup_keep_daily: 7
 backup_keep_weekly: 4
 

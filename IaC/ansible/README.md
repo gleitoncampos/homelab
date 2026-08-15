@@ -54,7 +54,7 @@ ansible/
 
 > `03-stack-monitoring.yml` ainda não foi migrado para `tasks/portainer_stack.yml` — continua
 > com os blocos antigos de `POST .../create/swarm/repository` aceitando `[200, 409, 500]` como
-> sucesso. Ver [`docs/ROADMAP.md`](../../docs/ROADMAP.md) para o acompanhamento dessa pendência.
+> sucesso. A migração é acompanhada no backlog de hardening, mantido fora do versionamento.
 
 ### Por que `group_vars/` mudou de lugar
 
@@ -206,9 +206,9 @@ $EDITOR inventories/dev/hosts.ini    # idem, nós de dev
 
 Estas stacks não têm playbook, então seus segredos existem apenas no banco do Portainer
 (digitados na UI), sem registro nem rotação: **firefly3, pricebuddy, cronicle**
-e as demais listadas em [`docs/ROADMAP.md`](../../docs/ROADMAP.md) secção 1.2.2. Serão migradas aos poucos.
-(**grafana** já saiu desta lista: `03-stack-monitoring.yml` injeta `grafana_admin_password`
-do vault desde a adequação registrada em [`docs/ROADMAP.md`](../../docs/ROADMAP.md).)
+e as demais anotadas no backlog de hardening, que fica fora do versionamento.
+Serão migradas aos poucos. (**grafana** já saiu desta lista:
+`03-stack-monitoring.yml` injeta `grafana_admin_password` do vault.)
 
 ---
 
