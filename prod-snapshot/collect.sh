@@ -14,7 +14,7 @@
 #
 # Uso:
 #   ./collect.sh                          # tudo, inventário de prod
-#   ./collect.sh -i ../ansible/inventories/dev/hosts.ini
+#   ./collect.sh -i ../IaC/ansible/inventories/dev/hosts.ini
 #   ./collect.sh -l node1                 # só um host
 #   ./collect.sh -g proxmox,omv           # só alguns grupos
 #   ./collect.sh -n                       # dry-run: mostra o que faria
@@ -38,7 +38,7 @@ REPO="$(cd "$BASE/.." && pwd)"
 SNAP="$REPO/.local/snapshot"
 mkdir -p "$SNAP"
 
-INVENTORY="$REPO/ansible/inventories/prod/hosts.ini"
+INVENTORY="$REPO/IaC/ansible/inventories/prod/hosts.ini"
 ONLY_HOSTS=""
 ONLY_GROUPS=""
 DRY_RUN=0

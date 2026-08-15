@@ -108,7 +108,7 @@ Fica no nó `<no-secundario>` (mesmo nó do CT 201), para não competir com a OP
 
 > ⚠️ **`lifecycle.ignore_changes = [started]`**: o nó dev fica desligado fora de janelas de teste (é assim que se economiza recurso do host `<no-secundario>`). Sem esse `ignore_changes`, **todo `terraform apply` religaria o CT automaticamente**, mesmo que alguém o tenha desligado de propósito.
 
-> ⚠️ **`initialization.user_account.keys` em LXC só escreve em `/root/.ssh/authorized_keys`** - não cria o usuário `nuvidio` que `ansible/inventories/prod/hosts.ini` usa com `become` via sudo. Quem cria esse usuário é `ansible/playbooks/00-node-bootstrap.yml` (playbook de responsabilidade de outro fluxo de trabalho, não criado a partir deste diretório), que roda como root usando a mesma chave pública e provisiona o usuário de automação antes de qualquer outro playbook assumir `ansible_user=nuvidio`. Rode esse bootstrap antes do restante do Ansible contra o CT 210.
+> ⚠️ **`initialization.user_account.keys` em LXC só escreve em `/root/.ssh/authorized_keys`** - não cria o usuário `nuvidio` que `ansible/inventories/prod/hosts.ini` usa com `become` via sudo. Quem cria esse usuário é `IaC/ansible/playbooks/00-node-bootstrap.yml` (playbook de responsabilidade de outro fluxo de trabalho, não criado a partir deste diretório), que roda como root usando a mesma chave pública e provisiona o usuário de automação antes de qualquer outro playbook assumir `ansible_user=nuvidio`. Rode esse bootstrap antes do restante do Ansible contra o CT 210.
 
 ---
 
@@ -189,4 +189,4 @@ cd /home/nuvidio/git/homelab/ansible
 ansible-playbook site.yml --ask-become-pass
 ```
 
-Para o CT 210 (dev), rode primeiro `ansible/playbooks/00-node-bootstrap.yml` (cria o usuário `nuvidio` usado pelo restante do inventário) antes de qualquer outro playbook direcionado a esse host.
+Para o CT 210 (dev), rode primeiro `IaC/ansible/playbooks/00-node-bootstrap.yml` (cria o usuário `nuvidio` usado pelo restante do inventário) antes de qualquer outro playbook direcionado a esse host.

@@ -18,7 +18,7 @@ os playbooks a apontarem para stacks inexistentes sem que ninguém percebesse.
    relativo ao repositório, porque o Portainer clona do Git.
 4. Acrescente as variáveis de ambiente que o compose exige ao `stack_env` do
    playbook, e as chaves de vault correspondentes ao
-   [`vault.yml.example`](../../ansible/inventories/vault.yml.example).
+   [`vault.yml.example`](../../IaC/ansible/inventories/vault.yml.example).
 
 ## Cinco não seguem o padrão
 

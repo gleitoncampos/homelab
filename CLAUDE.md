@@ -106,16 +106,17 @@ Este arquivo estabelece os princípios de arquitetura, padrões de projeto, conv
 ├── docs/
 │   ├── ROADMAP.md          # Backlog por fase
 │   └── PRE-DEPLOY.md       # Pré-requisitos do primeiro push público
-├── ansible/                # IaC do sistema operacional, do Swarm e das stacks
-│   ├── requirements.yml    # Collections Galaxy (community.docker/general, ansible.posix)
-│   ├── inventories/        # Um diretório por ambiente — ver ansible/README.md
-│   │   ├── _common/        # Variáveis comuns a prod e dev (camada 1 de 3)
-│   │   ├── prod/           # hosts.ini (gitignorado) + group_vars/ (main.yml, vault.yml)
-│   │   └── dev/            # idem, ambiente de desenvolvimento
-│   ├── tasks/              # Tasks reutilizáveis (login e deploy no Portainer, vault)
-│   └── playbooks/          # 00-node-bootstrap, 01-05, network/
-├── terraform/              # IaC do hardware virtual (Proxmox VE — VMs e CTs LXC)
-│   └── proxmox/            # Provider bpg/proxmox; runbook de import no README de lá
+├── IaC/                    # TODA ferramenta de infraestrutura como código
+│   ├── ansible/            # Sistema operacional, cluster Swarm e stacks
+│   │   ├── requirements.yml    # Collections Galaxy (community.docker/general, ansible.posix)
+│   │   ├── inventories/        # Um diretório por ambiente — ver IaC/ansible/README.md
+│   │   │   ├── _common/        # Variáveis comuns a prod e dev (camada 1 de 3)
+│   │   │   ├── prod/           # hosts.ini (gitignorado) + group_vars/
+│   │   │   └── dev/            # idem, ambiente de desenvolvimento
+│   │   ├── tasks/              # Tasks reutilizáveis (Portainer, validação do vault)
+│   │   └── playbooks/          # 00-node-bootstrap, 01-05, network/
+│   └── terraform/          # Hardware virtual (Proxmox VE — VMs e CTs LXC)
+│       └── proxmox/        # Provider bpg/proxmox; runbook de import no README de lá
 ├── prod-snapshot/          # Ferramentas de coleta do estado real (só os scripts)
 │   ├── collect.sh          # Coleta config por host, conforme o grupo do inventário
 │   └── discover.sh         # Descobre hosts na rede e sugere o hosts.ini
@@ -127,6 +128,26 @@ Este arquivo estabelece os princípios de arquitetura, padrões de projeto, conv
 
 > `docker/` contém apenas o que está no ar. Tudo o mais vive em
 > `docker/_catalog/`, para que a árvore não descreva serviços inexistentes.
+
+### Regra: toda ferramenta de IaC vive sob `IaC/`
+
+Ansible, Terraform e qualquer ferramenta futura — Packer, Vagrant, Pulumi,
+cloud-init — entram como um subdiretório de `IaC/`, **nunca** na raiz.
+
+O motivo é o mesmo que separou `docker/` de `docker/_catalog/`: a raiz deve
+responder *o que este repositório é*, não *quais ferramentas ele usa*. Com
+`ansible/` e `terraform/` soltos no topo, cada ferramenta nova custava mais uma
+entrada na raiz, e a leitura passava a ser um inventário de tecnologias em vez de
+um mapa do sistema. Agrupadas, a raiz diz: aqui se provisiona infraestrutura
+(`IaC/`), aqui se definem serviços (`docker/`), aqui se documenta (`docs/`).
+
+Ao acrescentar uma ferramenta:
+
+1. `IaC/<ferramenta>/` com um `README.md` próprio explicando o que ela provisiona
+   e qual a ordem de execução em relação às outras.
+2. Se ela guarda estado ou credencial (`*.tfstate`, `*.tfvars`, inventário real),
+   acrescente a regra ao `.gitignore` **antes** do primeiro arquivo existir.
+3. Atualize esta árvore e a tabela do [`README.md`](./README.md).
 
 ---
 

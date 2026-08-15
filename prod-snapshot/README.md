@@ -33,7 +33,7 @@ servir prod e dev.
 
 | flag | efeito |
 |---|---|
-| `-i <arquivo>` | outro inventário (default: `ansible/inventories/prod/hosts.ini`) |
+| `-i <arquivo>` | outro inventário (default: `IaC/ansible/inventories/prod/hosts.ini`) |
 | `-l node1,node2` | só estes hosts |
 | `-g proxmox,omv` | só hosts destes grupos |
 | `-n` | dry-run |

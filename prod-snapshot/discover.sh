@@ -31,8 +31,8 @@ REPO="$(cd "$BASE/.." && pwd)"
 SNAP="$REPO/.local/snapshot"
 OUT="$SNAP/_discovery"
 
-INVENTORY="$REPO/ansible/inventories/prod/hosts.ini"
-NETWORK_VARS="$REPO/ansible/inventories/prod/group_vars/network.yml"
+INVENTORY="$REPO/IaC/ansible/inventories/prod/hosts.ini"
+NETWORK_VARS="$REPO/IaC/ansible/inventories/prod/group_vars/network.yml"
 MODE="arp"
 ONLY_VLANS=""
 CIDR=""
@@ -310,7 +310,7 @@ echo
 echo "Saída em .local/snapshot/_discovery/ (gitignorada):"
 ls -1 "$OUT" | sed 's/^/  /'
 echo
-echo "Confira o palpite antes de colar em ansible/inventories/prod/hosts.ini."
+echo "Confira o palpite antes de colar em IaC/ansible/inventories/prod/hosts.ini."
 echo "Depois: ansible -i inventories/prod/hosts.ini all -m ping"
 
 if [[ -n "$(git -C "$REPO" status --porcelain -- "$SNAP" 2>/dev/null)" ]]; then
