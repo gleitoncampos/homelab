@@ -50,7 +50,7 @@ que já aconteceu entre os dois arquivos.
 | `IaC/` | **toda** ferramenta de infraestrutura como código. Hoje `bootstrap/` (gera as entradas das outras duas), `ansible/` (sistema, cluster e stacks) e `terraform/` (VMs e containers no Proxmox); amanhã Packer, Vagrant ou o que vier — sempre como subdiretório, nunca solto na raiz |
 | `docker/` | as stacks que estão **no ar**. As demais ficam em `docker/_catalog/` |
 | `prod-snapshot/` | ferramentas que coletam o estado real da produção para comparar com o que está descrito aqui |
-| `docs/` | roadmap e pré-requisitos de publicação |
+| `docs/` | runbooks operacionais. ⚠️ Documento que enumera fraqueza ainda não corrigida — backlog de segurança, lista de pendências, plano de hardening — **não** entra aqui: vive fora do versionamento. Ver [`CLAUDE.md`](./CLAUDE.md#regra-documento-de-trabalho-vive-em-local) |
 
 A regra do `IaC/` existe para que a raiz responda *o que este repositório é*, e
 não *quais ferramentas ele usa* — com cada ferramenta solta no topo, a leitura
