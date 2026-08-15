@@ -80,11 +80,16 @@
         state: started
         enabled: true
 
-    - name: Configurar Chrony NTP apontando para o Gateway OPNsense (198.18.10.1)
+    # `mgmt_gateway_ip` vem do inventário, que é gitignorado — o endereço do
+    # gateway é topologia interna e não entra em arquivo versionado. Sem
+    # `default()` de propósito: o playbook aborta com erro claro se a variável
+    # faltar, em vez de configurar o chrony apontando para um host que não
+    # existe e deixar o relógio derivar em silêncio.
+    - name: Configurar Chrony NTP apontando para o gateway de gerência
       ansible.builtin.copy:
         dest: /etc/chrony/chrony.conf
         content: |
-          server 198.18.10.1 iburst
+          server {{ mgmt_gateway_ip }} iburst
           driftfile /var/lib/chrony/drift
           makestep 1.0 3
           rtcsync

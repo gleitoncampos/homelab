@@ -36,3 +36,10 @@ homelab_workers
 [network:children]
 opnsense
 openwrt
+
+[all:vars]
+# Gateway da rede de gerência, usado como servidor NTP pelos hosts Proxmox e
+# OMV. Fica aqui, e não em group_vars versionado, porque endereço interno é
+# topologia. Os playbooks 00-* não têm default para esta variável: sem ela
+# abortam com erro claro, em vez de apontar o chrony para um host inexistente.
+mgmt_gateway_ip=<IP-DO-GATEWAY>

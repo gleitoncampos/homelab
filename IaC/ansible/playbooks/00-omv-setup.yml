@@ -50,11 +50,14 @@
           - hdparm
         state: present
 
-    - name: Configurar Chrony NTP apontando para o Gateway OPNsense (198.18.10.1)
+    # Ver a nota em 00-proxmox-setup.yml: `mgmt_gateway_ip` vem do inventário
+    # gitignorado, sem `default()`, para falhar alto em vez de configurar o
+    # chrony para um host inexistente.
+    - name: Configurar Chrony NTP apontando para o gateway de gerência
       ansible.builtin.copy:
         dest: /etc/chrony/chrony.conf
         content: |
-          server 198.18.10.1 iburst
+          server {{ mgmt_gateway_ip }} iburst
           driftfile /var/lib/chrony/drift
           makestep 1.0 3
           rtcsync

@@ -138,7 +138,7 @@ unbound_host_overrides: >-
      + (unbound_host_overrides_extra | default([])) }}
 
 # IPs de destino de syslog/netflow derivados do inventário (e não mais um
-# literal fixo, ex.: 198.18.20.10, hardcoded em
+# literal fixo, ex.: 198.51.100.10, hardcoded em
 # inventories/prod/group_vars/network.yml). Ficar em `all` (e não em
 # network.yml) é o que faz tanto os nós do cluster quanto os dispositivos de
 # rede resolverem a mesma var, e faz o inventário de dev apontar sozinho para
