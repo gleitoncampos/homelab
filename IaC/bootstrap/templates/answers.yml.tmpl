@@ -39,7 +39,13 @@ wifi:
 # São os endereços reais, agora. Se um host não existe ainda, deixe vazio: o
 # hosts.ini gerado o deixa comentado, em vez de inventar um IP.
 rede_atual:
+  # Quem roteia hoje. Registrado por ser topologia útil; nenhum playbook o
+  # consome diretamente.
   gateway: @@ATUAL_GATEWAY@@
+  # Quem serve NTP hoje. Papel diferente do gateway, ainda que costume ser o
+  # mesmo host. Vazio = só as fontes públicas do ntp.br, que entram como
+  # fallback de qualquer forma.
+  ntp_interno: @@ATUAL_NTP@@
   manager: @@ATUAL_MANAGER@@
   worker: @@ATUAL_WORKER@@
   hypervisor1: @@ATUAL_HV1@@

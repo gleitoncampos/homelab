@@ -50,14 +50,16 @@
           - hdparm
         state: present
 
-    # Ver a nota em 00-proxmox-setup.yml: `mgmt_gateway_ip` vem do inventário
-    # gitignorado, sem `default()`, para falhar alto em vez de configurar o
-    # chrony para um host inexistente.
-    - name: Configurar Chrony NTP apontando para o gateway de gerência
+    # Ver a nota em 00-proxmox-setup.yml: servidor interno opcional seguido das
+    # públicas, para que o host não fique sem fonte de tempo se o firewall
+    # ainda não servir NTP.
+    - name: Configurar Chrony NTP
       ansible.builtin.copy:
         dest: /etc/chrony/chrony.conf
         content: |
-          server {{ mgmt_gateway_ip }} iburst
+          {% for servidor in ntp_servers %}
+          server {{ servidor }} iburst
+          {% endfor %}
           driftfile /var/lib/chrony/drift
           makestep 1.0 3
           rtcsync

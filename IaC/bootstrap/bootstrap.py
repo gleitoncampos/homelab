@@ -349,7 +349,7 @@ def perguntar_respostas() -> str:
 
     print(_c("1", "\n  Rede de HOJE — é por onde o Ansible vai alcançar os hosts."))
     respostas |= {
-        "ATUAL_GATEWAY": ask("Gateway atual"),
+        "ATUAL_GATEWAY": ask("Gateway atual (quem roteia hoje)"),
         "ATUAL_MANAGER": ask("IP do nó manager do Swarm"),
         "ATUAL_WORKER": ask("IP do worker (vazio se não houver)", obrigatorio=False),
         "ATUAL_HV1": ask("IP do hypervisor primário"),
@@ -359,6 +359,17 @@ def perguntar_respostas() -> str:
         "ATUAL_OPENWRT": ask("IP do OpenWrt", obrigatorio=False),
         "ATUAL_DEV": ask("IP do CT de desenvolvimento", obrigatorio=False),
     }
+
+    # Papéis diferentes que às vezes coincidem: o gateway roteia, o servidor NTP
+    # serve tempo. Só são o mesmo host quando o firewall roteia E está com o
+    # serviço ligado. Enter deixa vazio, e valem só as públicas do ntp.br.
+    print(
+        "\n  O firewall serve NTP para a rede? Se sim, costuma ser o próprio"
+        "\n  gateway. Enter deixa vazio e usa só as fontes públicas."
+    )
+    respostas["ATUAL_NTP"] = ask(
+        "Servidor NTP interno", respostas["ATUAL_GATEWAY"], obrigatorio=False
+    )
 
     print(_c("1", "\n  Nomes dos nós Proxmox — o Terraform os usa como destino."))
     respostas |= {
@@ -572,11 +583,22 @@ opnsense
 openwrt
 
 [all:vars]
-# Gateway da rede de gerência, usado como servidor NTP pelos hosts Proxmox e
-# OMV. Os playbooks 00-* não têm default para esta variável: sem ela abortam
-# com erro claro, em vez de apontar o chrony para um host inexistente.
-mgmt_gateway_ip={a["gateway"]}
-"""
+{_ntp(a)}"""
+
+
+def _ntp(atual: dict) -> str:
+    """Servidor NTP interno. Opcional de propósito: `inventories/_common/all.yml`
+    acrescenta as públicas do ntp.br como fallback, porque apontar só para o
+    firewall pressupõe que ele já roteia E tem o serviço de tempo ligado. Sem
+    isso o host fica sem fonte, e relógio sem fonte não dá erro — derrapa."""
+    ntp = atual.get("ntp_interno") or ""
+    cabecalho = (
+        "# Servidor NTP interno, normalmente o firewall. As públicas do ntp.br\n"
+        "# entram como fallback via inventories/_common/all.yml.\n"
+    )
+    if not ntp:
+        return cabecalho + "# ntp_server_internal=<IP-DO-FIREWALL>   (nenhum informado)\n"
+    return cabecalho + f"ntp_server_internal={ntp}\n"
 
 
 def render_tfvars(resp: dict, seg: dict, ssh_pub: str) -> str:

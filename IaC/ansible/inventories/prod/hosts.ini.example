@@ -26,8 +26,9 @@ opnsense
 openwrt
 
 [all:vars]
-# Gateway da rede de gerência, usado como servidor NTP pelos hosts Proxmox e
-# OMV. Fica aqui, e não em group_vars versionado, porque endereço interno é
-# topologia. Os playbooks 00-* não têm default para esta variável: sem ela
-# abortam com erro claro, em vez de apontar o chrony para um host inexistente.
-mgmt_gateway_ip=<IP-DO-GATEWAY>
+# Servidor NTP interno — normalmente o firewall, que costuma ser também o
+# gateway. OPCIONAL: enquanto ele não roteia, ou está sem o serviço de tempo
+# ligado, deixe comentado e só as fontes públicas do ntp.br valem (definidas em
+# inventories/_common/all.yml). Ter as duas é de propósito: relógio sem fonte
+# não dá erro, derrapa devagar até virar falha de TLS semanas depois.
+# ntp_server_internal=<IP-DO-FIREWALL>

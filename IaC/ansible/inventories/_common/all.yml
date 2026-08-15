@@ -146,6 +146,29 @@ unbound_host_overrides: >-
 syslog_server_ip: "{{ hostvars[groups['homelab_managers'][0]].ansible_host }}"
 netflow_collector_ip: "{{ syslog_server_ip }}"
 
+# Fontes de tempo dos hosts que NÃO são dispositivo de rede (Proxmox, OMV).
+#
+# Duas fontes de propósito. O desenho-alvo é o lab inteiro sincronizar pelo
+# firewall, para ter uma referência única; as públicas ficam como fallback
+# porque relógio sem fonte não dá erro — derrapa devagar, e em cluster com TLS
+# isso vira falha de certificado semanas depois, longe da causa.
+#
+# `ntp_server_internal` vem do inventário (gitignorado) e é OPCIONAL: enquanto o
+# firewall não roteia, ou não tem o serviço de tempo ligado, deixe vazio e só as
+# públicas valem.
+#
+# ⚠️ `group_vars/network.yml` declara o seu próprio `ntp_servers` e tem
+# precedência MAIOR que `group_vars/all/` para opnsense e openwrt — o que é
+# correto: o firewall sincroniza direto com a fonte externa, não consigo mesmo.
+ntp_servers_public:
+  - "a.st1.ntp.br"
+  - "b.st1.ntp.br"
+  - "c.st1.ntp.br"
+  - "d.st1.ntp.br"
+ntp_servers: >-
+  {{ ([ntp_server_internal] if (ntp_server_internal | default('')) else [])
+     + ntp_servers_public }}
+
 # Parâmetros de coleta e retenção do stack de observabilidade (Prometheus +
 # Loki), comuns aos dois ambientes.
 prometheus_scrape_interval: "15s"

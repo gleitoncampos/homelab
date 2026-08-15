@@ -80,16 +80,20 @@
         state: started
         enabled: true
 
-    # `mgmt_gateway_ip` vem do inventário, que é gitignorado — o endereço do
-    # gateway é topologia interna e não entra em arquivo versionado. Sem
-    # `default()` de propósito: o playbook aborta com erro claro se a variável
-    # faltar, em vez de configurar o chrony apontando para um host que não
-    # existe e deixar o relógio derivar em silêncio.
-    - name: Configurar Chrony NTP apontando para o gateway de gerência
+    # `ntp_servers` deriva de `inventories/_common/all.yml`: o servidor interno
+    # (opcional, vindo do inventário gitignorado) seguido das públicas.
+    #
+    # Duas fontes de propósito. Apontar só para o firewall pressupõe que ele
+    # roteia E tem o serviço de tempo ligado; enquanto isso não for verdade, o
+    # host fica sem fonte nenhuma — e relógio sem fonte não dá erro, derrapa
+    # devagar, até virar falha de TLS semanas depois, longe da causa.
+    - name: Configurar Chrony NTP
       ansible.builtin.copy:
         dest: /etc/chrony/chrony.conf
         content: |
-          server {{ mgmt_gateway_ip }} iburst
+          {% for servidor in ntp_servers %}
+          server {{ servidor }} iburst
+          {% endfor %}
           driftfile /var/lib/chrony/drift
           makestep 1.0 3
           rtcsync
