@@ -100,6 +100,8 @@ Este arquivo estabelece os princípios de arquitetura, padrões de projeto, conv
 ├── AGENTS.md               # Regras de estilo para assistentes (CLAUDE.md é symlink)
 ├── CLAUDE.md               # Este arquivo (diretrizes e premissas do repositório)
 ├── README.md               # Porta de entrada: o que é o projeto e como subir
+├── .editorconfig           # Convenções de espaço e fim de linha
+├── .githooks/              # Gate de qualidade; ativar com core.hooksPath
 ├── .gitignore              # vault.yml, hosts.ini, .tfvars, .tfstate, .local/
 ├── .local/                 # IGNORADO. Notas, coleta da produção, descoberta de rede
 ├── .renovaterc.json        # Atualização automática de versão de imagem
@@ -167,6 +169,56 @@ Ao adicionar uma nova aplicação ao repositório, siga o checklist:
 4. **Documentação**:
    - Atualizar a tabela de catálogo no [`README.md`](./README.md).
    - Atualizar o guia de stacks em [`docker/README.md`](./docker/README.md).
+
+---
+
+## ✅ Gate de qualidade (`.githooks/`)
+
+Ativar uma vez por clone — o Git não compartilha `.git/hooks/`:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+### `pre-commit`
+
+Roda só sobre o que está no índice, na ordem em que os problemas custam caro:
+
+1. **Vazamento.** Compara as linhas *adicionadas* contra
+   [`.githooks/secret-patterns.txt`](./.githooks/secret-patterns.txt): chave
+   privada, chave SSH real, hash de senha, token de 64 hex, senha literal,
+   e-mail pessoal, MAC, IP privado, hostname de dispositivo e domínio real.
+   Também barra nome de arquivo proibido mesmo que o `.gitignore` falhe.
+2. **Referências.** Todo `stack_compose_path` aponta para arquivo existente, e
+   todo link relativo de markdown resolve. As duas já quebraram de verdade nesta
+   base, ao mover stacks para `_catalog/` e ao criar `docs/`.
+3. **Sintaxe.** `docker stack config` nos composes alterados, YAML parseável,
+   `ansible-playbook --syntax-check`.
+4. **Linters.** `ansible-lint`, `shellcheck`, `terraform fmt`. Ausente do
+   sistema, o linter é pulado com aviso em vez de falhar.
+
+Os padrões são **deste** repositório, não uma lista genérica: ferramenta de
+prateleira pega chave da AWS, não pega o hostname do seu hypervisor. Ao mudar
+hostname, domínio ou faixa de rede, atualize o arquivo de padrões — um padrão
+desatualizado é pior que padrão nenhum, porque dá a sensação de proteção.
+
+O terceiro campo de cada padrão isenta caminhos onde o valor é legítimo: o plano
+de VLANs precisa declarar gateways, os templates de rede descrevem a topologia
+atual, e os `.example` existem para mostrar o formato.
+
+### `commit-msg`
+
+Conventional Commits: `<tipo>(<escopo>): <descrição>`, com `!` antes dos dois
+pontos para mudança incompatível. Tipos aceitos: `feat`, `fix`, `docs`, `style`,
+`refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`, `security`.
+Assunto até 72 caracteres — acima disso o GitHub trunca justamente onde estaria
+a informação. Descrição no particípio ("adicionado") gera aviso, não bloqueio.
+
+### Escapar do gate
+
+`git commit --no-verify` funciona e às vezes é o certo. Quando usar, escreva o
+motivo no corpo da mensagem — o hook existe para tornar a exceção visível, não
+impossível.
 
 ---
 

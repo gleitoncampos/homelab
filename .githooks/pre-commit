@@ -1,0 +1,206 @@
+#!/usr/bin/env bash
+#
+# pre-commit — barra o que já vazou uma vez neste repositório.
+#
+# A ordem importa: as checagens que impedem VAZAMENTO vêm primeiro e são
+# absolutas. As de correção vêm depois. Nenhuma delas roda sobre o repositório
+# inteiro — só sobre o que está no índice, senão o hook fica lento e ignorado.
+#
+# Instalar:  git config core.hooksPath .githooks
+# Pular:     git commit --no-verify   (registre o motivo na mensagem)
+
+set -uo pipefail
+
+REPO="$(git rev-parse --show-toplevel)"
+cd "$REPO" || exit 1
+
+FAIL=0
+step()  { printf '\n\033[1m%s\033[0m\n' "$1"; }
+ok()    { printf '  \033[32m✓\033[0m %s\n' "$1"; }
+bad()   { printf '  \033[31m✗\033[0m %s\n' "$1"; FAIL=1; }
+skip()  { printf '  \033[90m–\033[0m %s\n' "$1"; }
+
+# Só arquivos adicionados/copiados/modificados/renomeados no índice.
+mapfile -t STAGED < <(git diff --cached --name-only --diff-filter=ACMR)
+[[ ${#STAGED[@]} -eq 0 ]] && exit 0
+
+staged_matching() { # staged_matching <regex-de-caminho>
+  printf '%s\n' "${STAGED[@]}" | grep -E "$1" || true
+}
+
+# ---------------------------------------------------------------------------
+# 1. Vazamento — o modo de falha histórico deste repositório
+# ---------------------------------------------------------------------------
+# Ferramenta genérica pega chave da AWS e token do GitHub. Não pega o hostname
+# do seu hypervisor nem a sua zona DNS, que é o que já vazou aqui. Os padrões
+# abaixo são os deste repositório; ajuste conforme a topologia mudar.
+step "Varredura de dado sensível"
+
+PATTERNS_FILE="$REPO/.githooks/secret-patterns.txt"
+if [[ ! -f "$PATTERNS_FILE" ]]; then
+  bad "não achei $PATTERNS_FILE — a varredura de segredo é obrigatória"
+else
+  leaked=0
+  # Separador `%%` e não `|`, porque os regex usam `|` para alternância.
+  while IFS= read -r line; do
+    [[ -z "${line// }" || "$line" == \#* ]] && continue
+    label="${line%%\%\%*}"; rest="${line#*%%}"
+    regex="${rest%%\%\%*}"; exempt="${rest#*%%}"
+    [[ "$exempt" == "$rest" ]] && exempt=""
+    for f in "${STAGED[@]}"; do
+      # Isenção por caminho: o plano de VLANs precisa declarar gateways, os
+      # `.example` existem para mostrar o formato, e este diretório contém os
+      # próprios padrões. Ver o cabeçalho de secret-patterns.txt.
+      [[ -n "${exempt// }" ]] && grep -qE "$exempt" <<<"$f" && continue
+      # Só as linhas ADICIONADAS deste arquivo.
+      hits="$(git diff --cached -U0 --diff-filter=ACMR -- "$f" \
+              | grep -E '^\+[^+]' | grep -iE -e "$regex" || true)"
+      if [[ -n "$hits" ]]; then
+        bad "$label — em $f"
+        printf '%s\n' "$hits" | head -2 | cut -c1-110 | sed 's/^/      /'
+        leaked=1
+      fi
+    done
+  done < "$PATTERNS_FILE"
+  (( leaked )) || ok "nenhum padrão sensível nas linhas adicionadas"
+fi
+
+# Arquivo que nunca pode ser versionado, mesmo que o .gitignore falhe.
+FORBIDDEN='(^|/)(vault\.yml|hosts\.ini|\.env|[^/]*\.tfvars|[^/]*\.tfstate.*|\.ansible_vault_pass.*|id_[rd]sa|[^/]*\.pem)$'
+if forb="$(staged_matching "$FORBIDDEN")" && [[ -n "$forb" ]]; then
+  bad "arquivo proibido no índice:"; printf '%s\n' "$forb" | sed 's/^/      /'
+else
+  ok "nenhum arquivo proibido"
+fi
+
+# ---------------------------------------------------------------------------
+# 2. Referências quebradas — as duas já quebraram de verdade nesta base
+# ---------------------------------------------------------------------------
+step "Referências"
+
+# stack_compose_path é caminho relativo ao repositório: o Portainer clona do Git
+# e resolve a partir da raiz. Um caminho errado só aparece no deploy.
+missing=0
+while read -r p; do
+  [[ -z "$p" ]] && continue
+  [[ -f "$p" ]] || { bad "stack_compose_path aponta para arquivo inexistente: $p"; missing=1; }
+done < <(git grep -hoE 'stack_compose_path: "[^"]+"' -- 'IaC/ansible/playbooks/*.yml' 2>/dev/null \
+         | sed -E 's/.*"(.*)"/\1/' | sort -u)
+(( missing )) || ok "todo stack_compose_path resolve"
+
+# Links relativos de markdown.
+if command -v python3 >/dev/null; then
+  broken="$(python3 - <<'PY'
+import re, pathlib
+out = []
+for f in pathlib.Path('.').rglob('*.md'):
+    s = str(f)
+    if '/.local/' in s or '/.git/' in s or s.startswith('.local/'):
+        continue
+    try:
+        txt = f.read_text(errors='ignore')
+    except OSError:
+        continue
+    for m in re.finditer(r'\]\((\.{1,2}/[^)#]+)', txt):
+        if not (f.parent / m.group(1)).resolve().exists():
+            out.append(f"{f}: {m.group(1)}")
+print('\n'.join(out))
+PY
+)"
+  if [[ -n "$broken" ]]; then
+    bad "link relativo quebrado:"; printf '%s\n' "$broken" | head -5 | sed 's/^/      /'
+  else
+    ok "links relativos de markdown resolvem"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# 3. Sintaxe e validação — só do que mudou
+# ---------------------------------------------------------------------------
+step "Sintaxe"
+
+if compose="$(staged_matching '^docker/.*compose\.ya?ml$')" && [[ -n "$compose" ]]; then
+  if command -v docker >/dev/null; then
+    while read -r f; do
+      [[ -f "$f" ]] || continue
+      if err="$(docker stack config -c "$f" 2>&1 >/dev/null)"; then
+        ok "docker stack config: $f"
+      else
+        bad "docker stack config: $f"; printf '      %s\n' "$(head -1 <<<"$err")"
+      fi
+    done <<<"$compose"
+  else
+    skip "docker ausente; compose não validado"
+  fi
+fi
+
+if yamls="$(staged_matching '\.ya?ml$')" && [[ -n "$yamls" ]] && command -v python3 >/dev/null; then
+  bads=0
+  while read -r f; do
+    [[ -f "$f" ]] || continue
+    python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1]))" "$f" 2>/dev/null \
+      || { bad "YAML inválido: $f"; bads=1; }
+  done <<<"$yamls"
+  (( bads )) || ok "YAML parseável"
+fi
+
+if staged_matching '^IaC/ansible/(playbooks|site)' | grep -q . ; then
+  if command -v ansible-playbook >/dev/null; then
+    bads=0
+    for p in IaC/ansible/site.yml IaC/ansible/playbooks/*.yml IaC/ansible/playbooks/network/*.yml; do
+      [[ -f "$p" ]] || continue
+      (cd IaC/ansible && ansible-playbook --syntax-check "${p#IaC/ansible/}" >/dev/null 2>&1) \
+        || { bad "syntax-check: $p"; bads=1; }
+    done
+    (( bads )) || ok "playbooks passam no --syntax-check"
+  else
+    skip "ansible-playbook ausente"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# 4. Linters — presentes por escolha, pulados sem drama se não instalados
+# ---------------------------------------------------------------------------
+step "Linters"
+
+if staged_matching '^IaC/ansible/' | grep -q .; then
+  if command -v ansible-lint >/dev/null; then
+    if out="$(cd IaC/ansible && ansible-lint --nocolor -q -p 2>/dev/null)" && [[ -z "$out" ]]; then
+      ok "ansible-lint limpo"
+    else
+      bad "ansible-lint:"; printf '%s\n' "$out" | head -5 | sed 's/^/      /'
+    fi
+  else
+    skip "ansible-lint ausente"
+  fi
+fi
+
+if shs="$(staged_matching '\.sh$')" && [[ -n "$shs" ]]; then
+  if command -v shellcheck >/dev/null; then
+    bads=0
+    while read -r f; do
+      [[ -f "$f" ]] || continue
+      shellcheck -S warning "$f" >/dev/null 2>&1 || { bad "shellcheck: $f"; bads=1; }
+    done <<<"$shs"
+    (( bads )) || ok "shellcheck limpo"
+  else
+    bads=0
+    while read -r f; do
+      [[ -f "$f" ]] || continue
+      bash -n "$f" 2>/dev/null || { bad "sintaxe bash: $f"; bads=1; }
+    done <<<"$shs"
+    (( bads )) || skip "shellcheck ausente; só 'bash -n' rodou"
+  fi
+fi
+
+if tfs="$(staged_matching '\.tf$')" && [[ -n "$tfs" ]] && command -v terraform >/dev/null; then
+  (cd IaC/terraform/proxmox && terraform fmt -check -recursive >/dev/null 2>&1) \
+    && ok "terraform fmt" || bad "terraform fmt — rode 'terraform fmt -recursive'"
+fi
+
+# ---------------------------------------------------------------------------
+if (( FAIL )); then
+  printf '\n\033[31mCommit barrado.\033[0m Corrija acima, ou use --no-verify se souber o que está fazendo.\n\n'
+  exit 1
+fi
+printf '\n\033[32mTudo certo.\033[0m\n\n'

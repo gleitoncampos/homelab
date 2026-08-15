@@ -1,0 +1,33 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# YAML é a maioria do repositório: playbooks, inventários e composes.
+[*.{yml,yaml}]
+indent_size = 2
+
+# HCL do Terraform usa 2 espaços por convenção do `terraform fmt`.
+[*.{tf,tfvars,hcl}]
+indent_size = 2
+
+[*.{sh,bash}]
+indent_size = 2
+
+# Markdown usa dois espaços no fim da linha para quebra forçada.
+[*.md]
+trim_trailing_whitespace = false
+
+# Templates Jinja herdam a indentação do formato de destino (XML, UCI, INI),
+# que não é uniforme — deixar o editor em paz evita reformatação destrutiva.
+[*.j2]
+indent_size = unset
+trim_trailing_whitespace = false
+
+[Makefile]
+indent_style = tab

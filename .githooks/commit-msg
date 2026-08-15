@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+#
+# commit-msg — Conventional Commits.
+#
+# A convenção já era seguida de fato antes deste hook existir; ele só impede a
+# deriva. O valor concreto vem depois: changelog gerado, versão derivada do tipo
+# de mudança, e histórico em que dá para achar "toda alteração de segurança"
+# com um grep.
+#
+# Instalar:  git config core.hooksPath .githooks
+
+set -uo pipefail
+
+MSG_FILE="$1"
+# Ignora comentários e a mensagem gerada por merge/revert/fixup.
+SUBJECT="$(grep -vE '^[[:space:]]*#' "$MSG_FILE" | grep -vE '^[[:space:]]*$' | head -1)"
+
+case "$SUBJECT" in
+  "Merge "*|"Revert "*|"fixup!"*|"squash!"*) exit 0 ;;
+esac
+
+TYPES='feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|security'
+PATTERN="^(${TYPES})(\([a-z0-9._/-]+\))?!?: .{1,}$"
+
+fail() {
+  cat >&2 <<TXT
+
+✗ Mensagem de commit fora do padrão Conventional Commits.
+
+  recebido: ${SUBJECT:-<vazio>}
+  esperado: <tipo>(<escopo opcional>): <descrição>
+
+  tipos: feat fix docs style refactor perf test build ci chore revert security
+  exemplos:
+    feat(ansible): injeta o env das stacks pela API do Portainer
+    fix: remove o ignore_errors que mascarava falha de deploy
+    docs(readme): corrige os caminhos após o agrupamento em IaC/
+
+  Use ! antes dos dois pontos para mudança incompatível: feat(iac)!: ...
+  Pular esta checagem: git commit --no-verify
+
+TXT
+  exit 1
+}
+
+[[ "$SUBJECT" =~ $PATTERN ]] || fail
+
+# O assunto é o que aparece em `git log --oneline` e nas listagens do GitHub;
+# acima de 72 caracteres ele é truncado justamente onde estaria a informação.
+if (( ${#SUBJECT} > 72 )); then
+  printf '\n✗ Assunto com %d caracteres (máximo 72):\n  %s\n\n' "${#SUBJECT}" "$SUBJECT" >&2
+  printf '  O corpo da mensagem não tem limite — mova o detalhe para lá.\n\n' >&2
+  exit 1
+fi
+
+# Imperativo, não passado: "adiciona", não "adicionado".
+DESC="${SUBJECT#*: }"
+if [[ "$DESC" =~ ^[[:alpha:]]+(ado|ada|ados|adas|ido|ida|idos|idas)[[:space:]] ]]; then
+  printf '\n⚠ A descrição parece estar no particípio: "%s"\n' "${DESC%% *}" >&2
+  printf '  A convenção pede imperativo — "adiciona", não "adicionado".\n' >&2
+  printf '  Isto é só um aviso; o commit segue.\n\n' >&2
+fi
