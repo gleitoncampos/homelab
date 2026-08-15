@@ -27,6 +27,19 @@ done < <(git grep -hoE 'stack_compose_path: "[^"]+"' -- 'IaC/ansible/playbooks/*
 if command -v python3 >/dev/null; then
   broken="$(python3 - <<'PY'
 import re, pathlib
+
+def sem_blocos_de_codigo(txt: str) -> str:
+    """Remove blocos cercados por ``` e trechos em crase simples.
+
+    Link dentro de bloco de código é EXEMPLO, não referência: um plano de
+    implementação mostra o markdown a ser inserido em outro arquivo, onde o
+    caminho relativo é resolvido a partir de outro diretório. Verificá-lo aqui
+    acusa quebra que não existe — e falso positivo treina a pessoa a ignorar o
+    gate, que é o pior desfecho possível para ele.
+    """
+    txt = re.sub(r'^\s*```.*?^\s*```', '', txt, flags=re.S | re.M)
+    return re.sub(r'`[^`\n]*`', '', txt)
+
 out = []
 for f in pathlib.Path('.').rglob('*.md'):
     s = str(f)
@@ -36,7 +49,7 @@ for f in pathlib.Path('.').rglob('*.md'):
         txt = f.read_text(errors='ignore')
     except OSError:
         continue
-    for m in re.finditer(r'\]\((\.{1,2}/[^)#]+)', txt):
+    for m in re.finditer(r'\]\((\.{1,2}/[^)#]+)', sem_blocos_de_codigo(txt)):
         if not (f.parent / m.group(1)).resolve().exists():
             out.append(f"{f}: {m.group(1)}")
 print('\n'.join(out))
