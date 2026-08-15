@@ -94,13 +94,18 @@
         group: root
         mode: '0755'
 
+    # 0750, não 0755. A coleta de produção encontrou 82 de 87 caminhos em 777
+    # — incluindo traefik/data, onde vive o acme.json com as chaves privadas
+    # dos certificados. Diretório 777 (ou 755 com grupo/outros amplos) permite
+    # renomear e substituir arquivo dentro dele independentemente da permissão
+    # do próprio arquivo; 0750 restringe a dono e grupo docker, sem "outros".
     - name: Criar subpastas de serviços em /srv/containers
       ansible.builtin.file:
         path: "{{ containers_base_dir }}/{{ item }}"
         state: directory
         owner: "{{ system_user }}"
         group: docker
-        mode: '0755'
+        mode: '0750'
       loop:
         - traefik/config
         - portainer
@@ -162,6 +167,52 @@
         - { path: "influxdb/db", owner: "1000", group: "docker", mode: "0750" }
       loop_control:
         label: "{{ item.path }}"
+
+    # Remediação: os 82 de 87 caminhos em 777 encontrados na coleta de
+    # produção incluem subdiretórios que os PRÓPRIOS CONTAINERS criam em
+    # runtime (cache, media, uploads — ex.: paperless-ngx/data/media,
+    # nextcloud/config/data), que não aparecem em nenhum `loop:` acima. As
+    # tasks anteriores usam `ansible.builtin.file` com `state: directory`,
+    # que é idempotente mas só atua nos caminhos que cada loop lista — não
+    # alcança o que foi criado por fora dele, seja por um `chmod -R`
+    # manual, seja por uma imagem que cria sua própria subpasta na primeira
+    # escrita. Sem uma task que varra a árvore inteira, esses caminhos
+    # continuam em 777 para sempre, porque nada nunca os visita de novo.
+    #
+    # Escolhido `recurse: yes` em vez de `find` + loop: o volume de dados
+    # de cada serviço já vive inteiro sob um path só (`{{
+    # containers_base_dir }}`), então uma árvore recursiva cobre tudo numa
+    # task idempotente só, sem precisar listar module `find` + parsear
+    # resultado + loop sobre ele — mais YAML para o mesmo resultado, com
+    # mais uma chance de escapar algo do padrão de exclusão.
+    #
+    # Só MODE, sem owner/group: aplicar owner recursivamente reatribuiria
+    # tudo ao mesmo dono, e um serviço que grava como UID próprio (ex.:
+    # Grafana/472, Loki/10001, ver task acima) quebraria no próximo start
+    # — o mesmo risco que o topo deste play avisa para o chown
+    # serviço-a-serviço. Mode não tem esse efeito colateral: só restringe
+    # quem pode ler/escrever, não muda quem já tem acesso ao que já é seu.
+    #
+    # Notação simbólica `u=rwX,g=rX,o=`, não octal (`0750`): `recurse: yes`
+    # com mode octal aplicaria o MESMO modo a arquivos e diretórios — um
+    # binário ou script executável dentro de `/srv/containers` perderia o
+    # bit de execução, e ficaria não-executável até o próximo `chmod`
+    # manual. O `X` maiúsculo só liga execução em diretórios e em arquivos
+    # que já eram executáveis, preservando o que já era binário; `o=`
+    # remove leitura/escrita/execução de "outros" em tudo, que é o defeito
+    # real (777 → dono e grupo mantêm o que tinham, outros perdem acesso).
+    #
+    # Roda por último no bloco: as tasks específicas acima (traefik/data em
+    # 0700, monitoring com owner dedicado) já aplicaram o valor exato que
+    # cada uma precisa — esta varredura só fecha o que sobrou fora delas,
+    # e por rodar depois não desfaz o que elas configuraram (0700 e 0750
+    # já satisfazem `o=`, então a varredura é um no-op nesses caminhos).
+    - name: "Remediar recursivamente qualquer diretório/arquivo com escrita para outros dentro de /srv/containers"
+      ansible.builtin.file:
+        path: "{{ containers_base_dir }}"
+        state: directory
+        recurse: true
+        mode: u=rwX,g=rX,o=
 
     # --- Firewall & Hardening (UFW & Fail2ban) ---
     # ATENÇÃO ao limite do UFW no Docker Swarm: o routing mesh do Swarm faz
