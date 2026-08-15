@@ -1,0 +1,132 @@
+---
+# Respostas do bootstrap — a FONTE ÚNICA da configuração deste homelab.
+#
+# Gerado em @@DATA@@ por IaC/bootstrap/bootstrap.py.
+# NÃO versionado (.gitignore). Nenhum segredo entra aqui: senhas e tokens vão
+# direto para o vault cifrado.
+#
+# Deste arquivo derivam, por `make bootstrap`:
+#
+#   inventories/{prod,dev}/hosts.ini      IPs de HOJE (alcançabilidade)
+#   terraform/proxmox/terraform.tfvars    IPs-ALVO (onde as VMs serão criadas)
+#   .githooks/secret-patterns.local.txt   hostnames e domínio, para o gate
+#   inventories/*/group_vars/all/vault.yml (só a parte não-secreta)
+#
+# ⚠️ Editar aqui e rodar `make bootstrap` de novo REGENERA os alvos. Editar um
+# alvo à mão funciona até a próxima execução sobrescrever. A fonte é esta.
+
+# =============================================================================
+# Identidade
+# =============================================================================
+dominio: @@DOMINIO@@
+admin_user: @@ADMIN_USER@@
+email_alerta: @@ADMIN_EMAIL@@
+ssh_user: nuvidio
+
+# Hostnames que o gate deve barrar em arquivo versionado, além dos nós Proxmox
+# declarados em `nos:`. Acrescente NAS, firewall, access point.
+outros_hostnames: []
+
+wifi:
+  main: homelab
+  iot: homelab-iot
+  media: homelab-media
+  guest: homelab-guest
+
+# =============================================================================
+# Rede de HOJE — como o Ansible alcança os hosts
+# =============================================================================
+# São os endereços reais, agora. Se um host não existe ainda, deixe vazio: o
+# hosts.ini gerado o deixa comentado, em vez de inventar um IP.
+rede_atual:
+  gateway: @@ATUAL_GATEWAY@@
+  manager: @@ATUAL_MANAGER@@
+  worker: @@ATUAL_WORKER@@
+  hypervisor1: @@ATUAL_HV1@@
+  hypervisor2: @@ATUAL_HV2@@
+  omv: @@ATUAL_OMV@@
+  opnsense: @@ATUAL_OPNSENSE@@
+  openwrt: @@ATUAL_OPENWRT@@
+  dev: @@ATUAL_DEV@@
+
+# =============================================================================
+# Nós Proxmox
+# =============================================================================
+nos:
+  primario:
+    nome: @@HV1_NOME@@
+  secundario:
+    nome: @@HV2_NOME@@
+
+# Endereço PCI da NIC de WAN em passthrough. Descubra com `lspci` no nó
+# primário. Valor errado aqui cria a VM do firewall sem WAN.
+opnsense_wan_pci_id: "0000:05:00.0"
+
+# =============================================================================
+# Rede-ALVO — o plano de VLANs
+# =============================================================================
+# ⚠️ REVISE ANTES DE APLICAR. Este bloco é o destino, não o presente. Ele é
+# consumido pelo Terraform (onde as VMs nascem) e pelo playbook de rede, que
+# SUBSTITUI o /conf/config.xml inteiro do OPNsense e roda rc.reload_all. Um
+# plano errado aqui vira firewall reconfigurado, não um aviso.
+#
+# Enquanto a migração não acontece, é normal e esperado que estes IPs sejam
+# diferentes dos de `rede_atual`.
+rede_alvo:
+  cidr: 24
+  gateway: "@@ALVO_PREFIXO@@.20.1"
+  manager: "@@ALVO_PREFIXO@@.20.10"
+  worker: "@@ALVO_PREFIXO@@.20.11"
+  omv: "@@ALVO_PREFIXO@@.20.15"
+  dev: "@@ALVO_PREFIXO@@.20.20"
+
+  vlans:
+    - tag: 10
+      name: MGMT
+      descr: Gerenciamento de infraestrutura (OPNsense, Proxmox, Swarm)
+      ip: "@@ALVO_PREFIXO@@.10.1"
+      subnet: 24
+      dhcp_enabled: false
+
+    - tag: 20
+      name: HOMELAB
+      descr: Servidores, Docker Swarm e storage NAS
+      ip: "@@ALVO_PREFIXO@@.20.1"
+      subnet: 24
+      dhcp_enabled: false
+
+    - tag: 30
+      name: TRUSTED
+      descr: Dispositivos pessoais de confiança
+      ip: "@@ALVO_PREFIXO@@.30.1"
+      subnet: 24
+      dhcp_enabled: true
+      dhcp_start: "@@ALVO_PREFIXO@@.30.100"
+      dhcp_end: "@@ALVO_PREFIXO@@.30.254"
+
+    - tag: 40
+      name: IOT
+      descr: Dispositivos IoT, sem acesso às demais VLANs
+      ip: "@@ALVO_PREFIXO@@.40.1"
+      subnet: 24
+      dhcp_enabled: true
+      dhcp_start: "@@ALVO_PREFIXO@@.40.100"
+      dhcp_end: "@@ALVO_PREFIXO@@.40.254"
+
+    - tag: 50
+      name: MEDIA
+      descr: TVs, consoles e streaming
+      ip: "@@ALVO_PREFIXO@@.50.1"
+      subnet: 24
+      dhcp_enabled: true
+      dhcp_start: "@@ALVO_PREFIXO@@.50.100"
+      dhcp_end: "@@ALVO_PREFIXO@@.50.254"
+
+    - tag: 60
+      name: GUEST
+      descr: Visitantes, isolada de tudo exceto internet
+      ip: "@@ALVO_PREFIXO@@.60.1"
+      subnet: 24
+      dhcp_enabled: true
+      dhcp_start: "@@ALVO_PREFIXO@@.60.100"
+      dhcp_end: "@@ALVO_PREFIXO@@.60.254"

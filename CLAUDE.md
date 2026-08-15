@@ -131,6 +131,10 @@ Este arquivo estabelece os princípios de arquitetura, padrões de projeto, conv
 │   ├── ROADMAP.md          # Backlog por fase
 │   └── PRE-DEPLOY.md       # Pré-requisitos do primeiro push público
 ├── IaC/                    # TODA ferramenta de infraestrutura como código
+│   ├── bootstrap/          # Gera as ENTRADAS que as duas ferramentas consomem
+│   │   ├── bootstrap.py    # Fonte única -> vault, hosts.ini, tfvars, padrões
+│   │   ├── test_render.py  # Testa contra ansible-inventory e terraform fmt
+│   │   └── templates/      # Modelo do arquivo de respostas (.tmpl: não é YAML ainda)
 │   ├── ansible/            # Sistema operacional, cluster Swarm e stacks
 │   │   ├── requirements.yml    # Collections Galaxy (community.docker/general, ansible.posix)
 │   │   ├── inventories/        # Um diretório por ambiente — ver IaC/ansible/README.md
@@ -164,6 +168,9 @@ responder *o que este repositório é*, não *quais ferramentas ele usa*. Com
 entrada na raiz, e a leitura passava a ser um inventário de tecnologias em vez de
 um mapa do sistema. Agrupadas, a raiz diz: aqui se provisiona infraestrutura
 (`IaC/`), aqui se definem serviços (`docker/`), aqui se documenta (`docs/`).
+
+A ordem de execução é: **`make bootstrap`** (gera as entradas) → `terraform`
+(cria VMs e CTs) → `ansible` (sistema, cluster e stacks).
 
 Ao acrescentar uma ferramenta:
 

@@ -43,7 +43,13 @@ hooks: ## Ativa o gate de pre-commit neste clone (obrigatório, uma vez)
 	  echo "✓ secret-patterns.local.txt já existe"; \
 	fi
 
-check: lint validate-compose validate-ansible links ## Tudo que a CI roda
+bootstrap: ## Gera vault, inventário, tfvars e chave SSH a partir de uma fonte única
+	@python3 IaC/bootstrap/bootstrap.py $(ARGS)
+
+test-bootstrap: ## Testa os renderizadores do bootstrap contra os consumidores reais
+	@python3 IaC/bootstrap/test_render.py
+
+check: lint validate-compose validate-ansible links test-bootstrap ## Tudo que a CI roda
 	@echo
 	@echo "✓ check completo"
 
