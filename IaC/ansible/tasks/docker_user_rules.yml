@@ -24,7 +24,6 @@
   ansible.builtin.apt:
     name: iptables-persistent
     state: present
-  register: iptables_pkg
 
 - name: "Permitir a faixa de gerência nas portas administrativas"
   ansible.builtin.iptables:
@@ -42,22 +41,65 @@
     - { port: "1514", proto: "tcp" }
     - { port: "1514", proto: "udp" }
 
+# `insert` com rule_num, NÃO `append`. A posição é o mecanismo inteiro aqui.
+#
+# Conteúdo padrão da chain: o Docker cria DOCKER-USER já com uma regra, e uma
+# só — `-A DOCKER-USER -j RETURN`. Ela devolve o pacote à FORWARD, onde as
+# regras geradas pelo Docker liberam o tráfego para os containers. Um `append`
+# coloca os DROP DEPOIS desse RETURN, e regra depois de RETURN nunca é
+# avaliada: `iptables -S DOCKER-USER` mostra as seis regras, o Ansible reporta
+# `changed`, e as portas 9000 e 1514 continuam abertas ao mundo. É o modo de
+# falha que este arquivo existe para eliminar, reproduzido dentro dele.
+#
+# Posições 4, 5 e 6: depois dos três RETURN da faixa autorizada (posições 1 a
+# 3, inseridas pela task acima) e antes do RETURN do Docker, que passa a ser a
+# sétima. Ordem final esperada:
+#
+#   1-3  RETURN  -s {{ mgmt_allowed_cidr }}  (9000/tcp, 1514/tcp, 1514/udp)
+#   4-6  DROP                                (9000/tcp, 1514/tcp, 1514/udp)
+#   7    RETURN                              (a regra que o Docker criou)
+#
+# ⚠️ Isso pressupõe que mais nada escreve em DOCKER-USER (não há ufw-docker
+# nem script de terceiro nestes nós). Confira com `iptables -S DOCKER-USER`
+# depois de aplicar: `state: present` resolve por `iptables -C`, que casa a
+# regra INDEPENDENTE da posição — reexecutar não move para o lugar certo uma
+# regra que já esteja no lugar errado. Se a ordem sair diferente da de cima,
+# zere a chain (`iptables -F DOCKER-USER && iptables -A DOCKER-USER -j RETURN`)
+# e rode o playbook de novo.
 - name: "Recusar o resto nas portas administrativas"
   ansible.builtin.iptables:
     chain: DOCKER-USER
     protocol: "{{ item.proto }}"
     destination_port: "{{ item.port }}"
     jump: DROP
-    action: append
+    action: insert
+    rule_num: "{{ item.rule_num }}"
     comment: "homelab: fecha {{ item.port }}/{{ item.proto }}"
     state: present
   loop:
-    - { port: "9000", proto: "tcp" }
-    - { port: "1514", proto: "tcp" }
-    - { port: "1514", proto: "udp" }
+    - { port: "9000", proto: "tcp", rule_num: "4" }
+    - { port: "1514", proto: "tcp", rule_num: "5" }
+    - { port: "1514", proto: "udp", rule_num: "6" }
+  loop_control:
+    label: "{{ item.proto }}/{{ item.port }} na posição {{ item.rule_num }}"
 
+# `table: filter` restringe o que vai para o arquivo. Sem isso o módulo grava
+# TODAS as tabelas, e a `nat` carrega o DNAT por container — endereço de
+# container que já morreu, restaurado no boot antes do `dockerd` subir, é
+# regra apontando para IP que não existe mais. Com `filter`, o que sobrevive
+# ao boot é a chain que precisa sobreviver.
+#
+# Dentro de `filter` ainda entram as chains geradas pelo Docker (DOCKER,
+# DOCKER-FORWARD, DOCKER-ISOLATION-*): o módulo não tem granularidade por
+# chain, só por tabela. Tolerável porque o `dockerd` recria as suas próprias
+# chains ao iniciar — a única que ele NÃO limpa é justamente DOCKER-USER, que
+# é o motivo de as regras acima morarem nela.
 - name: Persistir as regras
   community.general.iptables_state:
     state: saved
+    table: filter
     path: /etc/iptables/rules.v4
-  when: iptables_pkg is succeeded
+  # Sem `when:`. O que estava aqui era `iptables_pkg is succeeded`, que nunca é
+  # falso: a task do apt não tem `ignore_errors`, então uma falha dela já teria
+  # abortado o play antes desta linha. Condição que nunca reprova é ruído que
+  # aparenta cuidado.

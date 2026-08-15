@@ -52,7 +52,10 @@ services:
     # ("Additional property host_ip is not allowed") — Swarm não tem como
     # restringir o bind a loopback pelo stack file. UFW também não fecha isso:
     # o publish do Docker faz DNAT em nat/PREROUTING, antes da chain filter.
-    # O fecho real é uma regra em DOCKER-USER (ver ufw-docker). Está no TODO.
+    # O fecho real é uma regra em DOCKER-USER, e ela já existe:
+    # IaC/ansible/tasks/docker_user_rules.yml, incluída por
+    # playbooks/01-bootstrap-os.yml. Ela libera só `mgmt_allowed_cidr` na 9000
+    # e descarta o resto.
     ports:
       - target: 9000
         published: 9000
