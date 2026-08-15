@@ -169,6 +169,22 @@ ntp_servers: >-
   {{ ([ntp_server_internal] if (ntp_server_internal | default('')) else [])
      + ntp_servers_public }}
 
+# --- Backup ------------------------------------------------------------------
+# VMID da VM que roda o Swarm inteiro. Sem default: um VMID errado faria o
+# vzdump salvar a máquina errada e reportar sucesso, que é o pior desfecho
+# possível para um mecanismo cuja única função é ser confiável.
+# Definir em `hosts.ini` do ambiente ([all:vars] backup_vmid_swarm=NNN).
+
+# Storage do Proxmox com `content backup`. Verificar com `pvesm status`.
+backup_storage: "NAS_BACKUP"
+
+# 02:30 diário. Fora da janela de rotação de log e do fstrim semanal (03:00 dom).
+backup_schedule: "02:30"
+
+# Retenção. O storage está com `keep-all=1`, que nunca poda e enche o disco.
+backup_keep_daily: 7
+backup_keep_weekly: 4
+
 # Parâmetros de coleta e retenção do stack de observabilidade (Prometheus +
 # Loki), comuns aos dois ambientes.
 prometheus_scrape_interval: "15s"

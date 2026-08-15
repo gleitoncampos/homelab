@@ -1,0 +1,71 @@
+---
+# Backup da VM que roda o Swarm.
+#
+# Existe porque `CLAUDE.md` promete reprodutibilidade "a partir das definições
+# deste repositório E do diretório /srv/containers" — e a segunda metade não
+# tinha backup nenhum. `docker service rollback` NÃO restaura bind mount: ele
+# restaura a ServiceSpec. Este playbook é o único ponto de retorno real.
+#
+# Backup de VM inteira, e não restic por diretório, por ser a opção mais
+# aditiva: não toca em serviço nenhum e entrega rollback de máquina completa.
+#
+#   ansible-playbook playbooks/06-backup.yml
+- name: Configurar backup agendado da VM do Swarm
+  hosts: proxmox
+  gather_facts: true
+
+  pre_tasks:
+    - name: "Abortar se backup_vmid_swarm não estiver no inventário"
+      ansible.builtin.assert:
+        that:
+          - backup_vmid_swarm is defined
+          - backup_vmid_swarm | string | length > 0
+        fail_msg: >-
+          backup_vmid_swarm não está definido. Sem ele o vzdump salvaria a VM
+          errada e reportaria sucesso. Defina em [all:vars] no hosts.ini do
+          ambiente — ver hosts.ini.example.
+
+  tasks:
+    - name: Conferir que o storage de backup existe e aceita backup
+      ansible.builtin.command:
+        cmd: "pvesm status --storage {{ backup_storage }}"
+      register: storage_status
+      changed_when: false
+      failed_when: storage_status.rc != 0
+
+    - name: "Abortar se o storage não estiver ativo"
+      ansible.builtin.assert:
+        that: "'active' in storage_status.stdout"
+        fail_msg: >-
+          Storage {{ backup_storage }} não está ativo. Um job de backup
+          apontando para storage inativo falha silenciosamente todo dia.
+
+    - name: Conferir que a VM alvo existe neste nó
+      ansible.builtin.command:
+        cmd: "qm config {{ backup_vmid_swarm }}"
+      register: vm_config
+      changed_when: false
+      failed_when: false
+
+    - name: Agendar o job de backup
+      ansible.builtin.command:
+        argv:
+          - pvesh
+          - create
+          - /cluster/backup
+          - --schedule={{ backup_schedule }}
+          - --storage={{ backup_storage }}
+          - --vmid={{ backup_vmid_swarm }}
+          - --mode=snapshot
+          - --compress=zstd
+          - --enabled=1
+          - --notes-template=homelab-swarm-{{ '{{' }} guestname {{ '}}' }}
+          - --prune-backups=keep-daily={{ backup_keep_daily }},keep-weekly={{ backup_keep_weekly }}
+      when: vm_config.rc == 0
+      register: backup_job
+      changed_when: backup_job.rc == 0
+      # Já existir não é erro: o playbook é idempotente por natureza aqui, e o
+      # pvesh não tem create-or-update para /cluster/backup.
+      failed_when:
+        - backup_job.rc != 0
+        - "'already exists' not in (backup_job.stderr | default(''))"
