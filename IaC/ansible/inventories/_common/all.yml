@@ -131,7 +131,11 @@ fqdn_ittools: "tools.{{ homelab_domain }}"
 #
 # Para acrescentar overrides pontuais sem perder este, defina
 # `unbound_host_overrides_extra` no vault do ambiente.
-unbound_host_overrides: "{{ [{'hostname': '*', 'domain': homelab_domain, 'server': hostvars[groups['homelab_managers'][0]].ansible_host}] + (unbound_host_overrides_extra | default([])) }}"
+unbound_host_overrides: >-
+  {{ [{'hostname': '*',
+       'domain': homelab_domain,
+       'server': hostvars[groups['homelab_managers'][0]].ansible_host}]
+     + (unbound_host_overrides_extra | default([])) }}
 
 # IPs de destino de syslog/netflow derivados do inventário (e não mais um
 # literal fixo, ex.: 198.18.20.10, hardcoded em

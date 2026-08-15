@@ -56,7 +56,7 @@
 # (pode conter senhas/tokens do Vault). Nenhum ignore_errors: uma falha real de API
 # deve interromper o play, nunca ser mascarada.
 
-- name: "{{ stack_name }} :: Listar stacks existentes no Portainer"
+- name: "Listar stacks existentes no Portainer :: {{ stack_name }}"
   ansible.builtin.uri:
     url: "{{ portainer_url }}/api/stacks"
     method: GET
@@ -67,11 +67,11 @@
   register: portainer_stacks_list
   no_log: true
 
-- name: "{{ stack_name }} :: Resolver Id da stack existente (vazio se ainda não existe)"
+- name: "Resolver Id da stack existente (vazio se ainda não existe) :: {{ stack_name }}"
   ansible.builtin.set_fact:
     stack_id: "{{ ((portainer_stacks_list.json | selectattr('Name', 'equalto', stack_name) | map(attribute='Id') | list) + ['']) | first }}"
 
-- name: "{{ stack_name }} :: Exigir que o chamador passe env (lista vazia é sempre erro)"
+- name: "Exigir que o chamador passe env (lista vazia é sempre erro) :: {{ stack_name }}"
   ansible.builtin.assert:
     that:
       - stack_env is defined
@@ -88,7 +88,7 @@
 # que hoje só existe no BoltDB, digitada no formulário da stack — e essas chaves
 # não estão em lugar nenhum do git. Por isso o env atual entra como base e o do
 # vault sobrescreve por nome.
-- name: "{{ stack_name }} :: Mesclar o env do vault sobre o env já existente no Portainer"
+- name: "Mesclar o env do vault sobre o env já existente no Portainer :: {{ stack_name }}"
   ansible.builtin.set_fact:
     stack_env_merged: >-
       {{ ((portainer_stacks_list.json | selectattr('Name', 'equalto', stack_name)
@@ -98,7 +98,7 @@
   when: stack_id
   no_log: true
 
-- name: "{{ stack_name }} :: Obter Id do Swarm no endpoint do Portainer (apenas para criação nova)"
+- name: "Obter Id do Swarm no endpoint do Portainer (apenas para criação nova) :: {{ stack_name }}"
   ansible.builtin.uri:
     url: "{{ portainer_url }}/api/endpoints/{{ portainer_endpoint_id }}/docker/swarm"
     method: GET
@@ -110,7 +110,7 @@
   when: not stack_id
   no_log: true
 
-- name: "{{ stack_name }} :: Criar stack nova via repositório Git (primeiro deploy)"
+- name: "Criar stack nova via repositório Git (primeiro deploy) :: {{ stack_name }}"
   ansible.builtin.uri:
     url: "{{ portainer_url }}/api/stacks/create/swarm/repository?endpointId={{ portainer_endpoint_id }}"
     method: POST
@@ -130,7 +130,7 @@
   when: not stack_id
   no_log: true
 
-- name: "{{ stack_name }} :: Redeploy da stack existente (env mesclado)"
+- name: "Redeploy da stack existente (env mesclado) :: {{ stack_name }}"
   ansible.builtin.uri:
     url: "{{ portainer_url }}/api/stacks/{{ stack_id }}/git/redeploy?endpointId={{ portainer_endpoint_id }}"
     method: PUT
@@ -148,7 +148,7 @@
   when: stack_id
   no_log: true
 
-- name: "{{ stack_name }} :: Confirmar que create ou redeploy retornou HTTP 200"
+- name: "Confirmar que create ou redeploy retornou HTTP 200 :: {{ stack_name }}"
   ansible.builtin.assert:
     that:
       - (not stack_id and portainer_stack_create is defined and portainer_stack_create.status == 200)

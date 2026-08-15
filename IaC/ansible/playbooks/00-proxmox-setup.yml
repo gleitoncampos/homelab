@@ -10,6 +10,13 @@
           - ssh_public_key
           - proxmox_alert_email
   tasks:
+    # Coletado uma vez para condicionar as tasks que mexem em serviços que podem
+    # não existir neste host. Antes elas carregavam `ignore_errors: true`, o que
+    # silenciava também as falhas reais — incluindo as das tasks seguintes, que
+    # dependiam delas.
+    - name: Levantar os serviços presentes no host
+      ansible.builtin.service_facts:
+
     - name: Corrigir repositórios oficiais do Debian Bookworm no /etc/apt/sources.list
       ansible.builtin.copy:
         dest: /etc/apt/sources.list
@@ -66,14 +73,12 @@
           - rsync
           - ethtool
         state: present
-      ignore_errors: true
 
     - name: Garantir desduplicação de memória RAM em tempo real (KSM) ativa
       ansible.builtin.systemd:
         name: ksmtuned
         state: started
         enabled: true
-      ignore_errors: true
 
     - name: Configurar Chrony NTP apontando para o Gateway OPNsense (198.18.10.1)
       ansible.builtin.copy:
@@ -86,14 +91,12 @@
         owner: root
         group: root
         mode: '0644'
-      ignore_errors: true
 
     - name: Reiniciar Chrony NTP
       ansible.builtin.systemd:
         name: chrony
         state: restarted
         enabled: true
-      ignore_errors: true
 
     - name: Configurar Fail2ban para proteção do Proxmox Web GUI (Porta 8006)
       ansible.builtin.copy:
@@ -110,14 +113,12 @@
         owner: root
         group: root
         mode: '0644'
-      ignore_errors: true
 
     - name: Garantir serviço do Fail2ban ativo e habilitado
       ansible.builtin.systemd:
         name: fail2ban
         state: started
         enabled: true
-      ignore_errors: true
 
     - name: Configurar CPU Performance Governor no Proxmox Host
       ansible.builtin.copy:
@@ -127,7 +128,6 @@
         owner: root
         group: root
         mode: '0644'
-      ignore_errors: true
 
     - name: Desativar serviços de High Availability (HA) em nó único Proxmox (Economia de CPU/RAM)
       ansible.builtin.systemd:
@@ -137,7 +137,6 @@
       loop:
         - pve-ha-crm
         - pve-ha-lrm
-      ignore_errors: true
 
     - name: Remover o aviso/popup de assinatura (No Subscription NAG Popup) na Web GUI (Idempotente)
       ansible.builtin.shell: |
@@ -147,7 +146,12 @@
         fi
       args:
         executable: /bin/bash
+      register: nag_patch
+      changed_when: "'Ext.Msg.show' not in nag_patch.stdout"
 
+    # Nenhum dos três vem instalado por padrão no Proxmox. Condicionar à presença
+    # real é o que permite remover o ignore_errors sem quebrar o play num host
+    # que simplesmente não tem o serviço.
     - name: Desativar serviços desnecessários do Debian Host (avahi-daemon, cups, modemmanager)
       ansible.builtin.systemd:
         name: "{{ item }}"
@@ -157,7 +161,7 @@
         - avahi-daemon
         - cups
         - modemmanager
-      ignore_errors: true
+      when: "(item ~ '.service') in ansible_facts.services"
 
     - name: Configurar Blacklist de módulos de Kernel não utilizados (bluetooth, firewire)
       ansible.builtin.copy:
@@ -169,7 +173,6 @@
         owner: root
         group: root
         mode: '0644'
-      ignore_errors: true
 
     - name: Configurar Timeout de Shell Ocioso, Aliases QoL (pve-vms, pve-top, disk-map) e Histórico Bash
       ansible.builtin.copy:
@@ -187,28 +190,25 @@
         owner: root
         group: root
         mode: '0644'
-      ignore_errors: true
 
     - name: Reduzir Timeout de Desligamento de Serviços Travados para 15s (/etc/systemd/system.conf)
       ansible.builtin.lineinfile:
         path: /etc/systemd/system.conf
         regexp: '^#?DefaultTimeoutStopSec='
         line: 'DefaultTimeoutStopSec=15s'
-      ignore_errors: true
 
-    - name: Desativar daemon systemd-resolved para usar consulta direta de DNS no OPNsense (198.18.10.1)
+    - name: Desativar daemon systemd-resolved para usar consulta direta de DNS no OPNsense
       ansible.builtin.systemd:
         name: systemd-resolved
         state: stopped
         enabled: false
-      ignore_errors: true
+      when: "'systemd-resolved.service' in ansible_facts.services"
 
     - name: Travar resolução pvelocalhost no /etc/hosts apontando estritamente para IPv4 (127.0.0.1)
       ansible.builtin.lineinfile:
         path: /etc/hosts
         regexp: '.*pvelocalhost.*'
         line: '127.0.0.1 pvelocalhost'
-      ignore_errors: true
 
     - name: Configurar ZRAM Swap Comprimido em RAM (12GB de capacidade virtual ideal para host 16GB RAM no Intel N100)
       ansible.builtin.copy:
@@ -220,14 +220,12 @@
         owner: root
         group: root
         mode: '0644'
-      ignore_errors: true
 
     - name: Reiniciar serviço ZRAM Swap
       ansible.builtin.systemd:
         name: zramswap
         state: restarted
         enabled: true
-      ignore_errors: true
 
     - name: Configurar Hardening de Cifras e Algoritmos SSH no Debian Host
       ansible.builtin.copy:
@@ -239,7 +237,6 @@
         owner: root
         group: root
         mode: '0644'
-      ignore_errors: true
 
     - name: Configurar Sysctl Enterprise do Kernel (swappiness=10, fq_codel, somaxconn, eBPF, suid_dumpable, dirty memory, max_map_count)
       ansible.builtin.copy:
@@ -271,11 +268,10 @@
         owner: root
         group: root
         mode: '0644'
-      ignore_errors: true
 
     - name: Aplicar sysctl no Proxmox Host
       ansible.builtin.command: "sysctl --system"
-      ignore_errors: true
+      changed_when: true
 
     - name: Configurar Regra de I/O Scheduler para SSDs (mq-deadline / kyber)
       ansible.builtin.copy:
@@ -285,7 +281,6 @@
         owner: root
         group: root
         mode: '0644'
-      ignore_errors: true
 
     - name: Configurar Envio Centralizado de Logs Syslog do Proxmox para o Grafana Alloy (UDP 1514)
       ansible.builtin.copy:
@@ -295,69 +290,74 @@
         owner: root
         group: root
         mode: '0644'
-      ignore_errors: true
 
     - name: Reiniciar rsyslog para ativar envio centralizado de logs
       ansible.builtin.systemd:
         name: rsyslog
         state: restarted
         enabled: true
-      ignore_errors: true
 
-    - name: Configurar CPU Pinning no OPNsense VM (1 núcleo dedicado - Core 0)
+    # A VM do firewall vive num nó só; nos demais este arquivo não existe. Testar
+    # a presença é honesto — `ignore_errors` aqui escondia também erro de escrita
+    # no nó certo.
+    - name: Verificar se a VM do firewall reside neste nó
+      ansible.builtin.stat:
+        path: "/etc/pve/qemu-server/{{ opnsense_vmid | default(100) }}.conf"
+      register: opnsense_vm_conf
+
+    - name: Configurar CPU Pinning na VM do OPNsense (1 núcleo dedicado - Core 0)
       ansible.builtin.lineinfile:
-        path: /etc/pve/qemu-server/100.conf
+        path: "/etc/pve/qemu-server/{{ opnsense_vmid | default(100) }}.conf"
         line: "affinity: 0"
         create: false
-      ignore_errors: true
+      when: opnsense_vm_conf.stat.exists
 
     - name: Configurar pcie_aspm=performance no GRUB contra desconexões de placa de rede
       ansible.builtin.lineinfile:
         path: /etc/default/grub
         regexp: '^GRUB_CMDLINE_LINUX_DEFAULT='
         line: 'GRUB_CMDLINE_LINUX_DEFAULT="quiet pcie_aspm=performance"'
-      ignore_errors: true
-
-    - name: Atualizar GRUB se modificado
-      ansible.builtin.command: "update-grub"
-      ignore_errors: true
+      notify: Atualizar GRUB
 
     - name: Agendar fstrim semanal nos domingos às 02:00 AM para manutenção do SSD LVM-Thin
       ansible.builtin.raw: '(crontab -l 2>/dev/null; echo "0 2 * * 0 /sbin/fstrim -av") | sort -u | crontab -'
+      changed_when: false
 
     - name: Agendar limpeza semanal automática de caches e imagens no Proxmox via Crontab
       ansible.builtin.raw: '(crontab -l 2>/dev/null; echo "0 3 * * 0 pveam update && apt-get autoremove -y && apt-get clean") | sort -u | crontab -'
+      changed_when: false
 
-    - name: Aplicar padronização de interfaces de rede (/etc/network/interfaces)
+    # Os três `noqa: no-relative-paths` abaixo: a regra pede estrutura de role,
+    # e estes playbooks são deliberadamente flat — converter em roles é uma
+    # refatoração maior, registrada no roadmap. O caminho é relativo ao playbook,
+    # não ao diretório de execução, então é estável.
+    - name: Aplicar padronização de interfaces de rede (/etc/network/interfaces)  # noqa: no-relative-paths
       ansible.builtin.template:
-        src: ../templates/proxmox/proxmox_interfaces.j2
+        src: "{{ playbook_dir }}/../templates/proxmox/proxmox_interfaces.j2"
         dest: /etc/network/interfaces
         owner: root
         group: root
         mode: '0644'
-      ignore_errors: true
 
-    - name: Aplicar padronização de armazenamento LVM-Thin (/etc/pve/storage.cfg)
+    - name: Aplicar padronização de armazenamento LVM-Thin (/etc/pve/storage.cfg)  # noqa: no-relative-paths
       ansible.builtin.template:
-        src: ../templates/proxmox/proxmox_storage.j2
+        src: "{{ playbook_dir }}/../templates/proxmox/proxmox_storage.j2"
         dest: /etc/pve/storage.cfg
         owner: root
         group: root
         mode: '0644'
-      ignore_errors: true
 
-    - name: Aplicar padronização de Datacenter (Teclado ABNT2 pt-br e E-mail de Alertas)
+    - name: Aplicar padronização de Datacenter (Teclado ABNT2 pt-br e E-mail de Alertas)  # noqa: no-relative-paths
       ansible.builtin.template:
-        src: ../templates/proxmox/proxmox_datacenter.j2
+        src: "{{ playbook_dir }}/../templates/proxmox/proxmox_datacenter.j2"
         dest: /etc/pve/datacenter.cfg
         owner: root
         group: root
         mode: '0644'
-      ignore_errors: true
 
     - name: Configurar e-mail oficial do usuário root@pam no Proxmox
       ansible.builtin.command: "pveum user modify root@pam -email {{ proxmox_alert_email }}"
-      ignore_errors: true
+      changed_when: true
 
     - name: Configurar Chave SSH Pública do Administrador no Proxmox Host
       ansible.posix.authorized_key:
@@ -371,7 +371,9 @@
         state: directory
         mode: '0755'
 
-    - name: Exportar configurações essenciais do Proxmox VE (storage, VMs, LXC, interfaces)
+    # `unarchive` extrai, não empacota: não existe módulo nativo que crie um
+    # tar.gz a partir de caminhos do host.
+    - name: Exportar configurações essenciais do Proxmox VE  # noqa: command-instead-of-module
       ansible.builtin.shell: |
         tar -czf /var/backups/proxmox_config_exports/pve-configs-$(date +%Y%m%d_%H%M%S).tar.gz \
           /etc/pve/storage.cfg \
@@ -383,7 +385,15 @@
           2>/dev/null || true
       args:
         executable: /bin/bash
+      changed_when: true
 
     - name: Exibir confirmação do Proxmox Host
       ansible.builtin.debug:
-        msg: "🖥️ Proxmox VE Host Enterprise padronizado! Chrony sincronizado com OPNsense (198.18.10.1), RAM KSM ativa, Fail2ban (porta 8006), Sysctl max_map_count/inotify e Syslog Alloy prontos."
+        msg: >-
+          🖥️ Proxmox VE padronizado: Chrony sincronizado com o gateway, KSM ativo,
+          Fail2ban na porta 8006, sysctl e envio de syslog para o Alloy prontos.
+
+  handlers:
+    - name: Atualizar GRUB
+      ansible.builtin.command: "update-grub"
+      changed_when: true
