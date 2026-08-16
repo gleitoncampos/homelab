@@ -194,3 +194,379 @@ opnsense_tunables:
     tunable: net.inet.icmp.maskrepl
     value: '0'
     descr: Disable ICMP Subnet Mask Replying (Anti-Network Recon)
+
+# =============================================================================
+# ALIASES DE FIREWALL — política, não topologia
+# =============================================================================
+# Blocklists públicas (Firehol, Spamhaus, Hagezi, DOH_list), grupos de porta
+# (Management_Ports, Mining_Ports, ...) e os aliases externos que o CrowdSec
+# popula em runtime (crowdsec_blacklists/blocklists). Nenhum IP real do lab
+# aqui — o conteúdo dinâmico vem de URL pública ou é preenchido pelo próprio
+# CrowdSec depois do deploy.
+#
+# Exceção: o alias DNS_REDIRECT_BYPASS. Seu `content` real é a lista de IPs
+# que pulam o redirecionamento de DNS forçado — isso É topologia, então
+# continua vindo da variável `dns_redirect_bypass_ips` (definida em
+# group_vars/vault, não aqui). O campo `content` abaixo fica vazio de
+# propósito; `_aliases.xml.j2` faz o caso especial por nome.
+opnsense_aliases:
+  - uuid: 073bcd34-d1e6-4b87-8d0a-2d51159fc8ac
+    enabled: '1'
+    name: HTTP_PORTS
+    type: port
+    path_expression: ''
+    proto: ''
+    interface: ''
+    counters: '0'
+    updatefreq: ''
+    content: '80
+
+      443'
+    password: ''
+    username: ''
+    authtype: ''
+    expire: ''
+    categories: ''
+    description: HTTP PORTS
+  - uuid: 43ab23d3-fa04-44dc-8a31-f5f1ddce781a
+    enabled: '1'
+    name: Firehol_v1
+    type: urltable
+    path_expression: ''
+    proto: ''
+    interface: ''
+    counters: '0'
+    updatefreq: '1'
+    content: https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level1.netset
+    password: ''
+    username: ''
+    authtype: ''
+    expire: ''
+    categories: ''
+    description: Firehol v1
+  - uuid: 08d9a053-6634-4d4b-ba3a-54fe69cb951c
+    enabled: '1'
+    name: Firehol_v2
+    type: urltable
+    path_expression: ''
+    proto: ''
+    interface: ''
+    counters: '0'
+    updatefreq: '1'
+    content: https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level2.netset
+    password: ''
+    username: ''
+    authtype: ''
+    expire: ''
+    categories: ''
+    description: Firehol v2
+  - uuid: e20129ad-8c13-4e3d-80bc-62062001abc0
+    enabled: '1'
+    name: Firehol_v3
+    type: urltable
+    path_expression: ''
+    proto: ''
+    interface: ''
+    counters: '0'
+    updatefreq: ''
+    content: https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level3.netset
+    password: ''
+    username: ''
+    authtype: ''
+    expire: ''
+    categories: ''
+    description: Firehol v3
+  - uuid: d6fa6b22-831c-425d-905d-bb6987fa96e6
+    enabled: '1'
+    name: Cloudflare_IPs
+    type: url
+    path_expression: ''
+    proto: ''
+    interface: ''
+    counters: '0'
+    updatefreq: '1'
+    content: https://www.cloudflare.com/ips-v4/
+    password: ''
+    username: ''
+    authtype: ''
+    expire: ''
+    categories: ''
+    description: CloudFlare Ips
+  - uuid: f7ed4955-9591-4c9a-8604-d6df62e0b877
+    enabled: '1'
+    name: hagezi_TIF
+    type: url
+    path_expression: ''
+    proto: ''
+    interface: ''
+    counters: '0'
+    updatefreq: '1'
+    content: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/ips/tif.txt
+    password: ''
+    username: ''
+    authtype: ''
+    expire: ''
+    categories: ''
+    description: Hagezi DNS TIF List
+  - uuid: 271cc36e-67b2-4aeb-ba82-7adb7553094a
+    enabled: '1'
+    name: DOH_list
+    type: urltable
+    path_expression: ''
+    proto: ''
+    interface: ''
+    counters: '0'
+    updatefreq: '1'
+    content: 'https://raw.githubusercontent.com/dibdot/DoH-IP-blocklists/refs/heads/master/doh-ipv6.txt
+
+      https://raw.githubusercontent.com/dibdot/DoH-IP-blocklists/refs/heads/master/doh-ipv4.txt
+
+      https://raw.githubusercontent.com/hagezi/dns-blocklists/main/ips/doh.txt'
+    password: ''
+    username: ''
+    authtype: ''
+    expire: ''
+    categories: ''
+    description: DOH List - Dibdot + Hagezi
+  - uuid: b5b1911d-4f28-4658-a796-73ea25bce1ea
+    enabled: '1'
+    name: crowdsec_blacklists
+    type: external
+    path_expression: ''
+    proto: IPv4
+    interface: ''
+    counters: ''
+    updatefreq: ''
+    content: ''
+    password: ''
+    username: ''
+    authtype: ''
+    expire: ''
+    categories: ''
+    description: CrowdSec (IPv4)
+  - uuid: 103d9005-51fa-40ba-9a46-1f6d165a6278
+    enabled: '1'
+    name: crowdsec6_blacklists
+    type: external
+    path_expression: ''
+    proto: IPv6
+    interface: ''
+    counters: ''
+    updatefreq: ''
+    content: ''
+    password: ''
+    username: ''
+    authtype: ''
+    expire: ''
+    categories: ''
+    description: CrowdSec (IPv6)
+  - uuid: c3f87b12-99a4-4a2e-8123-112233445566
+    enabled: '1'
+    name: Spamhaus_DROP
+    type: urltable
+    path_expression: ''
+    proto: ''
+    interface: ''
+    counters: '0'
+    updatefreq: '1'
+    content: https://www.spamhaus.org/drop/drop.txt
+    password: ''
+    username: ''
+    authtype: ''
+    expire: ''
+    categories: ''
+    description: Spamhaus DROP List
+  - uuid: d4e98c23-00b5-5b3f-9234-223344556677
+    enabled: '1'
+    name: Spamhaus_EDROP
+    type: urltable
+    path_expression: ''
+    proto: ''
+    interface: ''
+    counters: '0'
+    updatefreq: '1'
+    content: https://www.spamhaus.org/drop/edrop.txt
+    password: ''
+    username: ''
+    authtype: ''
+    expire: ''
+    categories: ''
+    description: Spamhaus EDROP List
+  - uuid: 5aeba382-8760-42dd-bea3-9dd5241fbe14
+    enabled: '1'
+    name: DNS_REDIRECT_BYPASS
+    type: host
+    path_expression: ''
+    proto: ''
+    interface: ''
+    counters: '0'
+    updatefreq: ''
+    content: ''
+    password: ''
+    username: ''
+    authtype: ''
+    expire: ''
+    categories: ''
+    description: ''
+  - uuid: 448e3603-8729-402f-8841-7d8257e2a10c
+    enabled: '1'
+    name: crowdsec_blocklists
+    type: external
+    path_expression: ''
+    proto: IPv4
+    interface: ''
+    counters: ''
+    updatefreq: ''
+    content: ''
+    password: ''
+    username: ''
+    authtype: ''
+    expire: ''
+    categories: ''
+    description: CrowdSec (IPv4)
+  - uuid: 8248e0b8-db77-423c-ad76-9161f13b9091
+    enabled: '1'
+    name: crowdsec6_blocklists
+    type: external
+    path_expression: ''
+    proto: IPv6
+    interface: ''
+    counters: ''
+    updatefreq: ''
+    content: ''
+    password: ''
+    username: ''
+    authtype: ''
+    expire: ''
+    categories: ''
+    description: CrowdSec (IPv6)
+  - uuid: dd8ba375-c7ed-48e0-b138-12f78a16b440
+    enabled: '1'
+    name: ZOOM_IPs
+    type: url
+    path_expression: ''
+    proto: ''
+    interface: ''
+    counters: '1'
+    updatefreq: ''
+    content: https://assets.zoom.us/docs/ipranges/Zoom.txt
+    password: ''
+    username: ''
+    authtype: ''
+    expire: ''
+    categories: ''
+    description: Ips do Zoom
+  - uuid: e5f6a7b8-c9d0-1234-ef01-999988887777
+    enabled: '1'
+    name: Mining_Ports
+    type: port
+    path_expression: ''
+    proto: ''
+    interface: ''
+    counters: '1'
+    updatefreq: ''
+    content: '3333
+
+      4444
+
+      5555
+
+      6666
+
+      7777
+
+      8888
+
+      9999'
+    password: ''
+    username: ''
+    authtype: ''
+    expire: ''
+    categories: ''
+    description: Portas de Cryptomining e Stratum Pools
+  - uuid: a1b2c3d4-e5f6-7890-abcd-112233445566
+    enabled: '1'
+    name: Noise_Ports
+    type: port
+    path_expression: ''
+    proto: ''
+    interface: ''
+    counters: '1'
+    updatefreq: ''
+    content: '137
+
+      138
+
+      139
+
+      1900
+
+      3702
+
+      5355'
+    password: ''
+    username: ''
+    authtype: ''
+    expire: ''
+    categories: ''
+    description: Portas de Broadcast Ruidoso (NetBIOS, SSDP, WSDD, LLMNR)
+  - uuid: f9e8d7c6-b5a4-3210-9876-001122334455
+    enabled: '1'
+    name: SMTP_Spam_Ports
+    type: port
+    path_expression: ''
+    proto: ''
+    interface: ''
+    counters: '1'
+    updatefreq: ''
+    content: '25
+
+      465'
+    password: ''
+    username: ''
+    authtype: ''
+    expire: ''
+    categories: ''
+    description: Portas SMTP Legadas para Prevencao de SPAM (25, 465)
+  - uuid: e9d8c7b6-a5f4-3210-9876-112233445566
+    enabled: '1'
+    name: DoQ_Ports
+    type: port
+    path_expression: ''
+    proto: ''
+    interface: ''
+    counters: '1'
+    updatefreq: ''
+    content: '853'
+    password: ''
+    username: ''
+    authtype: ''
+    expire: ''
+    categories: ''
+    description: Portas DNS-over-QUIC (UDP 853)
+  - uuid: d8c7b6a5-f4e3-2109-8765-443322110099
+    enabled: '1'
+    name: Management_Ports
+    type: port
+    path_expression: ''
+    proto: ''
+    interface: ''
+    counters: '1'
+    updatefreq: ''
+    content: '22
+
+      23
+
+      80
+
+      443
+
+      8080
+
+      8443'
+    password: ''
+    username: ''
+    authtype: ''
+    expire: ''
+    categories: ''
+    description: Portas de Gerenciamento e WebGUI (SSH, Telnet, HTTP, HTTPS, 8080, 8443)

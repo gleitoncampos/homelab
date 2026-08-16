@@ -1,0 +1,31 @@
+{# Aliases de firewall. Blocklists públicas e grupos de porta são política. #}
+      <Alias version="1.0.1" persisted_at="1776356932.53" description="Firewall aliases">
+        <geoip>
+          <url/>
+        </geoip>
+        <aliases>
+{% for a in opnsense_aliases %}
+          <alias uuid="{{ a.uuid }}">
+            <enabled>{{ a.enabled }}</enabled>
+            <name>{{ a.name }}</name>
+            <type>{{ a.type }}</type>
+            <path_expression>{{ a.path_expression }}</path_expression>
+            <proto>{{ a.proto }}</proto>
+            <interface>{{ a.interface }}</interface>
+            <counters>{{ a.counters }}</counters>
+            <updatefreq>{{ a.updatefreq }}</updatefreq>
+{% if a.name == 'DNS_REDIRECT_BYPASS' %}
+            <content>{{ dns_redirect_bypass_ips | default([]) | join('\n') }}</content>
+{% else %}
+            <content>{{ a.content }}</content>
+{% endif %}
+            <password>{{ a.password }}</password>
+            <username>{{ a.username }}</username>
+            <authtype>{{ a.authtype }}</authtype>
+            <expire>{{ a.expire }}</expire>
+            <categories>{{ a.categories }}</categories>
+            <description>{{ a.description }}</description>
+          </alias>
+{% endfor %}
+        </aliases>
+      </Alias>
