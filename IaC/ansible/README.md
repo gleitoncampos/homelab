@@ -24,7 +24,9 @@ ansible/
 │   │       │   ├── 00-common.yml  # symlink -> ../../../_common/all.yml
 │   │       │   ├── main.yml       # Camada 2: só o que difere de dev (homelab_env, branch, ACME)
 │   │       │   └── vault.yml      # Camada 3: segredos de PROD, cifrado (gitignorado, você cria)
-│   │       └── network.yml        # Variáveis de rede (OPNsense/OpenWrt) — só existem em prod
+│   │       └── network/           # Variáveis de rede (OPNsense/OpenWrt) — duas camadas
+│   │           ├── 10-defaults.yml  # Versionado: estrutura e nomes reais, endereço de documentação
+│   │           └── 99-local.yml     # ⚠️ GITIGNORADO: a faixa real. Sem ele o inventário ainda sobe
 │   └── dev/
 │       ├── hosts.ini          # ⚠️ GITIGNORADO, idem prod
 │       ├── hosts.ini.example
@@ -33,7 +35,9 @@ ansible/
 │           │   ├── 00-common.yml  # symlink -> ../../../_common/all.yml
 │           │   ├── main.yml       # homelab_env: dev, branch develop, ACME staging
 │           │   └── vault.yml      # segredos de DEV — valores DIFERENTES dos de prod
-│           └── network.yml        # dev não tem OPNsense/OpenWrt próprio: só a VLAN do CT 210
+│           └── network/           # dev não tem OPNsense/OpenWrt próprio: só a VLAN do CT 210
+│               ├── 10-defaults.yml  # Versionado, endereço de documentação
+│               └── 99-local.yml     # ⚠️ GITIGNORADO: a faixa real
 ├── tasks/
 │   ├── portainer_login.yml    # Task reutilizável de Login & Token JWT na API do Portainer
 │   ├── portainer_stack.yml    # Create-or-update de stack via API (usada por 02, 04 e 05)
@@ -180,16 +184,20 @@ novo deste repositório **não tem como reconstruir o cluster** sem os dois:
 
 - `.ansible_vault_pass` (senha do vault)
 - `inventories/prod/hosts.ini` **e** `inventories/dev/hosts.ini` (inventários reais)
+- `inventories/prod/group_vars/network/99-local.yml` **e** o de `dev` (a topologia real)
 
-Guarde uma cópia dos três arquivos junto, no mesmo gerenciador de senhas/backup. Perder só o
+Guarde uma cópia dos cinco arquivos junto, no mesmo gerenciador de senhas/backup. Perder só o
 vault não basta para travar a automação — perder o `hosts.ini` também trava, porque
-`ansible-playbook` sem inventário real não sabe contra qual host conectar.
+`ansible-playbook` sem inventário real não sabe contra qual host conectar. Perder o
+`99-local.yml` não trava: o inventário continua válido e cai para os endereços de
+documentação do `10-defaults.yml` ao lado. É pior que travar — o playbook roda e
+configura a rede errada.
 
 ### Criar o `hosts.ini` real num clone novo
 
 `make bootstrap` gera os dois, com os IPs de HOJE — que é o que importa aqui,
 porque é por eles que o Ansible alcança os hosts. O plano de VLANs descreve o
-destino e vive em `group_vars/network.yml`; confundir os dois produz timeout de
+destino e vive em `group_vars/network/`; confundir os dois produz timeout de
 SSH, cujo sintoma não diz nada sobre a causa.
 
 Manualmente:

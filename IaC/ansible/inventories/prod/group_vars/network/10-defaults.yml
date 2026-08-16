@@ -1,8 +1,33 @@
 ---
-# Variáveis Globais de Dispositivos de Rede (OPNsense / OpenWrt)
+# Variáveis Globais de Dispositivos de Rede (OPNsense / OpenWrt) — CAMADA
+# VERSIONADA.
+#
+# ⚠️ TODO ENDEREÇO NESTE ARQUIVO É FICTÍCIO, E A INCOERÊNCIA É DELIBERADA.
+#
+# Os nomes de VLAN (LAN, MGMT, HOMELAB, MAIN, IOT, GUEST, MEDIA), as tags, as
+# descrições e a estrutura são reais: é assim que a rede é segmentada, e quem
+# lê o repositório precisa disso para entender o desenho. Já as faixas são de
+# documentação. Um leitor atento vai estranhar ver "MAIN" apontando para uma
+# rede que não existe em lugar nenhum — é exatamente o efeito pretendido. A
+# faixa real vive no arquivo irmão `99-local.yml`, que o `.gitignore` barra e
+# que, carregado depois deste por ordem alfabética, sobrescreve o que estiver
+# aqui.
+#
+# Sem o `99-local.yml` — o caso de um clone de terceiro — o inventário
+# continua válido e completo. Ele apenas descreve uma rede de documentação em
+# vez desta rede. Nada aqui pode ser `null`, ausente ou vazio, ou o clone
+# quebra em vez de degradar.
+#
+# As faixas usadas:
+#   - RFC 5737 (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) onde bastam
+#     três redes distintas;
+#   - RFC 2544/6890 (198.18.0.0/15, reservada para benchmarking e proibida na
+#     Internet pública) nas VLANs, porque são seis e a RFC 5737 só oferece
+#     três /24. O terceiro octeto espelha a tag da VLAN — 198.18.30.1 é a
+#     VLAN 30 — para que o arquivo continue legível e obviamente fictício.
 
-# syslog_server_ip e netflow_collector_ip NÃO ficam aqui: `group_vars/network.yml`
-# tem precedência MAIOR que `group_vars/all/` para hosts do grupo `network`
+# syslog_server_ip e netflow_collector_ip NÃO ficam aqui: este group_vars tem
+# precedência MAIOR que `group_vars/all/` para hosts do grupo `network`
 # (opnsense, openwrt) — um literal aqui sombrearia silenciosamente a derivação
 # de `inventories/_common/all.yml:106-107` justo para os hosts que a consomem.
 # Só porta/protocolo, que não têm equivalente derivado, ficam neste arquivo.
@@ -23,6 +48,8 @@ ntp_servers:
 # -------------------------------------------------------------
 # ARQUITETURA DE SEGMENTAÇÃO DE REDE (VLANs)
 # -------------------------------------------------------------
+# Nomes de interface física: reais, e ficam reais. Não são topologia — são
+# nomenclatura de dispositivo, não dizem em que endereço nada responde.
 parent_interface: "vtnet0" # Interface física pai no OPNsense (Trunk vmbr0 Proxmox)
 passthrough_wan_interface: "enp5s0" # Interface física de rede dedicada via PCIe Pass-through (VT-d) no Proxmox Host
 
@@ -31,9 +58,9 @@ passthrough_wan_interface: "enp5s0" # Interface física de rede dedicada via PCI
 # migraram para VLAN). Eram literais em opnsense_config.xml.j2 até virarem
 # variável: template não deve carregar a topologia real de um repositório
 # público.
-lan_ipaddr: "198.51.100.1"
-lan_dhcp_range_from: "198.51.100.170"
-lan_dhcp_range_to: "198.51.100.254"
+lan_ipaddr: "192.0.2.1"
+lan_dhcp_range_from: "192.0.2.170"
+lan_dhcp_range_to: "192.0.2.254"
 
 # Rede (CIDR) correspondente a lan_ipaddr acima. Não é redundante com ele:
 # lan_ipaddr é o endereço do host (o gateway), este é o endereço de rede —
@@ -41,12 +68,16 @@ lan_dhcp_range_to: "198.51.100.254"
 # Consumida por openwrt_firewall.j2 (regra "Guest - Block Lan Access"), num
 # dispositivo diferente do OPNsense — o grupo [openwrt], que também herda
 # este arquivo via [network:children].
-lan_network_cidr: "198.51.100.0/24"
+lan_network_cidr: "192.0.2.0/24"
 
 # Faixa de origem liberada no UPnP/NAT-PMP (upnpd.internal_iface=vlan30 no
 # template) — a VLAN 30 "MAIN" abaixo, de uso diário.
 upnp_allowed_source: "198.18.30.0/24"
 
+# ⚠️ `vlans` é LISTA, e YAML não funde lista entre arquivos: o `99-local.yml`
+# redeclara a lista INTEIRA, não um item. Ao acrescentar uma VLAN aqui,
+# acrescente no arquivo local também, ou ela desaparece na máquina que tem os
+# dois.
 vlans:
   - tag: 10
     name: "MGMT"

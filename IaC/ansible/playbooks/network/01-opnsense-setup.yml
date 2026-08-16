@@ -35,6 +35,25 @@
           # hoje. Esta entrada sobrevive até a Task 12 repontar `src:`
           # para o template novo (sem <snmpd>); some no mesmo commit.
           - opnsense_snmp_ro_community
+
+    # A topologia real vive em `group_vars/network/99-local.yml`, que é
+    # gitignorado; ao lado dele o `10-defaults.yml` versionado declara a mesma
+    # estrutura com endereços de documentação. Num clone sem o arquivo local o
+    # inventário continua VÁLIDO — de propósito, para que um terceiro consiga
+    # ler e testar o repositório. O preço é um modo de falha novo: sem a trava
+    # abaixo, este play rodaria até o fim e reescreveria o firewall com a rede
+    # de documentação, o que é pior que abortar, porque não parece um erro.
+    - name: Recusar aplicar com endereço de documentação (99-local.yml ausente)
+      ansible.builtin.assert:
+        that:
+          - lan_ipaddr is not match('^(192\\.0\\.2\\.|198\\.51\\.100\\.|203\\.0\\.113\\.|198\\.1[89]\\.)')
+          - vlans | map(attribute='ip') | select('match', '^(192\\.0\\.2\\.|198\\.51\\.100\\.|203\\.0\\.113\\.|198\\.1[89]\\.)') | list | length == 0
+        fail_msg: >-
+          A topologia carregada é a de documentação, não a real. Falta
+          inventories/{{ homelab_env | default('prod') }}/group_vars/network/99-local.yml
+          — restaure-o do backup (ele fica junto do vault e do hosts.ini) antes
+          de aplicar. Ver IaC/ansible/README.md.
+        success_msg: "Topologia real carregada."
   tasks:
     # Sem ignore_errors: se o backup falhar, ABORTA. A task seguinte sobrescreve
     # o /conf/config.xml inteiro — seguir sem cópia de segurança deixaria o

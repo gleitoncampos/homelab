@@ -91,3 +91,12 @@ IaC/bootstrap/CREDENCIAIS.local.txt
 # gerador de segredos. Nunca versionado.
 __pycache__/
 *.py[cod]
+
+# Camada local do group_vars: 10-defaults.yml é versionado e fictício, o
+# 99-local.yml ao lado carrega a topologia real e nunca sobe. O padrão é
+# agnóstico de profundidade pelo mesmo motivo do vault acima — um caminho
+# fixo deixaria de casar no próximo restructure e um `git add -A` publicaria
+# a rede inteira.
+# ⚠️  Guarde backup do seu 99-local.yml junto do backup do vault e do
+#     hosts.ini: sem ele o inventário sobe, mas com endereço de documentação.
+**/group_vars/**/99-local.yml

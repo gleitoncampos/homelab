@@ -143,8 +143,8 @@ unbound_host_overrides: >-
 
 # IPs de destino de syslog/netflow derivados do inventário (e não mais um
 # literal fixo, ex.: 198.51.100.10, hardcoded em
-# inventories/prod/group_vars/network.yml). Ficar em `all` (e não em
-# network.yml) é o que faz tanto os nós do cluster quanto os dispositivos de
+# inventories/prod/group_vars/network/). Ficar em `all` (e não em
+# network/) é o que faz tanto os nós do cluster quanto os dispositivos de
 # rede resolverem a mesma var, e faz o inventário de dev apontar sozinho para
 # o manager de dev.
 syslog_server_ip: "{{ hostvars[groups['homelab_managers'][0]].ansible_host }}"
@@ -161,7 +161,7 @@ netflow_collector_ip: "{{ syslog_server_ip }}"
 # firewall não roteia, ou não tem o serviço de tempo ligado, deixe vazio e só as
 # públicas valem.
 #
-# ⚠️ `group_vars/network.yml` declara o seu próprio `ntp_servers` e tem
+# ⚠️ `group_vars/network/` declara o seu próprio `ntp_servers` e tem
 # precedência MAIOR que `group_vars/all/` para opnsense e openwrt — o que é
 # correto: o firewall sincroniza direto com a fonte externa, não consigo mesmo.
 ntp_servers_public:

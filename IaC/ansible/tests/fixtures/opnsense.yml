@@ -37,7 +37,7 @@ parent_interface: "vtnet0"
 
 # Interface LAN nativa (não confundir com as VLANs abaixo) e o range de UPnP
 # permitido: literais que saíram do template em direção a variável (ver
-# opnsense_config.xml.j2 e group_vars/network.yml de cada ambiente). RFC 5737,
+# opnsense_config.xml.j2 e group_vars/network/ de cada ambiente). RFC 5737,
 # não a rede real do lab.
 lan_ipaddr: "192.0.2.1"
 lan_dhcp_range_from: "192.0.2.170"

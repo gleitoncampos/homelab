@@ -550,7 +550,7 @@ def render_hosts(env: str, resp: dict) -> str:
 # Gerado por IaC/bootstrap/bootstrap.py em {date.today().isoformat()}
 #
 # Os IPs abaixo são os da rede COMO ELA É HOJE — é por aqui que o Ansible
-# alcança os hosts. O plano de VLANs (rede-alvo) vive em group_vars/network.yml
+# alcança os hosts. O plano de VLANs (rede-alvo) vive em group_vars/network/
 # e descreve o destino, não o presente. Confundir os dois produz timeout de SSH,
 # cujo sintoma não diz nada sobre a causa.
 
