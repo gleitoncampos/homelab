@@ -86,3 +86,8 @@ IaC/bootstrap/CREDENCIAIS.local.txt
 
 # Workspace do subagent-driven-development (brief, report, diff)
 .superpowers/
+
+# Bytecode do Python: gerado, e o .pyc carrega nomes de variável do
+# gerador de segredos. Nunca versionado.
+__pycache__/
+*.py[cod]
