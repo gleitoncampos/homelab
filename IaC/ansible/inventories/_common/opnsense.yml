@@ -826,6 +826,67 @@ opnsense_rules:
     shaper1: ''
     shaper2: ''
     description: Bloqueio Global de Conexao para IPs de Servidores DoH Conhecidos
+  # R19: gêmea em IPv6 da regra acima. `ipprotocol` não tem valor "inet46" no
+  # OPNsense (confirmado no template e na coleta de produção: só "inet" e
+  # "inet6" aparecem) — a cobertura de IPv6 exige uma segunda regra, não uma
+  # troca de valor na mesma. Sem ela, DOH_list (que inclui doh-ipv6.txt) não
+  # bloqueia nada em IPv6, e a LAN roda track6 com "Default allow LAN IPv6 to
+  # any" ativa: o tráfego IPv6 para os mesmos servidores DoH passaria livre.
+  - uuid: b4df393b-96cb-4cd7-b305-8c1c82e2b1da
+    enabled: '1'
+    statetype: keep
+    state-policy: ''
+    sequence: '2'
+    action: block
+    quick: '1'
+    interfacenot: '0'
+    interface: lan,vlan10,vlan20,vlan30,vlan40,vlan50
+    direction: in
+    ipprotocol: inet6
+    protocol: any
+    icmptype: ''
+    icmp6type: ''
+    source_net: any
+    source_not: '0'
+    source_port: ''
+    destination_net: DOH_list
+    destination_not: '0'
+    destination_port: ''
+    divert-to: ''
+    gateway: ''
+    replyto: ''
+    disablereplyto: '0'
+    log: '1'
+    allowopts: '0'
+    nosync: '0'
+    nopfsync: '0'
+    statetimeout: ''
+    udp-first: ''
+    udp-multiple: ''
+    udp-single: ''
+    max-src-nodes: ''
+    max-src-states: ''
+    max-src-conn: ''
+    max: ''
+    max-src-conn-rate: ''
+    max-src-conn-rates: ''
+    overload: ''
+    adaptivestart: ''
+    adaptiveend: ''
+    prio: ''
+    set-prio: ''
+    set-prio-low: ''
+    tag: ''
+    tagged: ''
+    tcpflags1: ''
+    tcpflags2: ''
+    tcpflags_any: '0'
+    categories: ''
+    sched: ''
+    tos: ''
+    shaper1: ''
+    shaper2: ''
+    description: Bloqueio Global de Conexao para IPs de Servidores DoH Conhecidos (IPv6)
   - uuid: 3aacd6cd-3bd9-4498-8419-d3163ee495b1
     enabled: '1'
     statetype: keep
