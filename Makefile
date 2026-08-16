@@ -123,7 +123,7 @@ render-opnsense: ## Renderiza o template do OPNsense e compara com o baseline co
 	[ -s "$$tmp/novo.xml" ] || { echo "✗ normalização produziu arquivo vazio"; exit 1; }; \
 	base=$(ANSIBLE_DIR)/tests/baseline/opnsense-fase0.xml; \
 	[ -s "$$base" ] || { echo "✗ baseline ausente ou vazio: $$base"; exit 1; }; \
-	diff -u "$$base" "$$tmp/novo.xml" > "$$tmp/obtido.diff" || true; \
+	diff -u --label baseline --label novo "$$base" "$$tmp/novo.xml" > "$$tmp/obtido.diff" || true; \
 	esperado=$$(cat $(ANSIBLE_DIR)/tests/expected/*.diff 2>/dev/null || true); \
 	if [ -z "$$esperado" ]; then \
 	  if [ -s "$$tmp/obtido.diff" ]; then \
