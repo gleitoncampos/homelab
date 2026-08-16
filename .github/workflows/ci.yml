@@ -47,7 +47,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install ansible-core ansible-lint yamllint
           ansible-galaxy collection install -r IaC/ansible/requirements.yml
-          sudo apt-get update && sudo apt-get install -y shellcheck
+          # libxml2-utils: fornece o xmllint que o alvo render-opnsense exige
+          # (Makefile) — sem ele, o alvo falha DURO em vez de pular, por
+          # desenho (ver comentário em Makefile:58-62). Antecipado da Task 3.
+          sudo apt-get update && sudo apt-get install -y shellcheck libxml2-utils
 
       - name: Lint e validação
         run: make check
