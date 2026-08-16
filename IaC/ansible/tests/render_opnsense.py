@@ -26,6 +26,11 @@ def main() -> int:
     ap.add_argument("--out", required=True, type=Path)
     args = ap.parse_args()
 
+    # Apaga qualquer --out de uma execução anterior ANTES de qualquer validação:
+    # sem isso, uma falha abaixo deixa o arquivo velho no lugar, e um diff que
+    # não encadeie com `&&` compara render antigo e lê como verde.
+    args.out.unlink(missing_ok=True)
+
     for p in (args.template, args.fixture):
         if not p.is_file():
             return err(f"arquivo não encontrado: {p}")
@@ -37,8 +42,8 @@ def main() -> int:
     env = Environment(
         loader=FileSystemLoader(str(args.template.parent)),
         undefined=StrictUndefined,   # variável não definida ABORTA
-        trim_blocks=True,            # igual ao ansible.builtin.template
-        lstrip_blocks=True,
+        trim_blocks=True,            # casa o default do ansible.builtin.template (trim_blocks=yes)
+        lstrip_blocks=False,         # idem: o módulo NÃO sobrescreve lstrip_blocks, default é no
         keep_trailing_newline=True,
     )
     try:
