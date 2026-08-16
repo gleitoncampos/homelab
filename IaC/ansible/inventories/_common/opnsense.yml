@@ -15,3 +15,190 @@
 # manter duas cópias que podem divergir sem ninguém notar.
 opnsense_ids_homenet: "192.168.0.0/16,10.0.0.0/8,172.16.0.0/12"
 opnsense_unbound_privateaddress: "0.0.0.0/8,10.0.0.0/8,100.64.0.0/10,169.254.0.0/16,172.16.0.0/12,192.0.2.0/24,192.168.0.0/16,198.18.0.0/15,198.51.100.0/24,203.0.113.0/24,233.252.0.0/24,::1/128,2001:db8::/32,fc00::/8,fd00::/8,fe80::/10"
+opnsense_tunables:
+  - uuid: cb052371-32d8-453e-b4be-a30b40a7955a
+    tunable: vfs.read_max
+    value: ''
+    descr: Increase UFS read-ahead speeds to match the state of hard drives and NCQ.
+  - uuid: 99be1ff5-8e4c-417d-9885-bcc38ebc87fa
+    tunable: net.inet.ip.portrange.first
+    value: ''
+    descr: Set the ephemeral port range to be lower.
+  - uuid: 15210612-9d12-4aba-8d10-dd0eb790aa2d
+    tunable: net.inet.tcp.blackhole
+    value: '2'
+    descr: Drop packets to closed TCP ports without returning a RST
+  - uuid: 1ad253a9-4dd5-4cf9-8fc9-53b6ecd0167b
+    tunable: net.inet.udp.blackhole
+    value: '1'
+    descr: Do not send ICMP port unreachable messages for closed UDP ports
+  - uuid: 0ba9d6e3-af46-40b9-9844-7c908d7918fb
+    tunable: net.inet.ip.random_id
+    value: '1'
+    descr: Randomize the ID field in IP packets
+  - uuid: 9757044a-93e0-4310-b3ac-9709652dabd5
+    tunable: net.inet.ip.sourceroute
+    value: '0'
+    descr: "Source routing is another way for an attacker to try to reach non-routable addresses behind your box.\n        It can also be used to probe for information about your internal networks. These\
+      \ functions come enabled\n        as part of the standard FreeBSD core system."
+  - uuid: f703e671-7a08-4263-a41a-418a70a030a9
+    tunable: net.inet.ip.accept_sourceroute
+    value: '0'
+    descr: "Source routing is another way for an attacker to try to reach non-routable addresses behind your box.\n        It can also be used to probe for information about your internal networks. These\
+      \ functions come enabled\n        as part of the standard FreeBSD core system."
+  - uuid: 0ae96288-0629-4f40-b860-284480ea80a5
+    tunable: net.inet.icmp.log_redirect
+    value: ''
+    descr: "This option turns off the logging of redirect packets because there is no limit and this could fill\n        up your logs consuming your whole hard drive."
+  - uuid: d1d78330-4157-4424-8773-a1cb2ccda7a6
+    tunable: net.inet.tcp.drop_synfin
+    value: '1'
+    descr: Drop SYN-FIN packets (breaks RFC1379, but nobody uses it anyway)
+  - uuid: ffb0fc52-3e07-4f4d-8a76-e6f9b8ea81f3
+    tunable: net.inet6.ip6.redirect
+    value: '0'
+    descr: Enable sending IPv6 redirects
+  - uuid: c617c221-875e-4e37-9aa1-72d469bb1fff
+    tunable: net.inet6.ip6.use_tempaddr
+    value: ''
+    descr: Enable privacy settings for IPv6 (RFC 4941)
+  - uuid: e598fddf-e017-4a02-8838-d5a5a7ee00a1
+    tunable: net.inet6.ip6.prefer_tempaddr
+    value: ''
+    descr: Prefer privacy addresses and use them over the normal addresses
+  - uuid: df90fd1d-207b-4ea7-b998-c852d75c5f09
+    tunable: net.inet.tcp.syncookies
+    value: '1'
+    descr: Generate SYN cookies for outbound SYN-ACK packets
+  - uuid: e4d534d2-fbbf-4a41-baeb-24fe42f2fd40
+    tunable: net.inet.tcp.recvspace
+    value: ''
+    descr: Maximum incoming/outgoing TCP datagram size (receive)
+  - uuid: 483eced2-5106-48ea-91d6-a6204db37939
+    tunable: net.inet.tcp.sendspace
+    value: ''
+    descr: Maximum incoming/outgoing TCP datagram size (send)
+  - uuid: 0a107a7b-e03b-4bd6-8034-b0475a60c73d
+    tunable: net.inet.tcp.delayed_ack
+    value: ''
+    descr: Do not delay ACK to try and piggyback it onto a data packet
+  - uuid: 7bbd05a9-be4a-4d3d-9322-1e9bcafd9fd0
+    tunable: net.inet.udp.maxdgram
+    value: ''
+    descr: Maximum outgoing UDP datagram size
+  - uuid: 9a37b4b2-a6a1-4a8a-9708-174a73ff6592
+    tunable: net.link.bridge.pfil_onlyip
+    value: ''
+    descr: Handling of non-IP packets which are not passed to pfil (see if_bridge(4))
+  - uuid: 411eb88d-f04f-460e-a925-4a4b235f13c1
+    tunable: net.link.bridge.pfil_local_phys
+    value: ''
+    descr: Set to 1 to additionally filter on the physical interface for locally destined packets
+  - uuid: 8a4b2da8-354f-4477-a8f7-3287c5fd69f1
+    tunable: net.link.bridge.pfil_member
+    value: ''
+    descr: Set to 0 to disable filtering on the incoming and outgoing member interfaces.
+  - uuid: c81f5699-a019-44de-9032-2eced7a7704f
+    tunable: net.link.bridge.pfil_bridge
+    value: ''
+    descr: Set to 1 to enable filtering on the bridge interface
+  - uuid: 4726439e-e4e5-4dab-a64d-935a8f78e6b5
+    tunable: net.link.tap.user_open
+    value: '0'
+    descr: Allow unprivileged access to tap(4) device nodes
+  - uuid: eda86feb-c874-4366-9ccd-d616368e0180
+    tunable: kern.randompid
+    value: '1'
+    descr: 'Randomize PID''s (see src/sys/kern/kern_fork.c: sysctl_kern_randompid())'
+  - uuid: d1a560ea-f0f7-41d2-88fe-b8e2e1120d73
+    tunable: hw.syscons.kbd_reboot
+    value: '0'
+    descr: Disable CTRL+ALT+Delete reboot from keyboard.
+  - uuid: c8e2176c-bee3-4156-878e-5c96f149c1e5
+    tunable: net.inet.tcp.log_debug
+    value: ''
+    descr: Enable TCP extended debugging
+  - uuid: c896b0b1-0e2a-4654-a078-87b9ef928d94
+    tunable: net.inet.icmp.icmplim
+    value: ''
+    descr: Set ICMP Limits
+  - uuid: 02b84301-167e-4db4-8e73-8d3edef6b198
+    tunable: net.inet.tcp.tso
+    value: ''
+    descr: TCP Offload Engine
+  - uuid: 229275f2-f2c2-4e97-b12b-cb73c18e3778
+    tunable: net.inet.udp.checksum
+    value: ''
+    descr: UDP Checksums
+  - uuid: 65ce8149-fabf-419a-8b97-786bdcce202c
+    tunable: kern.ipc.maxsockbuf
+    value: ''
+    descr: Maximum socket buffer size
+  - uuid: b4681076-8be5-4dcb-b70a-251a8a759e8e
+    tunable: vm.pmap.pti
+    value: '1'
+    descr: Page Table Isolation (Meltdown mitigation, requires reboot.)
+  - uuid: 8c00cf36-9697-464d-89a3-9d02d5bdaa07
+    tunable: hw.ibrs_disable
+    value: ''
+    descr: Disable Indirect Branch Restricted Speculation (Spectre V2 mitigation)
+  - uuid: be3cc6b8-327f-4283-9de5-1f5ab652d977
+    tunable: security.bsd.see_other_gids
+    value: '0'
+    descr: Hide processes running as other groups
+  - uuid: 6db93b9e-249c-443b-aeda-e53985738cce
+    tunable: security.bsd.see_other_uids
+    value: '0'
+    descr: Hide processes running as other users
+  - uuid: 2e7dc377-4e74-4a81-8e27-8a3be9c2a2d5
+    tunable: net.inet.ip.redirect
+    value: '0'
+    descr: Disable sending ICMP redirects (Anti-Man-in-the-Middle)
+  - uuid: e7d6c5b4-a3f2-1098-7654-221100998877
+    tunable: net.inet.icmp.drop_redirect
+    value: '1'
+    descr: Ignore incoming ICMP redirect packets (Anti-Route Hijacking)
+  - uuid: b4139081-c4b4-48e6-9dce-8fc298db10c9
+    tunable: net.local.dgram.maxdgram
+    value: ''
+    descr: Maximum outgoing UDP datagram size
+  - uuid: f1e2d3c4-b5a6-7890-1234-998877665544
+    tunable: net.inet.tcp.recvbuf_max
+    value: '16777216'
+    descr: VirtIO TCP Receive Buffer Max Size (16MB)
+  - uuid: e1d2c3b4-a5f6-7890-1234-887766554433
+    tunable: net.inet.tcp.sendbuf_max
+    value: '16777216'
+    descr: VirtIO TCP Send Buffer Max Size (16MB)
+  - uuid: d1c2b3a4-f5e6-7890-1234-776655443322
+    tunable: net.inet.tcp.sack.enable
+    value: '1'
+    descr: Enable TCP Selective ACK for VirtIO High Throughput
+  - uuid: c1b2a3f4-e5d6-7890-1234-665544332211
+    tunable: net.inet.ip.check_interface
+    value: '1'
+    descr: Enable Strict Reverse Path Filtering (Anti-IP Spoofing)
+  - uuid: b1a2f3e4-d5c6-7890-1234-554433221100
+    tunable: net.link.ether.inet.max_age
+    value: '600'
+    descr: Fast ARP Cache Clearing (10 minutes max age)
+  - uuid: a1f2e3d4-c5b6-7890-1234-443322110099
+    tunable: net.inet.ip.random_id
+    value: '1'
+    descr: Randomize IP Identification Numbers (Anti-Nmap OS Fingerprinting)
+  - uuid: f1e2d3c4-b5a6-7890-1234-332211009988
+    tunable: net.inet.icmp.icmplim
+    value: '100'
+    descr: ICMP Response Rate Limit (Max 100/sec)
+  - uuid: e1d2c3b4-a5f6-7890-1234-998877665544
+    tunable: security.bsd.unprivileged_proc_debug
+    value: '0'
+    descr: Disable Unprivileged Process Debugging (Anti-Process Hijacking)
+  - uuid: d1c2b3a4-f5e6-7890-1234-887766554433
+    tunable: security.bsd.unprivileged_read_msgbuf
+    value: '0'
+    descr: Disable Unprivileged Dmesg Log Access (Anti-Kernel Info Leak)
+  - uuid: c1b2a3f4-e5d6-7890-1234-776655443322
+    tunable: net.inet.icmp.maskrepl
+    value: '0'
+    descr: Disable ICMP Subnet Mask Replying (Anti-Network Recon)

@@ -1,0 +1,37 @@
+--- baseline
++++ novo
+@@ -30,28 +30,22 @@
+     <item uuid="9757044a-93e0-4310-b3ac-9709652dabd5">
+       <tunable>net.inet.ip.sourceroute</tunable>
+       <value>0</value>
+-      <descr>
+-        Source routing is another way for an attacker to try to reach non-routable addresses behind your box.
++      <descr>Source routing is another way for an attacker to try to reach non-routable addresses behind your box.
+         It can also be used to probe for information about your internal networks. These functions come enabled
+-        as part of the standard FreeBSD core system.
+-      </descr>
++        as part of the standard FreeBSD core system.</descr>
+     </item>
+     <item uuid="f703e671-7a08-4263-a41a-418a70a030a9">
+       <tunable>net.inet.ip.accept_sourceroute</tunable>
+       <value>0</value>
+-      <descr>
+-        Source routing is another way for an attacker to try to reach non-routable addresses behind your box.
++      <descr>Source routing is another way for an attacker to try to reach non-routable addresses behind your box.
+         It can also be used to probe for information about your internal networks. These functions come enabled
+-        as part of the standard FreeBSD core system.
+-      </descr>
++        as part of the standard FreeBSD core system.</descr>
+     </item>
+     <item uuid="0ae96288-0629-4f40-b860-284480ea80a5">
+       <tunable>net.inet.icmp.log_redirect</tunable>
+       <value/>
+-      <descr>
+-        This option turns off the logging of redirect packets because there is no limit and this could fill
+-        up your logs consuming your whole hard drive.
+-      </descr>
++      <descr>This option turns off the logging of redirect packets because there is no limit and this could fill
++        up your logs consuming your whole hard drive.</descr>
+     </item>
+     <item uuid="d1d78330-4157-4424-8773-a1cb2ccda7a6">
+       <tunable>net.inet.tcp.drop_synfin</tunable>
