@@ -83,3 +83,6 @@ SECURITY-AUDIT.local.md
 IaC/homelab.local.yml
 IaC/bootstrap/CREDENCIAIS.local.txt
 .local/ssh/
+
+# Workspace do subagent-driven-development (brief, report, diff)
+.superpowers/
