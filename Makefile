@@ -116,6 +116,7 @@ render-opnsense: ## Renderiza o template do OPNsense e compara com o baseline co
 	tmp="$$(mktemp -d)"; trap 'rm -rf "$$tmp"' EXIT; \
 	python3 $(ANSIBLE_DIR)/tests/render_opnsense.py \
 	  --template "$$tpl" \
+	  --common $(ANSIBLE_DIR)/inventories/_common/opnsense.yml \
 	  --fixture $(ANSIBLE_DIR)/tests/fixtures/opnsense.yml \
 	  --out "$$tmp/raw.xml"; \
 	[ -s "$$tmp/raw.xml" ] || { echo "✗ render vazio"; exit 1; }; \

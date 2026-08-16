@@ -23,6 +23,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--template", required=True, type=Path)
     ap.add_argument("--fixture", required=True, type=Path)
+    ap.add_argument("--common", type=Path, default=None)
     ap.add_argument("--out", required=True, type=Path)
     args = ap.parse_args()
 
@@ -31,13 +32,23 @@ def main() -> int:
     # não encadeie com `&&` compara render antigo e lê como verde.
     args.out.unlink(missing_ok=True)
 
-    for p in (args.template, args.fixture):
-        if not p.is_file():
+    for p in (args.template, args.fixture, args.common):
+        if p is not None and not p.is_file():
             return err(f"arquivo não encontrado: {p}")
 
-    variaveis = yaml.safe_load(args.fixture.read_text(encoding="utf-8"))
-    if not isinstance(variaveis, dict):
-        return err(f"fixture não é um mapa YAML: {args.fixture}")
+    # _common/opnsense.yml é a política (tunables, aliases, regras, plugins,
+    # constantes RFC). O fixture traz só o que ela não tem: topologia e segredo,
+    # com valores de documentação. Carregar os dois aqui é o que faz o
+    # `make render-opnsense` validar o arquivo que o playbook realmente aplica —
+    # antes, ele validava uma cópia, e a cópia podia divergir em silêncio.
+    variaveis = {}
+    for p in (args.common, args.fixture):
+        if p is None:
+            continue
+        dados = yaml.safe_load(p.read_text(encoding="utf-8"))
+        if not isinstance(dados, dict):
+            return err(f"não é um mapa YAML: {p}")
+        variaveis.update(dados)
 
     env = Environment(
         loader=FileSystemLoader(str(args.template.parent)),
