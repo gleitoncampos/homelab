@@ -1,6 +1,14 @@
 --- baseline
 +++ novo
-@@ -30,28 +30,22 @@
+@@ -22,36 +22,25 @@
+       <value>1</value>
+       <descr>Do not send ICMP port unreachable messages for closed UDP ports</descr>
+     </item>
+-    <item uuid="0ba9d6e3-af46-40b9-9844-7c908d7918fb">
+-      <tunable>net.inet.ip.random_id</tunable>
+-      <value>1</value>
+-      <descr>Randomize the ID field in IP packets</descr>
+-    </item>
      <item uuid="9757044a-93e0-4310-b3ac-9709652dabd5">
        <tunable>net.inet.ip.sourceroute</tunable>
        <value>0</value>
@@ -35,3 +43,15 @@
      </item>
      <item uuid="d1d78330-4157-4424-8773-a1cb2ccda7a6">
        <tunable>net.inet.tcp.drop_synfin</tunable>
+@@ -138,11 +127,6 @@
+       <value/>
+       <descr>Enable TCP extended debugging</descr>
+     </item>
+-    <item uuid="c896b0b1-0e2a-4654-a078-87b9ef928d94">
+-      <tunable>net.inet.icmp.icmplim</tunable>
+-      <value/>
+-      <descr>Set ICMP Limits</descr>
+-    </item>
+     <item uuid="02b84301-167e-4db4-8e73-8d3edef6b198">
+       <tunable>net.inet.tcp.tso</tunable>
+       <value/>

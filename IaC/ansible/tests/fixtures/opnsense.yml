@@ -97,10 +97,6 @@ opnsense_tunables:
     tunable: net.inet.udp.blackhole
     value: '1'
     descr: Do not send ICMP port unreachable messages for closed UDP ports
-  - uuid: 0ba9d6e3-af46-40b9-9844-7c908d7918fb
-    tunable: net.inet.ip.random_id
-    value: '1'
-    descr: Randomize the ID field in IP packets
   - uuid: 9757044a-93e0-4310-b3ac-9709652dabd5
     tunable: net.inet.ip.sourceroute
     value: '0'
@@ -183,10 +179,6 @@ opnsense_tunables:
     tunable: net.inet.tcp.log_debug
     value: ''
     descr: Enable TCP extended debugging
-  - uuid: c896b0b1-0e2a-4654-a078-87b9ef928d94
-    tunable: net.inet.icmp.icmplim
-    value: ''
-    descr: Set ICMP Limits
   - uuid: 02b84301-167e-4db4-8e73-8d3edef6b198
     tunable: net.inet.tcp.tso
     value: ''
