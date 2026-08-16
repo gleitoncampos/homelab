@@ -1109,3 +1109,87 @@ opnsense_rules:
     shaper1: ''
     shaper2: ''
     description: ''
+
+# =============================================================================
+# SYSTEM — grupo administrativo e usuários (system/group, system/user)
+# =============================================================================
+# Campos por registro variam entre root e admin (privilégios, shell, dashboard
+# salvo), por isso _system.xml.j2 itera as chaves do próprio dado em vez de
+# lista fixa — mesmo padrão de opnsense_aliases e opnsense_rules.
+#
+# password, name (do admin) e authorizedkeys (do admin) ficam vazios aqui de
+# propósito: são segredo/dado pessoal e o partial os substitui por caso
+# especial por uuid, lendo o vault — nunca hardcoded num arquivo rastreado.
+# dashboard é o layout salvo do widget da GUI (posição/tamanho de cada
+# widget), não é segredo; mantido idêntico ao que a caixa grava hoje.
+opnsense_groups:
+  - uuid: 38d3ed68-080e-4ef6-b07a-4139d184979d
+    gid: '1999'
+    name: admins
+    scope: system
+    description: System Administrators
+    priv: page-all
+    member: '0,2000'
+
+opnsense_users:
+  - uuid: cff8d1ba-ebef-4d65-8109-e5b04267ef2f
+    uid: '0'
+    name: root
+    disabled: '1'
+    scope: system
+    expires: ''
+    authorizedkeys: ''
+    otp_seed: ''
+    shell: ''
+    password: ''
+    landing_page: ''
+    comment: ''
+    email: ''
+    apikeys: ''
+    priv: ''
+    language: ''
+    descr: System Administrator
+    dashboard: eyJvcHRpb25zIjpbXSwid2lkZ2V0cyI6W3siaWQiOiJtZW1vcnkiLCJtaW5XIjoxLCJ4IjowLCJ5IjowLCJ3IjoyLCJoIjoxODMsIndpZGdldCI6W119LHsiaWQiOiJjcHUiLCJtaW5XIjoyLCJ4IjoyLCJ5IjowLCJ3Ijo0LCJoIjoxNjYsIndpZGdldCI6eyJncmFwaHMiOlsidG90YWwiXX19LHsiaWQiOiJnYXRld2F5cyIsIm1pblciOjIsIngiOjYsInkiOjAsInNpemVUb0NvbnRlbnQiOjI0MCwiaCI6MjQwLCJ3aWRnZXQiOnsiZ2F0ZXdheXMiOlsiV0FOX0dXIiwiV0FOX1BQUE9FVjYiXX0sInciOjJ9LHsiaWQiOiJmaXJld2FsbCIsIm1pblciOjIsIngiOjgsInkiOjAsInciOjQsImgiOjMxMiwid2lkZ2V0IjpbXX0seyJpZCI6InRyYWZmaWMiLCJtaW5XIjoyLCJ4IjowLCJ5IjoxODMsInciOjYsImgiOjQ1MSwid2lkZ2V0Ijp7ImludGVyZmFjZXMiOlsibGFuIiwid2FuIl19fSx7ImlkIjoic3lzdGVtaW5mb3JtYXRpb24iLCJtaW5XIjoyLCJ4Ijo2LCJ5IjoyNDAsImgiOjUzNCwid2lkZ2V0IjpbXSwidyI6Mn0seyJpZCI6ImxpdmVsb2ciLCJtaW5XIjoyLCJ4Ijo4LCJ5IjozMTIsInciOjQsImgiOjgzNSwid2lkZ2V0IjpbXX0seyJpZCI6ImRpc2siLCJtaW5XIjoxLCJ4IjowLCJ5Ijo2MzQsImgiOjExNywid2lkZ2V0IjpbXSwidyI6bnVsbH0seyJpZCI6InN3YXAiLCJtaW5XIjoxLCJ4IjoxLCJ5Ijo2MzQsImgiOjExNywid2lkZ2V0IjpbXSwidyI6bnVsbH1dfQ==
+  - uuid: 40e072b0-592e-46ca-ba17-1711e29d8433
+    uid: '2000'
+    name: ''
+    disabled: '0'
+    scope: user
+    expires: ''
+    authorizedkeys: ''
+    otp_seed: ''
+    shell: /bin/sh
+    password: ''
+    landing_page: ''
+    comment: ''
+    email: ''
+    apikeys: ''
+    priv: ''
+    language: ''
+    descr: ''
+    dashboard: eyJvcHRpb25zIjpbXSwid2lkZ2V0cyI6W3siaWQiOiJjcHUiLCJtaW5XIjoyLCJ4IjowLCJ5IjowLCJ3Ijo0LCJoIjoxODYsIndpZGdldCI6eyJncmFwaHMiOlsidG90YWwiXX19LHsiaWQiOiJzd2FwIiwibWluVyI6MSwieCI6NCwieSI6MCwidyI6MiwiaCI6MjI3LCJ3aWRnZXQiOltdfSx7ImlkIjoibWVtb3J5IiwibWluVyI6MSwieCI6NiwieSI6MCwidyI6MiwiaCI6MjI3LCJ3aWRnZXQiOltdfSx7ImlkIjoibGl2ZWxvZyIsIm1pblciOjIsIngiOjgsInkiOjAsInciOjQsImgiOjY5NSwid2lkZ2V0IjpbXX0seyJpZCI6InRyYWZmaWMiLCJtaW5XIjoyLCJ4IjowLCJ5IjoxODYsInciOjQsImgiOjQ3MSwid2lkZ2V0Ijp7ImludGVyZmFjZXMiOlsibGFuIiwid2FuIl19fSx7ImlkIjoiZmlyZXdhbGwiLCJtaW5XIjoyLCJ4Ijo0LCJ5IjoyMjcsInciOjQsImgiOjQwMSwid2lkZ2V0IjpbXX0seyJpZCI6ImdhdGV3YXlzIiwibWluVyI6Miwic2l6ZVRvQ29udGVudCI6MjQyLCJ4Ijo0LCJ5Ijo2MjgsInciOjQsImgiOjI0Miwid2lkZ2V0Ijp7ImdhdGV3YXlzIjpbImY0MmFjODI3LTNjMmUtNDIzNy05OThkLTYwMzkzMDY1M2I5OCIsIldBTl9QUFBPRVY2Il19fSx7ImlkIjoiYW5ub3VuY2VtZW50cyIsIm1pblciOjIsInNpemVUb0NvbnRlbnQiOjU0OCwieCI6OCwieSI6Njk1LCJ3Ijo0LCJoIjo1NDgsIndpZGdldCI6W119XX0=
+
+# =============================================================================
+# PLUGINS — lista ÚNICA, lida pelo `pkg install` do playbook e por
+# firmware/plugins do config
+# =============================================================================
+# Divergiam em três lugares: a lista do vivo, a do template e a do pkg
+# install. Consolidada aqui para que as duas leituras (instalar e declarar)
+# nunca mais possam divergir.
+#
+# ⚠️ firmware/plugins é campo DERIVADO — escrevê-lo não instala nada. Só o
+# `pkg install` instala. Por isso o playbook acrescenta verificação com
+# `pkg info -e` em vez de confiar na declaração.
+opnsense_plugins:
+  - os-arpwatch
+  - os-crowdsec
+  - os-etpro-telemetry   # consome opnsense_etpro_telemetry_token; faltava no pkg install
+  - os-igmp-proxy
+  - os-mdns-repeater
+  - os-monit
+  - os-node_exporter
+  - os-osint
+  - os-qemu-guest-agent
+  - os-speedtest-community
+  - os-theme-rebellion    # substitui os-theme-cicada
+  - os-upnp

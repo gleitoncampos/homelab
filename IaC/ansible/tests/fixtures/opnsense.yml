@@ -19,7 +19,6 @@ opnsense_pppoe_password_b64: "Zml4dHVyZQo="
 opnsense_gui_cert_crt_b64: "RklYVFVSRS1DUlQK"
 opnsense_gui_cert_key_b64: "RklYVFVSRS1LRVkK"
 opnsense_etpro_telemetry_token: "fixture-tok"
-opnsense_snmp_ro_community: "fixture-snmp-ro"
 
 netflow_collector_ip: "192.0.2.11"
 netflow_collector_port: "2056"
