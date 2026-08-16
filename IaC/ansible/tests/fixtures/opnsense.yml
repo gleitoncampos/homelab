@@ -1,0 +1,67 @@
+---
+# Fixture do teste de render. NÃO é a topologia real: usa as faixas de
+# documentação da RFC 5737 e a faixa de MAC de documentação da IANA, para que
+# o arquivo possa ser versionado sem acionar o gate.
+#
+# ⚠️ Nenhuma coleção pode ficar vazia. Um laço sobre lista vazia rende igual
+# nos dois lados do diff e prova exatamente nada.
+
+opnsense_hostname: "fw.example"
+opnsense_root_password_hash: "$2y$10$FIXTURE0000000000000000000000000000000000000000000000"
+opnsense_admin_username: "adminfixture"
+opnsense_admin_fullname: "Admin Fixture"
+opnsense_admin_password_hash: "$2y$10$FIXTURE1111111111111111111111111111111111111111111111"
+opnsense_admin_authorizedkeys_b64: "c3NoLWVkMjU1MTkgQUFBQUZJWFRVUkU9IGZpeHR1cmVAZXhhbXBsZQo="
+opnsense_webgui_althostname: "fw.example"
+
+opnsense_pppoe_username: "fixture@isp.example"
+opnsense_pppoe_password_b64: "Zml4dHVyZQo="
+opnsense_gui_cert_crt_b64: "RklYVFVSRS1DUlQK"
+opnsense_gui_cert_key_b64: "RklYVFVSRS1LRVkK"
+opnsense_etpro_telemetry_token: "fixture-etpro-token-0000"
+opnsense_snmp_ro_community: "fixture-snmp-ro"
+
+netflow_collector_ip: "192.0.2.11"
+netflow_collector_port: "2056"
+geoip_license_key: ""
+syslog_server_ip: "192.0.2.10"
+syslog_server_port: "1514"
+
+opnsense_dns_redirect_uuid: "a1000000-0000-4000-8000-00000000d015"
+opnsense_dns_redirect_enabled: true
+opnsense_dns_redirect_target: "192.0.2.1"
+dns_redirect_bypass_ips:
+  - "192.0.2.20"
+  - "192.0.2.21"
+
+parent_interface: "vtnet0"
+
+vlans:
+  - tag: 10
+    name: "MGMT"
+    descr: "Gerenciamento"
+    ip: "198.51.100.1"
+    subnet: 24
+  - tag: 20
+    name: "HOMELAB"
+    descr: "Servidores"
+    ip: "203.0.113.1"
+    subnet: 24
+
+dhcp_static_maps:
+  - mac: "00:00:5e:00:53:01"
+    hostname: "host-um"
+    ipaddr: "192.0.2.201"
+    descr: "Fixture um"
+  - mac: "00:00:5e:00:53:02"
+    hostname: "host-dois"
+    ipaddr: "192.0.2.202"
+    descr: "Fixture dois"
+
+unbound_host_overrides:
+  - hostname: "*"
+    domain: "lab.example"
+    server: "192.0.2.30"
+  - hostname: "nas"
+    domain: "lab.example"
+    server: "192.0.2.31"
