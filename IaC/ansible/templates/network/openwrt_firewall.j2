@@ -153,6 +153,6 @@ config rule
 	list proto 'all'
 	option src 'guest'
 	option dest 'lan'
-	list dest_ip '198.51.100.0/24'
+	list dest_ip '{{ lan_network_cidr }}'
 	option target 'REJECT'
 

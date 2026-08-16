@@ -35,6 +35,14 @@ lan_ipaddr: "198.51.100.1"
 lan_dhcp_range_from: "198.51.100.170"
 lan_dhcp_range_to: "198.51.100.254"
 
+# Rede (CIDR) correspondente a lan_ipaddr acima. Não é redundante com ele:
+# lan_ipaddr é o endereço do host (o gateway), este é o endereço de rede —
+# nenhum dos vlans[].subnet cobre a LAN nativa, que fica fora da lista.
+# Consumida por openwrt_firewall.j2 (regra "Guest - Block Lan Access"), num
+# dispositivo diferente do OPNsense — o grupo [openwrt], que também herda
+# este arquivo via [network:children].
+lan_network_cidr: "198.51.100.0/24"
+
 # Faixa de origem liberada no UPnP/NAT-PMP (upnpd.internal_iface=vlan30 no
 # template) — a VLAN 30 "MAIN" abaixo, de uso diário.
 upnp_allowed_source: "198.18.30.0/24"
