@@ -826,12 +826,14 @@ opnsense_rules:
     shaper1: ''
     shaper2: ''
     description: Bloqueio Global de Conexao para IPs de Servidores DoH Conhecidos
-  # R19: gêmea em IPv6 da regra acima. `ipprotocol` não tem valor "inet46" no
-  # OPNsense (confirmado no template e na coleta de produção: só "inet" e
-  # "inet6" aparecem) — a cobertura de IPv6 exige uma segunda regra, não uma
-  # troca de valor na mesma. Sem ela, DOH_list (que inclui doh-ipv6.txt) não
-  # bloqueia nada em IPv6, e a LAN roda track6 com "Default allow LAN IPv6 to
-  # any" ativa: o tráfego IPv6 para os mesmos servidores DoH passaria livre.
+  # R19: gêmea em IPv6 da regra acima. Nem o template nem a coleta de
+  # produção usam "inet46" em nenhuma regra ou interface — só "inet" e
+  # "inet6" aparecem em ambos. Isso mostra que NÃO usamos "inet46" hoje; não
+  # foi confirmado se o modelo do OPNsense (FilterRule.xml) aceita esse
+  # valor. A regra gêmea evita a dúvida por ser explícita de qualquer forma.
+  # Sem ela, DOH_list (que inclui doh-ipv6.txt) não bloqueia nada em IPv6, e
+  # a LAN roda track6 com "Default allow LAN IPv6 to any" ativa: o tráfego
+  # IPv6 para os mesmos servidores DoH passaria livre.
   - uuid: b4df393b-96cb-4cd7-b305-8c1c82e2b1da
     enabled: '1'
     statetype: keep

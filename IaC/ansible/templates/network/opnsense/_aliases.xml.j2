@@ -1,4 +1,8 @@
-{# Aliases de firewall. Blocklists públicas e grupos de porta são política. #}
+{# Aliases de firewall. Blocklists públicas e grupos de porta são política.
+   O laço interno itera as chaves do próprio dado, não uma lista fixa: uma
+   lista fixa descarta em silêncio qualquer campo que não conste nela — foi
+   o defeito achado em _filter.xml.j2 e vale o mesmo aqui, mesmo as 20
+   aliases de hoje tendo forma idêntica. #}
       <Alias version="1.0.1" persisted_at="1776356932.53" description="Firewall aliases">
         <geoip>
           <url/>
@@ -6,25 +10,13 @@
         <aliases>
 {% for a in opnsense_aliases %}
           <alias uuid="{{ a.uuid }}">
-            <enabled>{{ a.enabled }}</enabled>
-            <name>{{ a.name }}</name>
-            <type>{{ a.type }}</type>
-            <path_expression>{{ a.path_expression }}</path_expression>
-            <proto>{{ a.proto }}</proto>
-            <interface>{{ a.interface }}</interface>
-            <counters>{{ a.counters }}</counters>
-            <updatefreq>{{ a.updatefreq }}</updatefreq>
-{% if a.name == 'DNS_REDIRECT_BYPASS' %}
+{% for campo in a if campo != 'uuid' %}
+{% if a.name == 'DNS_REDIRECT_BYPASS' and campo == 'content' %}
             <content>{{ dns_redirect_bypass_ips | default([]) | join('\n') }}</content>
 {% else %}
-            <content>{{ a.content }}</content>
+            <{{ campo }}>{{ a[campo] }}</{{ campo }}>
 {% endif %}
-            <password>{{ a.password }}</password>
-            <username>{{ a.username }}</username>
-            <authtype>{{ a.authtype }}</authtype>
-            <expire>{{ a.expire }}</expire>
-            <categories>{{ a.categories }}</categories>
-            <description>{{ a.description }}</description>
+{% endfor %}
           </alias>
 {% endfor %}
         </aliases>
