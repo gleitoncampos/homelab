@@ -21,11 +21,13 @@
           - opnsense_root_password_hash
           - opnsense_admin_username
           - opnsense_admin_password_hash
-          - opnsense_snmp_ro_community
           - opnsense_pppoe_username
           - opnsense_pppoe_password_b64
           - opnsense_gui_cert_crt_b64
           - opnsense_gui_cert_key_b64
+          # Sem chave, o apply instala permitrootlogin=0 +
+          # passwordauth=0 e a PRÓXIMA execução não conecta.
+          - opnsense_admin_authorizedkeys_b64
   tasks:
     # Sem ignore_errors: se o backup falhar, ABORTA. A task seguinte sobrescreve
     # o /conf/config.xml inteiro — seguir sem cópia de segurança deixaria o
@@ -34,31 +36,41 @@
       ansible.builtin.shell: "cp /conf/config.xml /conf/config.xml.bak.$(date +%Y%m%d_%H%M%S)"
       changed_when: true
 
-    - name: Garantir a instalação dos plugins essenciais (Node Exporter, QEMU Guest Agent, CrowdSec, mDNS, UPnP, IGMP Proxy, Speedtest, Monit, Arpwatch)
+    - name: Garantir a instalação dos plugins essenciais (lista única em _common/opnsense.yml)
       ansible.builtin.command: "pkg install -y {{ item }}"
-      loop:
-        - os-node_exporter
-        - os-qemu-guest-agent
-        - os-crowdsec
-        - os-mdns-repeater
-        - os-upnp
-        - os-igmp-proxy
-        - os-speedtest-community
-        - os-monit
-        - os-arpwatch
-        - os-osint
-        - os-theme-rebellion
+      loop: "{{ opnsense_plugins }}"
       register: opn_plugins
       failed_when: false
       changed_when: "'Installing' in opn_plugins.stdout"
 
     # A instalação acima não aborta: um plugin ausente do repositório não pode
-    # derrubar os outros nove. Mas o resultado tem de aparecer — antes o
+    # derrubar os outros onze. Mas o resultado tem de aparecer — antes o
     # `ignore_errors` engolia a lista inteira em silêncio.
     - name: Avisar sobre plugins do OPNsense que não instalaram
       ansible.builtin.debug:
         msg: "Plugin não instalado: {{ item.item }} (rc={{ item.rc }})"
       loop: "{{ opn_plugins.results | selectattr('rc', 'ne', 0) | list }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    # firmware/plugins é campo derivado: declarar não instala. Esta é a única
+    # verificação que distingue "declarado" de "presente".
+    - name: Conferir que cada plugin declarado está de fato instalado
+      ansible.builtin.command: "pkg info -e {{ item }}"
+      loop: "{{ opnsense_plugins }}"
+      register: opn_pkg_check
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Abortar se algum plugin exigido não foi instalado
+      ansible.builtin.assert:
+        that: "item.rc == 0"
+        fail_msg: >-
+          Plugin {{ item.item }} não está instalado. O config declara-o em
+          firmware/plugins, mas declarar não instala — e a configuração dele
+          seria escrita sem efeito.
+      loop: "{{ opn_pkg_check.results }}"
       loop_control:
         label: "{{ item.item }}"
 

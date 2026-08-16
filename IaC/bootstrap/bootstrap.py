@@ -104,7 +104,6 @@ GENERATED = [
     ("paperless_secret_key", "hex", False, ""),
     ("cronicle_secret_key", "hex", False, ""),
     ("bytestash_jwt_secret", "hex", False, ""),
-    ("opnsense_snmp_ro_community", "token", False, ""),
     ("wifi_main_password", "wifi", True, "Wi-Fi principal"),
     ("wifi_iot_password", "wifi", True, "Wi-Fi IoT"),
     ("wifi_media_password", "wifi", True, "Wi-Fi mídia"),

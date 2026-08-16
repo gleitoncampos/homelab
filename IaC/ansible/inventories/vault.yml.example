@@ -119,15 +119,14 @@ opnsense_admin_password_hash: '$2y$11$TROCAR-hash-bcrypt-do-usuario-admin'
 opnsense_admin_username: "TROCAR-usuario-admin"
 # Opcional. Nome completo exibido na GUI. Default genérico se omitido.
 opnsense_admin_fullname: "Administrator"
-# Opcional. Chave pública SSH em BASE64 para login sem senha nesse usuário
-# (o config.xml guarda authorizedkeys assim). Vazio desativa login por chave
-# para este usuário — a senha acima continua valendo.
-opnsense_admin_authorizedkeys_b64: ""
-
-# Community SNMP v2c somente-leitura. "public" = leitura anônima da topologia.
-# Preferível: desativar o snmpd ou migrar para SNMPv3. Se mantiver v2c, use um
-# valor aleatório e restrinja o acesso à VLAN de gestão pelo firewall.
-opnsense_snmp_ro_community: "TROCAR-community-aleatoria"
+# OBRIGATÓRIA (A4.6). Chave pública SSH em BASE64 para login sem senha nesse
+# usuário (o config.xml guarda authorizedkeys assim).
+# Gerar:  base64 -w0 ~/.ssh/id_ed25519.pub
+# O mesmo apply que grava este valor também desativa permitrootlogin e
+# passwordauth no <ssh> do OPNsense. Sem a chave aqui, a PRÓXIMA execução
+# não consegue mais conectar por SSH — por isso `validate_vault.yml` exige
+# esta variável e não aceita `| default('')`.
+opnsense_admin_authorizedkeys_b64: "TROCAR-base64-da-chave-publica-ssh"
 
 # Credencial PPPoE da WAN — é conta do PROVEDOR, não do lab. Rotacionar exige
 # contato com ele.
