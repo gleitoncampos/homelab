@@ -2,8 +2,12 @@
 # =============================================================================
 # VARIÁVEIS COMUNS AOS DOIS AMBIENTES — única cópia
 # =============================================================================
-# Carregado por prod e dev via symlink `group_vars/all/00-common.yml`. Os
-# arquivos de `group_vars/all/` fazem merge em ordem alfabética, então a
+# ⚠️ Este arquivo é a FONTE. As cópias em prod/ e dev/ group_vars/all/00-common.yml
+# são cópias de verdade, não symlinks — o git não os preservaria de forma
+# confiável entre clones. Ao editar aqui, copie para as duas, no mesmo commit.
+# Elas já divergiram uma vez por essa confusão.
+#
+# Os arquivos de `group_vars/all/` fazem merge em ordem alfabética, então a
 # precedência é de três camadas:
 #
 #   00-common.yml  (este)   →  main.yml  (por ambiente)  →  vault.yml  (vence)
@@ -180,17 +184,22 @@ ntp_servers: >-
 # com colchetes — é a sintaxe de lista que o parser INI do Ansible aceita).
 
 # Nome do storage do Proxmox com `content backup` (verificar com
-# `pvesm status`). Sem default, e de propósito: os dois nós Proxmox hoje
-# referenciam o mesmo share por nomes diferentes —
-# um valor genérico aqui esconderia essa divergência em vez de forçar cada
-# ambiente a declarar o nome que o seu nó realmente enxerga.
+# `pvesm status`). Uma variável só para as duas pontas: é o id que
+# `templates/proxmox/proxmox_storage.j2` declara no storage.cfg E o que
+# `playbooks/06-backup.yml` passa em `--storage` ao agendar o vzdump. Duas
+# fontes de verdade aqui significavam agendar backup contra um storage que o
+# outro playbook acabara de renomear. Sem default, e de propósito: os dois
+# nós Proxmox hoje referenciam o mesmo share por nomes diferentes — um valor
+# genérico aqui esconderia essa divergência
+# em vez de forçar cada ambiente a declarar o nome que o seu nó enxerga.
 # Definir em `hosts.ini` do ambiente ([all:vars] backup_storage=NOME).
 
 # Nome do compartilhamento CIFS no NAS, consumido por
 # `templates/proxmox/proxmox_storage.j2` (campo `share`). Sem default, mesmo
 # motivo do `backup_storage` acima: o valor real do compartilhamento é
 # específico do NAS de cada ambiente, e um genérico aqui mascararia o nome
-# errado em vez de forçar a declaração correta.
+# errado em vez de forçar a declaração correta. `00-proxmox-setup.yml` aborta
+# por `assert` se faltar.
 # Definir em `hosts.ini` do ambiente ([all:vars] proxmox_backup_share=NOME).
 
 # 02:30 diário. Fora da janela de rotação de log e do fstrim semanal (03:00 dom).

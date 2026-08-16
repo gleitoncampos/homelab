@@ -2,8 +2,12 @@
 # =============================================================================
 # VARIÁVEIS COMUNS AOS DOIS AMBIENTES — única cópia
 # =============================================================================
-# Carregado por prod e dev via symlink `group_vars/all/00-common.yml`. Os
-# arquivos de `group_vars/all/` fazem merge em ordem alfabética, então a
+# ⚠️ Este arquivo é a FONTE. As cópias em prod/ e dev/ group_vars/all/00-common.yml
+# são cópias de verdade, não symlinks — o git não os preservaria de forma
+# confiável entre clones. Ao editar aqui, copie para as duas, no mesmo commit.
+# Elas já divergiram uma vez por essa confusão.
+#
+# Os arquivos de `group_vars/all/` fazem merge em ordem alfabética, então a
 # precedência é de três camadas:
 #
 #   00-common.yml  (este)   →  main.yml  (por ambiente)  →  vault.yml  (vence)
