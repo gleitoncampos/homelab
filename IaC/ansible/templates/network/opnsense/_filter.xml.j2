@@ -1,0 +1,23 @@
+{# Regras de filtro. Política de segurança: vale para prod e dev.
+   Campos por regra variam (o OPNsense só grava o que a GUI expõe para cada
+   tipo de ação/estado), por isso o laço interno itera as chaves do próprio
+   dado em vez de uma lista fixa — preserva o conjunto e a ordem exatos de
+   cada regra sem introduzir elemento que o baseline não tem. #}
+      <Filter version="1.0.4" persisted_at="1784915020.70" description="Firewall rules (new)">
+        <rules>
+{% for r in opnsense_rules %}
+          <rule uuid="{{ r.uuid }}">
+{% for campo in r if campo != 'uuid' %}
+{% if r.uuid == '3aacd6cd-3bd9-4498-8419-d3163ee495b1' and campo == 'destination_net' %}
+            <destination_net>{{ lan_ipaddr }}</destination_net>
+{% else %}
+            <{{ campo }}>{{ r[campo] }}</{{ campo }}>
+{% endif %}
+{% endfor %}
+          </rule>
+{% endfor %}
+        </rules>
+        <snatrules/>
+        <npt/>
+        <onetoone/>
+      </Filter>
