@@ -3,6 +3,12 @@
   hosts: opnsense
   become: true
   gather_facts: false
+  # Constantes de protocolo (Suricata HOME_NET, lista de privatização do
+  # Unbound) — o mesmo valor em prod e dev, por isso vars_files direto no
+  # play em vez de group_vars duplicado por ambiente. Ver o comentário em
+  # inventories/_common/opnsense.yml.
+  vars_files:
+    - "../../inventories/_common/opnsense.yml"
   pre_tasks:
     # Este play SUBSTITUI o /conf/config.xml inteiro e recarrega tudo. Se um
     # segredo faltar, o firewall receberia senha vazia e o acesso à GUI e a WAN

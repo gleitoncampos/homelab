@@ -397,7 +397,7 @@
       <descr/>
       <enable>1</enable>
       <spoofmac/>
-      <ipaddr>198.51.100.1</ipaddr>
+      <ipaddr>{{ lan_ipaddr }}</ipaddr>
       <subnet>24</subnet>
       <ipaddrv6>track6</ipaddrv6>
       <track6-interface>wan</track6-interface>
@@ -430,14 +430,14 @@
   <dhcpd>
     <lan>
       <enable>1</enable>
-      <gateway>198.51.100.1</gateway>
+      <gateway>{{ lan_ipaddr }}</gateway>
       <ddnsdomainalgorithm>hmac-md5</ddnsdomainalgorithm>
       <numberoptions>
         <item/>
       </numberoptions>
       <range>
-        <from>198.51.100.170</from>
-        <to>198.51.100.254</to>
+        <from>{{ lan_dhcp_range_from }}</from>
+        <to>{{ lan_dhcp_range_to }}</to>
       </range>
       <winsserver/>
       <dnsserver/>
@@ -497,7 +497,7 @@
         <port>53</port>
         <not>1</not>
       </destination>
-      <target>{{ opnsense_dns_redirect_target | default('198.51.100.1') | e }}</target>
+      <target>{{ opnsense_dns_redirect_target | default(lan_ipaddr) | e }}</target>
       <local-port>53</local-port>
       <poolopts/>
       <log>1</log>
@@ -1304,7 +1304,7 @@ https://raw.githubusercontent.com/hagezi/dns-blocklists/main/ips/doh.txt</conten
             <source_net>DNS_REDIRECT_BYPASS</source_net>
             <source_not>1</source_not>
             <source_port/>
-            <destination_net>198.51.100.1</destination_net>
+            <destination_net>{{ lan_ipaddr }}</destination_net>
             <destination_not>0</destination_not>
             <destination_port>53</destination_port>
             <divert-to/>
@@ -1752,7 +1752,7 @@ https://raw.githubusercontent.com/hagezi/dns-blocklists/main/ips/doh.txt</conten
         <divert_listeners>1</divert_listeners>
         <promisc>0</promisc>
         <interfaces>wan</interfaces>
-        <homenet>192.168.0.0/16,10.0.0.0/8,172.16.0.0/12</homenet>
+        <homenet>{{ opnsense_ids_homenet }}</homenet>
         <defaultPacketSize/>
         <UpdateCron>29a4a8cb-f14d-4faa-b8f7-6d7ddb0a758c</UpdateCron>
         <AlertLogrotate>W0D23</AlertLogrotate>
@@ -2163,7 +2163,7 @@ https://raw.githubusercontent.com/hagezi/dns-blocklists/main/ips/doh.txt</conten
         <logverbosity>1</logverbosity>
         <valloglevel>0</valloglevel>
         <privatedomain/>
-        <privateaddress>0.0.0.0/8,10.0.0.0/8,100.64.0.0/10,169.254.0.0/16,172.16.0.0/12,192.0.2.0/24,192.168.0.0/16,198.18.0.0/15,198.51.100.0/24,203.0.113.0/24,233.252.0.0/24,::1/128,2001:db8::/32,fc00::/8,fd00::/8,fe80::/10</privateaddress>
+        <privateaddress>{{ opnsense_unbound_privateaddress }}</privateaddress>
         <insecuredomain/>
         <msgcachesize/>
         <rrsetcachesize/>
@@ -2469,7 +2469,7 @@ https://raw.githubusercontent.com/hagezi/dns-blocklists/main/ips/doh.txt</conten
     <enable_natpmp>1</enable_natpmp>
     <enable_upnp>1</enable_upnp>
     <internal_iface>vlan30</internal_iface>
-    <permuser1>allow 1024-65535 198.18.30.0/24 1024-65535</permuser1>
+    <permuser1>allow 1024-65535 {{ upnp_allowed_source }} 1024-65535</permuser1>
     <permuser2>deny 0-65535 0.0.0.0/0 0-65535</permuser2>
   </upnpd>
   <igmpproxy version="1.0.0">

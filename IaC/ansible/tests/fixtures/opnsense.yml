@@ -36,6 +36,21 @@ dns_redirect_bypass_ips:
 
 parent_interface: "vtnet0"
 
+# Interface LAN nativa (não confundir com as VLANs abaixo) e o range de UPnP
+# permitido: literais que saíram do template em direção a variável (ver
+# opnsense_config.xml.j2 e group_vars/network.yml de cada ambiente). RFC 5737,
+# não a rede real do lab.
+lan_ipaddr: "192.0.2.1"
+lan_dhcp_range_from: "192.0.2.170"
+lan_dhcp_range_to: "192.0.2.254"
+upnp_allowed_source: "198.51.100.0/24"
+
+# Constantes de PROTOCOLO (Suricata HOME_NET / lista de privatização do
+# Unbound), não a topologia deste lab — mas o fixture ainda assim usa só
+# RFC 5737, para não precisar de isenção nova no gate de segredo.
+opnsense_ids_homenet: "198.51.100.0/24,203.0.113.0/24"
+opnsense_unbound_privateaddress: "192.0.2.0/24,198.51.100.0/24,203.0.113.0/24"
+
 vlans:
   - tag: 10
     name: "MGMT"

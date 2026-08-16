@@ -1,0 +1,17 @@
+---
+# =============================================================================
+# CONSTANTES DE PROTOCOLO DO OPNsense — não são a rede deste lab
+# =============================================================================
+# `opnsense_ids_homenet` (Suricata HOME_NET) e `opnsense_unbound_privateaddress`
+# (lista de privatização do Unbound, RFC 6303) descrevem TODO o espaço RFC1918
+# — o mesmo valor-padrão que qualquer instalação de OPNsense declara, lab
+# nenhum em particular. Antes viviam como literal dentro de
+# `templates/network/opnsense_config.xml.j2`; saíram de lá para virar variável
+# (StrictUndefined exige que estejam definidas), mas o CONTEÚDO não mudou.
+#
+# Carregado explicitamente por `playbooks/network/01-opnsense-setup.yml` via
+# `vars_files` — não por `group_vars/`, porque não são específicas de
+# ambiente (prod/dev seriam idênticos) nem do grupo `opnsense` sozinho caberia
+# manter duas cópias que podem divergir sem ninguém notar.
+opnsense_ids_homenet: "192.168.0.0/16,10.0.0.0/8,172.16.0.0/12"
+opnsense_unbound_privateaddress: "0.0.0.0/8,10.0.0.0/8,100.64.0.0/10,169.254.0.0/16,172.16.0.0/12,192.0.2.0/24,192.168.0.0/16,198.18.0.0/15,198.51.100.0/24,203.0.113.0/24,233.252.0.0/24,::1/128,2001:db8::/32,fc00::/8,fd00::/8,fe80::/10"

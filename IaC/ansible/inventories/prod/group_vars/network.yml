@@ -26,6 +26,19 @@ ntp_servers:
 parent_interface: "vtnet0" # Interface física pai no OPNsense (Trunk vmbr0 Proxmox)
 passthrough_wan_interface: "enp5s0" # Interface física de rede dedicada via PCIe Pass-through (VT-d) no Proxmox Host
 
+# Interface LAN nativa do OPNsense (não é uma das VLANs abaixo — é a rede sem
+# tag, hoje usada pela gestão do próprio firewall e dos nós que ainda não
+# migraram para VLAN). Eram literais em opnsense_config.xml.j2 até virarem
+# variável: template não deve carregar a topologia real de um repositório
+# público.
+lan_ipaddr: "198.51.100.1"
+lan_dhcp_range_from: "198.51.100.170"
+lan_dhcp_range_to: "198.51.100.254"
+
+# Faixa de origem liberada no UPnP/NAT-PMP (upnpd.internal_iface=vlan30 no
+# template) — a VLAN 30 "MAIN" abaixo, de uso diário.
+upnp_allowed_source: "198.18.30.0/24"
+
 vlans:
   - tag: 10
     name: "MGMT"
