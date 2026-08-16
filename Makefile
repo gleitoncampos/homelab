@@ -23,7 +23,8 @@ PLAYBOOKS   := $(wildcard $(ANSIBLE_DIR)/playbooks/*.yml $(ANSIBLE_DIR)/playbook
 
 # Um alvo por ferramenta, para que a saída diga qual falhou.
 .PHONY: help hooks check lint lint-yaml lint-ansible lint-shell lint-tf \
-        validate-compose validate-ansible secrets links snapshot discover clean
+        validate-compose validate-ansible secrets links snapshot discover clean \
+        render-opnsense
 
 help: ## Lista os alvos
 	@echo "Alvos disponíveis:"
@@ -49,7 +50,7 @@ bootstrap: ## Gera vault, inventário, tfvars e chave SSH a partir de uma fonte 
 test-bootstrap: ## Testa os renderizadores do bootstrap contra os consumidores reais
 	@python3 IaC/bootstrap/test_render.py
 
-check: lint validate-compose validate-ansible links test-bootstrap ## Tudo que a CI roda
+check: lint validate-compose validate-ansible links test-bootstrap render-opnsense ## Tudo que a CI roda
 	@echo
 	@echo "✓ check completo"
 
@@ -99,6 +100,41 @@ validate-ansible: ## ansible-playbook --syntax-check
 	  done; \
 	  echo "✓ syntax-check ($(words $(PLAYBOOKS)) playbooks)"; \
 	else echo "– ansible ausente, pulado"; fi
+
+# O baseline (tests/baseline/opnsense-fase0.xml) fica congelado a partir da
+# fase 0 do plano OPNsense Plano A — ele MESMO é regenerado uma vez, na tarefa
+# que move homenet/privateaddress do template para variável (fase 0). Depois
+# disso, HEAD~1 nunca mais é a referência: comparar contra o commit anterior
+# transformaria toda regressão estrutural em "esperado". Esta é a exceção
+# documentada, não um convite a repetir a regeneração depois.
+render-opnsense: ## Renderiza o template do OPNsense e compara com o baseline congelado
+	@set -euo pipefail; \
+	command -v xmllint >/dev/null || { echo "✗ xmllint ausente (pacote libxml2-utils)"; exit 1; }; \
+	python3 -c 'import jinja2, yaml' 2>/dev/null || { echo "✗ Jinja2/PyYAML ausentes"; exit 1; }; \
+	tpl=$(ANSIBLE_DIR)/templates/network/opnsense/config.xml.j2; \
+	[ -f "$$tpl" ] || tpl=$(ANSIBLE_DIR)/templates/network/opnsense_config.xml.j2; \
+	tmp="$$(mktemp -d)"; trap 'rm -rf "$$tmp"' EXIT; \
+	python3 $(ANSIBLE_DIR)/tests/render_opnsense.py \
+	  --template "$$tpl" \
+	  --fixture $(ANSIBLE_DIR)/tests/fixtures/opnsense.yml \
+	  --out "$$tmp/raw.xml"; \
+	[ -s "$$tmp/raw.xml" ] || { echo "✗ render vazio"; exit 1; }; \
+	xmllint --c14n "$$tmp/raw.xml" | xmllint --format - > "$$tmp/novo.xml"; \
+	[ -s "$$tmp/novo.xml" ] || { echo "✗ normalização produziu arquivo vazio"; exit 1; }; \
+	base=$(ANSIBLE_DIR)/tests/baseline/opnsense-fase0.xml; \
+	[ -s "$$base" ] || { echo "✗ baseline ausente ou vazio: $$base"; exit 1; }; \
+	diff -u "$$base" "$$tmp/novo.xml" > "$$tmp/obtido.diff" || true; \
+	esperado=$$(cat $(ANSIBLE_DIR)/tests/expected/*.diff 2>/dev/null || true); \
+	if [ -z "$$esperado" ]; then \
+	  if [ -s "$$tmp/obtido.diff" ]; then \
+	    echo "✗ diff inesperado (nenhum expected/*.diff registrado):"; \
+	    head -40 "$$tmp/obtido.diff"; exit 1; \
+	  fi; \
+	else \
+	  printf '%s\n' "$$esperado" | diff -u - "$$tmp/obtido.diff" || \
+	    { echo "✗ diff difere do aprovado em expected/"; exit 1; }; \
+	fi; \
+	echo "✓ render-opnsense"
 
 secrets: ## Varre a árvore inteira, não só o índice (o hook cobre o índice)
 	@bash .githooks/scan-tree.sh
