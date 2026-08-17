@@ -28,13 +28,6 @@
           # Sem chave, o apply instala permitrootlogin=0 +
           # passwordauth=0 e a PRÓXIMA execução não conecta.
           - opnsense_admin_authorizedkeys_b64
-          # `src:` abaixo ainda aponta para o monolito legado
-          # (opnsense_config.xml.j2), que ainda tem <rocommunity> no
-          # <snmpd> — D10 só tirou a variável do config novo
-          # (templates/network/opnsense/), não do que é de fato aplicado
-          # hoje. Esta entrada sobrevive até a Task 12 repontar `src:`
-          # para o template novo (sem <snmpd>); some no mesmo commit.
-          - opnsense_snmp_ro_community
 
     - name: Validar que todo objeto do OPNsense tem UUID
       ansible.builtin.assert:
@@ -174,7 +167,7 @@
     # a chave privada TLS da GUI. validate: XML inválido aborta ANTES de escrever.
     - name: Aplicar novo arquivo /conf/config.xml a partir do Template Jinja2  # noqa: no-relative-paths
       ansible.builtin.template:
-        src: "../../templates/network/opnsense_config.xml.j2"
+        src: "../../templates/network/opnsense/config.xml.j2"
         dest: /conf/config.xml
         owner: root
         group: wheel
