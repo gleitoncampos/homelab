@@ -16,7 +16,10 @@
 # Módulos consumidos de cada collection, hoje, no código deste repositório:
 #   community.docker  -> docker_swarm, docker_network, docker_stack
 #                        (02-bootstrap-cluster.yml)
-#   community.general -> timezone, ufw (01-bootstrap-os.yml)
+#   community.general -> timezone, ufw (01-bootstrap-os.yml);
+#                        filtro counter (network/01-opnsense-setup.yml, para
+#                        nomear o UUID duplicado no assert de unicidade —
+#                        disponível desde a 4.3.0, já coberto pelo pin abaixo)
 #   ansible.posix     -> authorized_key (00-node-bootstrap.yml)
 #
 # As versões mínimas abaixo são as primeiras que trazem os módulos usados com
