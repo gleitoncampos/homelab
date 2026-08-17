@@ -101,7 +101,7 @@ validate-ansible: ## ansible-playbook --syntax-check
 	  echo "✓ syntax-check ($(words $(PLAYBOOKS)) playbooks)"; \
 	else echo "– ansible ausente, pulado"; fi
 
-validate-patterns: ## Valida a FORMA dos arquivos de padrões (separadores, regex, isenção não vira catch-all)
+validate-patterns: ## Valida os arquivos de padrões (separadores, isenção não vira catch-all, regex casa amostra conhecida-ruim)
 	@bash .githooks/validate-patterns.sh
 
 # O baseline (tests/baseline/opnsense-fase0.xml) fica congelado a partir da

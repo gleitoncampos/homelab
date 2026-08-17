@@ -77,6 +77,10 @@ SECURITY-AUDIT.local.md
 
 # Padrões de varredura específicos desta topologia — ver .githooks/secret-patterns.txt
 .githooks/secret-patterns.local.txt
+# Amostra conhecida-ruim de CADA padrão acima — ver validate-patterns.sh.
+# Gitignorado pelo mesmo motivo do arquivo acima: a amostra de um padrão que
+# casa hostname/domínio real É esse hostname/domínio real.
+.githooks/secret-patterns.local.samples.txt
 
 # --- Bootstrap: fonte única de respostas e o que ele gera --------------------
 # O arquivo de respostas não tem segredo, mas tem a topologia inteira.
