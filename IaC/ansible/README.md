@@ -14,7 +14,8 @@ ansible/
 ├── requirements.yml            # Collections Galaxy exigidas (community.docker, community.general, ansible.posix)
 ├── inventories/
 │   ├── _common/
-│   │   └── all.yml            # Camada 1: comum aos dois ambientes (nunca segredo, nunca o que difere)
+│   │   ├── all.yml            # Camada 1: comum aos dois ambientes (nunca segredo, nunca o que difere)
+│   │   └── opnsense.yml       # Constante de PROTOCOLO do OPNsense (HOME_NET, privateaddress) — mesmo valor em qualquer instalação, não a rede deste lab
 │   ├── vault.yml.example      # Modelo único do Vault — copiar para cada ambiente, ver Passo 0
 │   ├── prod/
 │   │   ├── hosts.ini          # ⚠️ GITIGNORADO — inventário real (IPs internos), você cria localmente
@@ -42,6 +43,14 @@ ansible/
 │   ├── portainer_login.yml    # Task reutilizável de Login & Token JWT na API do Portainer
 │   ├── portainer_stack.yml    # Create-or-update de stack via API (usada por 02, 04 e 05)
 │   └── validate_vault.yml     # Exige que os segredos existam antes de provisionar
+├── templates/network/
+│   ├── opnsense/              # Esqueleto (config.xml.j2) + 10 partials orientados a dado — ver seção abaixo
+│   └── openwrt_*.j2           # 4 templates do AP/roteador Wi-Fi, ainda monolíticos (fora deste refactor)
+├── tests/                     # Render do OPNsense fora da caixa — ver "make render-opnsense" abaixo
+│   ├── render_opnsense.py     # Jinja2 com trim_blocks=True, igual ao Ansible; nenhum inventário real
+│   ├── fixtures/opnsense.yml  # Variáveis de exemplo — RFC 5737, MAC de documentação IANA
+│   ├── baseline/opnsense-fase0.xml  # Render congelado da fase 0 deste refactor — nunca regenerar
+│   └── expected/               # Diff aprovado por fase, comparado byte a byte (ver expected/README.md)
 └── playbooks/
     ├── 00-node-bootstrap.yml     # Ponte root -> usuário de automação, contra CT recém-criado
     ├── 00-proxmox-setup.yml      # Setup do host Proxmox VE
@@ -99,6 +108,66 @@ vault.yml      (por ambiente, cifrado — VENCE por último)
 Nunca redeclare uma variável em mais de uma camada por engano — em especial `fqdn_*`, que é
 **derivado** de `homelab_domain` em `00-common.yml`: um `fqdn_*` fixo em `vault.yml` sobrescreveria
 o mapa derivado em silêncio, porque `vault.yml` carrega depois.
+
+---
+
+## 🧩 OPNsense: por que `templates/network/opnsense/` é um esqueleto com partials
+
+`templates/network/opnsense_config.xml.j2` — um único arquivo de 2.486 linhas, dump direto
+do `/conf/config.xml` vivo — não existe mais. No lugar, `templates/network/opnsense/` guarda
+`config.xml.j2`, que só contém a estrutura XML fixa (IPsec, Kea, VLANs, certificados) e um
+`{% include %}` por seção, e dez partials — cada um responsável por uma fatia do config e
+consumindo dado de `inventories/_common/opnsense.yml` ou de `group_vars/network/`:
+
+| partial | conteúdo | variável consumida |
+|---|---|---|
+| `_sysctl.xml.j2` | tunables de kernel | `opnsense_tunables` |
+| `_system.xml.j2` | hostname, WebGUI, SSH, usuários e grupos | `opnsense_hostname`, `opnsense_users`, `opnsense_groups` |
+| `_interfaces.xml.j2` | LAN nativa e WAN | `lan_ipaddr`, `parent_interface` |
+| `_dhcp.xml.j2` | `dhcpd`, Kea, reservas estáticas | `lan_dhcp_range_from/to`, `dhcp_static_maps` |
+| `_nat.xml.j2` | redirecionamento de porta e outbound | `opnsense_dns_redirect_*` |
+| `_aliases.xml.j2` | aliases de firewall | `opnsense_aliases` |
+| `_filter.xml.j2` | regras de filtro | `opnsense_rules` |
+| `_plugins.xml.j2` | lista única de plugins — incluído em 5 pontos do esqueleto, um por seção do XML onde o OPNsense declara plugin | `opnsense_plugins` |
+| `_dns.xml.j2` | Unbound, DNSBL, DoT, host overrides | `opnsense_unbound_privateaddress`, `opnsense_ids_homenet` |
+| `_certs.xml.j2` | certificado da WebGUI | `opnsense_gui_cert_crt_b64` |
+
+Nenhum partial declara endereço de rede, alias ou usuário como literal dentro do `.j2` — é a
+mesma razão do split de `group_vars/network.yml` em duas camadas (ver árvore acima): um
+template Jinja versionado não tem licença para carregar a topologia real de um repositório
+destinado a ser público. O split em si (um monolito → onze arquivos) existe porque um único
+arquivo de 2.486 linhas concentrava aliases, regras, DHCP, DNS e usuários no mesmo lugar —
+editar qualquer seção exigia revisar tudo em volta, e foi assim que ele acumulou tunable
+duplicado, `ifgroup` morto e um `<monit>` com dois blocos conflitantes sem que ninguém notasse.
+Partido por seção, cada `_*.xml.j2` só cresce quando a variável que ele consome muda.
+
+### Provar uma mudança sem hardware: `make render-opnsense`
+
+Nenhum destes templates roda contra um OPNsense de verdade em CI. O alvo `render-opnsense` do
+`Makefile` (raiz do repositório) prova a mudança fora da caixa:
+
+1. Renderiza `templates/network/opnsense/config.xml.j2` com
+   [`tests/render_opnsense.py`](./tests/render_opnsense.py) — mesmo motor Jinja2
+   (`trim_blocks=True`), sem depender do Ansible instalado — usando as constantes de
+   `inventories/_common/opnsense.yml` e o fixture sintético em `tests/fixtures/opnsense.yml`
+   (RFC 5737 e MAC de documentação IANA, nunca topologia real).
+2. Normaliza o XML com `xmllint --c14n | xmllint --format`, para que o diff não reaja a
+   diferença cosmética de atributo ou espaço.
+3. Compara o resultado contra `tests/baseline/opnsense-fase0.xml`, o render congelado da fase
+   0 deste refactor — **nunca regenerado depois**, para que uma regressão estrutural não vire
+   "baseline da fase seguinte" por omissão.
+4. Se o diff bater exatamente com o que já está registrado em `tests/expected/*.diff` (ver
+   [`tests/expected/README.md`](./tests/expected/README.md) para a convenção de nome dos
+   arquivos), passa. Se o diff for novo e nenhum `expected/*.diff` existir, falha e imprime o
+   hunk — sinal de que a fase precisa registrar sua própria aprovação antes de seguir.
+
+Rodar isolado, da raiz do repositório:
+
+```bash
+make render-opnsense
+```
+
+Encadeado em `make check`, então roda em toda CI e a cada verificação local antes do PR.
 
 ---
 
