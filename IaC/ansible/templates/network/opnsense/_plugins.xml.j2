@@ -16,9 +16,12 @@
 
    D3: cron origin=IDS enabled 0 -> 1.
    D4: Gateways/gateway_item monitor_disable 1 -> 0; monitor recebe
-   opnsense_gateway_monitor_ip (default 9.9.9.9 — Quad9, mesmo default de
-   qualquer instalação); latencylow/high e losslow/high passam a existir
-   porque o modelo exige latencylow < latencyhigh e losslow < losshigh.
+   opnsense_gateway_monitor_ip, SEM default aqui — o default (9.9.9.9,
+   Quad9, mesmo de qualquer instalação) mora só em _common/opnsense.yml,
+   igual a opnsense_ids_homenet: se a variável sumir do dado,
+   StrictUndefined derruba o render em vez de recuar em silêncio para
+   Quad9. latencylow/high e losslow/high passam a existir porque o
+   modelo exige latencylow < latencyhigh e losslow < losshigh.
    D5: OPNsense/monit/general/enabled 0 -> 1; os serviços gateway_alert e
    carp_status_change continuam desabilitados (enabled 0), sem mudança. #}
 {% if _plugins_section == 'cron' %}
@@ -504,7 +507,7 @@
         <monitor_noroute>0</monitor_noroute>
         <monitor_killstates>0</monitor_killstates>
         <monitor_killstates_priority>0</monitor_killstates_priority>
-        <monitor>{{ opnsense_gateway_monitor_ip | default('9.9.9.9') }}</monitor>
+        <monitor>{{ opnsense_gateway_monitor_ip }}</monitor>
         <force_down>0</force_down>
         <priority>255</priority>
         <weight>1</weight>
@@ -608,4 +611,12 @@
       <enabled>1</enabled>
     </general>
   </igmpproxy>
+{% else %}
+{# _plugins_section não bateu com nenhuma fatia conhecida — típico de um
+   `{% set %}` com o nome errado num dos cinco pontos de include da
+   skeleton. Sem este else, a fatia some do render em silêncio (string
+   vazia é XML válido) e o harness só percebe pelo diff. Referenciar uma
+   variável inexistente sob StrictUndefined derruba o render aqui, no
+   ponto do erro, com o próprio nome da variável como mensagem. #}
+{{ _plugins_section_invalido_confira_o_set_antes_do_include }}
 {% endif %}
