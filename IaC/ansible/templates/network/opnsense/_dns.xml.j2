@@ -2,6 +2,12 @@
    unbound_host_overrides é a lista variável; blocklist e dots (Cloudflare,
    Quad9, Google) são política fixa, igual em qualquer instalação.
 
+   host: enabled/rr/mxprio/mx/ttl/txtdata/addptr/description são sempre os
+   mesmos em todo override, não campo do registro — hostname/domain/server
+   vêm do dado, e qualquer outra chave do registro passa pelo laço
+   `for campo in override`, mesmo motivo de _aliases.xml.j2/_filter.xml.j2:
+   uma lista fixa de nomes descarta em silêncio um campo novo.
+
    D6: logreplies vai de 1 para 0 — o log de cada RESPOSTA de consulta é
    volume alto para pouco ganho de auditoria; logqueries (a pergunta) continua
    ligado.
@@ -152,8 +158,17 @@
       </dots>
       <hosts>
 {% for override in unbound_host_overrides | default([]) %}
+{#
+  uuid fabricado quando o registro não traz um: "generated-host-override-N"
+  não é um UUID válido e vai para o config.xml como identificador inválido.
+  Conhecido, deixado de propósito — mudar o valor muda o render, e junto dele
+  vêm as asserções de UUID da Task 12. Não mexer aqui.
+#}
         <host uuid="{{ override.uuid | default('generated-host-override-' ~ loop.index) }}">
           <enabled>1</enabled>
+{% for campo in override if campo not in ['uuid', 'hostname', 'domain', 'server'] %}
+          <{{ campo }}>{{ override[campo] | e }}</{{ campo }}>
+{% endfor %}
           <hostname>{{ override.hostname | default('*') | e }}</hostname>
           <domain>{{ override.domain | e }}</domain>
           <rr>A</rr>

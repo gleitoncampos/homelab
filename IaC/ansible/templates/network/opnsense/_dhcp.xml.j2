@@ -1,7 +1,14 @@
-{# DHCPv4 da LAN nativa. dhcp_static_maps é a lista de reservas — mesmo
-   padrão de _aliases.xml.j2/_filter.xml.j2 aplicado aqui já era o do
-   template original (staticmap não tem campo variável entre registros, mas
-   a lista em si é o dado, não o número de reservas). #}
+{# DHCPv4 da LAN nativa. dhcp_static_maps é a lista de reservas.
+
+   staticmap mistura campo de dado com campo estrutural fixo: mac e ipaddr
+   vêm do registro; cid é sempre igual a hostname (client-id do DHCP, não uma
+   chave própria de dhcp_static_maps — não existe map.cid); winsserver,
+   dnsserver e ntpserver são sempre vazios em todo staticmap do OPNsense, não
+   política nem topologia. Por isso mac/hostname/descr continuam explícitos
+   (posição fixa em torno do cid derivado e da tríade vazia), mas qualquer
+   outra chave do registro passa pelo laço `for campo in map` — mesmo motivo
+   de _aliases.xml.j2/_filter.xml.j2: uma lista fixa de nomes descarta em
+   silêncio um campo novo que apareça em dhcp_static_maps amanhã. #}
   <dhcpd>
     <lan>
       <enable>1</enable>
@@ -21,7 +28,9 @@
       <staticmap>
         <mac>{{ map.mac | e }}</mac>
         <cid>{{ map.hostname | e }}</cid>
-        <ipaddr>{{ map.ipaddr | e }}</ipaddr>
+{% for campo in map if campo not in ['mac', 'hostname', 'descr'] %}
+        <{{ campo }}>{{ map[campo] | e }}</{{ campo }}>
+{% endfor %}
         <hostname>{{ map.hostname | e }}</hostname>
         <descr>{{ map.descr | default('') | e }}</descr>
         <winsserver/>
