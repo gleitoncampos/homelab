@@ -23,8 +23,8 @@ PLAYBOOKS   := $(wildcard $(ANSIBLE_DIR)/playbooks/*.yml $(ANSIBLE_DIR)/playbook
 
 # Um alvo por ferramenta, para que a saída diga qual falhou.
 .PHONY: help hooks check lint lint-yaml lint-ansible lint-shell lint-tf \
-        validate-compose validate-ansible secrets links snapshot discover clean \
-        render-opnsense
+        validate-compose validate-ansible validate-patterns secrets links \
+        snapshot discover clean render-opnsense
 
 help: ## Lista os alvos
 	@echo "Alvos disponíveis:"
@@ -50,7 +50,7 @@ bootstrap: ## Gera vault, inventário, tfvars e chave SSH a partir de uma fonte 
 test-bootstrap: ## Testa os renderizadores do bootstrap contra os consumidores reais
 	@python3 IaC/bootstrap/test_render.py
 
-check: lint validate-compose validate-ansible links test-bootstrap render-opnsense ## Tudo que a CI roda
+check: lint validate-compose validate-ansible validate-patterns links test-bootstrap render-opnsense ## Tudo que a CI roda
 	@echo
 	@echo "✓ check completo"
 
@@ -100,6 +100,9 @@ validate-ansible: ## ansible-playbook --syntax-check
 	  done; \
 	  echo "✓ syntax-check ($(words $(PLAYBOOKS)) playbooks)"; \
 	else echo "– ansible ausente, pulado"; fi
+
+validate-patterns: ## Valida a FORMA dos arquivos de padrões (separadores, regex, isenção não vira catch-all)
+	@bash .githooks/validate-patterns.sh
 
 # O baseline (tests/baseline/opnsense-fase0.xml) fica congelado a partir da
 # fase 0 do plano OPNsense Plano A — ele MESMO é regenerado uma vez, na tarefa
