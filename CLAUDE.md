@@ -47,9 +47,9 @@ compose, e para os templates de `/etc/network/interfaces` do Proxmox.
 
 O que **não** é dispensa desta regra: "é só um ajuste pequeno", "eu anoto
 depois", "ninguém mais mexe nesse equipamento". Foi exatamente assim que
-`opnsense_config.xml.j2` nasceu — um dump de 3.8 MB do `/conf/config.xml` vivo,
-commitado para não perder o que havia sido feito à mão, carregando junto senha,
-chave privada e a topologia inteira.
+`opnsense_config.xml.j2` nasceu — um dump de 86.468 bytes (2.486 linhas) do
+`/conf/config.xml` vivo, commitado para não perder o que havia sido feito à
+mão, carregando junto senha, chave privada e a topologia inteira.
 
 ---
 
@@ -166,6 +166,7 @@ chave privada e a topologia inteira.
 │   ├── docs/               # Backlog, pré-publicação, pendências, plano de hardening
 │   ├── memoria/            # Symlinks para a memória de longo prazo (~/.claude)
 │   └── snapshot/           # Coleta da produção e o levantamento do que roda
+├── .superpowers/           # IGNORADO. Workspace do subagent-driven-development (brief, report, diff)
 ├── .renovaterc.json        # Atualização automática de versão de imagem
 ├── docs/
 │   └── runbooks/           # Procedimento operacional genérico, sem dado real
@@ -352,9 +353,14 @@ mas visível, porque proteção que existe e não roda foi o modo de falha do
 ele não é versionado, nada além do `.example` vai lembrar você — guarde uma
 cópia junto do backup do vault.
 
-O terceiro campo de cada padrão isenta caminhos onde o valor é legítimo: o plano
-de VLANs precisa declarar gateways, os templates de rede descrevem a topologia
-atual, e os `.example` existem para mostrar o formato.
+O terceiro campo de cada padrão isenta caminhos onde o valor é legítimo — e
+sempre por ARQUIVO nomeado, nunca por diretório inteiro nem por sufixo
+genérico: um fixture de teste já auditado (`tests/fixtures/opnsense.yml`) e o
+baseline congelado que ele deriva, ou um `.example` que precisa mesmo de um
+endereço para ilustrar o formato (os três do Traefik). O plano de VLANs e os
+templates de rede NÃO estão mais nessa lista — as duas isenções que os
+cobriam foram removidas quando o dado real saiu do arquivo versionado (ver
+seção seguinte).
 
 ### Isenção de gate não é ferramenta de desbloqueio
 
