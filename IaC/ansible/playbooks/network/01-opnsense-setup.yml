@@ -34,14 +34,19 @@
         that:
           - item.valor | selectattr('uuid', 'defined') | list | length == item.valor | length
         fail_msg: >-
-          {{ item.nome }}: há item sem 'uuid'. UUID é identidade — o config
-          referencia objeto por UUID (o monit lista UUIDs de teste, a reserva
-          do Kea aponta para o UUID da subnet). Gerar um novo a cada render
-          quebra esses vínculos e destrói o teste de equivalência.
+          {{ item.nome }}: item(ns) sem 'uuid' —
+          {{ item.valor | selectattr('uuid', 'undefined') | list }}.
+          UUID é identidade — o config referencia objeto por UUID (o monit
+          lista UUIDs de teste, a reserva do Kea aponta para o UUID da
+          subnet, e _system.xml.j2 seleciona segredo do vault por UUID
+          literal de usuário). Gerar um novo a cada render quebra esses
+          vínculos e destrói o teste de equivalência.
       loop:
         - { nome: "opnsense_tunables", valor: "{{ opnsense_tunables }}" }
         - { nome: "opnsense_aliases", valor: "{{ opnsense_aliases }}" }
         - { nome: "opnsense_rules", valor: "{{ opnsense_rules }}" }
+        - { nome: "opnsense_groups", valor: "{{ opnsense_groups }}" }
+        - { nome: "opnsense_users", valor: "{{ opnsense_users }}" }
       loop_control:
         label: "{{ item.nome }}"
 
@@ -53,11 +58,17 @@
           {{ item.nome }}: UUID duplicado —
           {{ item.valor | map(attribute='uuid') | list | community.general.counter
              | dict2items | selectattr('value', '>', 1) | map(attribute='key') | list }}.
-          Dois objetos com o mesmo UUID fazem um sumir do modelo, sem erro.
+          Dois objetos com o mesmo UUID fazem um sumir do modelo, sem erro —
+          em opnsense_users isso troca o hash de senha e o nome que o
+          _system.xml.j2 seleciona por UUID literal (root em vez de admin,
+          ou vice-versa), e este play em seguida aplica permitrootlogin=0 +
+          passwordauth=0, trancando o próximo acesso.
       loop:
         - { nome: "opnsense_tunables", valor: "{{ opnsense_tunables }}" }
         - { nome: "opnsense_aliases", valor: "{{ opnsense_aliases }}" }
         - { nome: "opnsense_rules", valor: "{{ opnsense_rules }}" }
+        - { nome: "opnsense_groups", valor: "{{ opnsense_groups }}" }
+        - { nome: "opnsense_users", valor: "{{ opnsense_users }}" }
       loop_control:
         label: "{{ item.nome }}"
 
