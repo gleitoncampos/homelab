@@ -8,14 +8,20 @@
 #
 # NÃO faz varredura às cegas por padrão. A OPNsense é o roteador de todas as
 # VLANs: a tabela ARP dela já viu todo dispositivo que falou na rede, e isso
-# cobre também as VLANs 10 e 20, que são ESTÁTICAS (dhcp_enabled: false em
-# network.yml) e portanto invisíveis para qualquer consulta de concessão DHCP.
-# Varredura ativa existe como modo alternativo (--sweep), para quando a OPNsense
-# não estiver acessível.
+# cobre também as VLANs 10 e 20, que são ESTÁTICAS (dhcp_enabled: false nas
+# camadas de group_vars/network/) e portanto invisíveis para qualquer consulta
+# de concessão DHCP. Varredura ativa existe como modo alternativo (--sweep),
+# para quando a OPNsense não estiver acessível.
+#
+# As faixas vêm de DUAS camadas — group_vars/network/10-defaults.yml
+# (versionada, endereço de documentação) e 99-local.yml ao lado (gitignorada,
+# a rede real), a segunda por cima da primeira. Sem a camada local este script
+# ABORTA: varrer só a documentação e reportar "nada encontrado" leria como uma
+# rede limpa, quando na verdade não varreu rede nenhuma.
 #
 # Uso:
 #   ./discover.sh                    # ARP + DHCP da OPNsense, depois identifica
-#   ./discover.sh --sweep            # varre as faixas do network.yml direto
+#   ./discover.sh --sweep            # varre as faixas de group_vars/network/ direto
 #   ./discover.sh --sweep --only 10,20   # só estas VLANs
 #   ./discover.sh --no-probe         # não abre conexão nenhuma, só lista o ARP
 #
@@ -32,7 +38,9 @@ SNAP="$REPO/.local/snapshot"
 OUT="$SNAP/_discovery"
 
 INVENTORY="$REPO/IaC/ansible/inventories/prod/hosts.ini"
-NETWORK_VARS="$REPO/IaC/ansible/inventories/prod/group_vars/network.yml"
+NETWORK_VARS_DEFAULTS="$REPO/IaC/ansible/inventories/prod/group_vars/network/10-defaults.yml"
+NETWORK_VARS_LOCAL="$REPO/IaC/ansible/inventories/prod/group_vars/network/99-local.yml"
+NETWORK_VARS=""   # caminho do merge das duas camadas acima, resolvido abaixo
 MODE="arp"
 ONLY_VLANS=""
 CIDR=""
@@ -57,9 +65,41 @@ if ! git -C "$REPO" check-ignore -q "$SNAP/.canary"; then
   echo "ABORTADO: $SNAP não está sendo ignorada pelo git." >&2
   exit 1
 fi
-[[ -f "$NETWORK_VARS" ]] || { echo "ABORTADO: não achei $NETWORK_VARS" >&2; exit 1; }
+[[ -f "$NETWORK_VARS_DEFAULTS" ]] || { echo "ABORTADO: não achei $NETWORK_VARS_DEFAULTS" >&2; exit 1; }
+
+# ⚠️ Sem a camada local, o merge abaixo cairia só nos endereços de
+# DOCUMENTAÇÃO de 10-defaults.yml — o --sweep varreria uma rede que não
+# existe, encontraria zero host, e reportaria isso como "nada novo: todo host
+# já está no inventário". Uma varredura que não varreu nada de verdade não
+# pode se parecer com uma que varreu e achou tudo limpo. Aborta alto, não cai
+# para a rede de documentação em silêncio.
+if [[ ! -f "$NETWORK_VARS_LOCAL" ]]; then
+  echo "ABORTADO: não achei $NETWORK_VARS_LOCAL" >&2
+  echo "Sem a camada local, a varredura cairia nas faixas de DOCUMENTAÇÃO de" >&2
+  echo "10-defaults.yml e reportaria uma rede vazia como se estivesse limpa." >&2
+  echo "Crie o arquivo (ver IaC/ansible/README.md) antes de rodar --sweep." >&2
+  exit 1
+fi
 
 mkdir -p "$OUT"
+
+# Merge das duas camadas — 99-local.yml por cima de 10-defaults.yml, mesma
+# precedência que o Ansible aplica a group_vars/ (ordem alfabética, último
+# vence). YAML não funde lista: `vlans` de 99-local.yml substitui a de
+# 10-defaults.yml inteira, nunca item a item — mesmo contrato descrito no
+# cabeçalho dos dois arquivos.
+NETWORK_VARS="$OUT/network-merged.yaml"
+python3 - "$NETWORK_VARS_DEFAULTS" "$NETWORK_VARS_LOCAL" "$NETWORK_VARS" <<'PY'
+import sys
+import yaml
+
+defaults_path, local_path, out_path = sys.argv[1:4]
+defaults = yaml.safe_load(open(defaults_path, encoding="utf-8")) or {}
+local = yaml.safe_load(open(local_path, encoding="utf-8")) or {}
+merged = {**defaults, **local}
+with open(out_path, "w", encoding="utf-8") as fh:
+    yaml.safe_dump(merged, fh)
+PY
 
 # ---------------------------------------------------------------------------
 # Fonte 1: OPNsense (ARP + DHCP)
@@ -101,7 +141,7 @@ print(f'"'"'{hv.get("ansible_user","root")}@{hv.get("ansible_host", hosts[0])}'"
 }
 
 # ---------------------------------------------------------------------------
-# Fonte 2: varredura das faixas declaradas em network.yml
+# Fonte 2: varredura das faixas declaradas em group_vars/network/
 # ---------------------------------------------------------------------------
 # Sem nmap: um connect() de TCP em portas conhecidas responde a mesma pergunta
 # ("existe host aqui e o que ele serve") usando só a stdlib do Python. Só varre
@@ -112,7 +152,7 @@ sweep_ranges() {
 import ipaddress, socket, sys, yaml
 from concurrent.futures import ThreadPoolExecutor
 
-# --cidr existe porque network.yml descreve a rede ALVO (o desenho de VLANs que
+# --cidr existe porque group_vars/network/ descreve a rede ALVO (o desenho de VLANs que
 # a refatoração vai criar), não a de hoje. Para levantar o que já existe é
 # preciso apontar para a faixa atual, que ainda é plana.
 explicit = [c.strip() for c in sys.argv[3].split(",") if c.strip()] if len(sys.argv) > 3 else []
@@ -154,7 +194,7 @@ PY
 echo "Descoberta de rede — $(date -Is)"
 case "$MODE" in
   arp)   echo "Fonte: tabela ARP + DHCP da OPNsense"; collect_from_opnsense || { echo; echo "Caindo para varredura ativa."; MODE=sweep; sweep_ranges; } ;;
-  sweep) echo "Fonte: varredura ativa das faixas de network.yml"; sweep_ranges ;;
+  sweep) echo "Fonte: varredura ativa das faixas de group_vars/network/"; sweep_ranges ;;
 esac
 
 echo
