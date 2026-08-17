@@ -7,16 +7,9 @@
 {% include '_dhcp.xml.j2' %}
 {% include '_nat.xml.j2' %}
   <filter/>
-  <rrd>
-    <enable/>
-  </rrd>
   <ntpd>
     <prefer>0.opnsense.pool.ntp.org</prefer>
   </ntpd>
-  <widgets>
-    <sequence>system_information-container:00000000-col3:show,services_status-container:00000001-col4:show,gateways-container:00000002-col4:show,interface_list-container:00000003-col4:show</sequence>
-    <column_count>2</column_count>
-  </widgets>
   <revision>
     <username>ansible</username>
     <description>Provisionado via Ansible</description>
@@ -31,11 +24,11 @@
       <general version="0.0.1">
         <enabled>0</enabled>
       </general>
-      <server version="1.0.1" persisted_at="1762515612.05" description="WireGuard instance configuration">
+      <server version="1.0.1" description="WireGuard instance configuration">
         <servers/>
       </server>
     </wireguard>
-    <IPsec version="1.0.5" persisted_at="1758076273.00">
+    <IPsec version="1.0.5">
       <general>
         <enabled/>
         <preferred_oldsa>0</preferred_oldsa>
@@ -127,7 +120,7 @@
       <Instances/>
       <StaticKeys/>
     </OpenVPN>
-    <captiveportal version="1.0.5" persisted_at="1780800097.03" description="Captive portal application model">
+    <captiveportal version="1.0.5" description="Captive portal application model">
       <zones/>
       <templates/>
     </captiveportal>
@@ -149,7 +142,7 @@
       <loopbacks version="1.0.0"/>
       <neighbors version="1.0.0"/>
       <vxlans version="1.0.2"/>
-      <settings version="1.0.0" persisted_at="1780798714.51" description="Global interface settings">
+      <settings version="1.0.0" description="Global interface settings">
         <disablechecksumoffloading>1</disablechecksumoffloading>
         <disablesegmentationoffloading>1</disablesegmentationoffloading>
         <disablelargereceiveoffloading>1</disablelargereceiveoffloading>
@@ -169,7 +162,7 @@
           <http_port>8000</http_port>
         </general>
       </ctrl_agent>
-      <dhcp4 version="1.0.5" persisted_at="1780800096.93" description="Kea DHCPv4 configuration">
+      <dhcp4 version="1.0.5" description="Kea DHCPv4 configuration">
         <general>
           <enabled>0</enabled>
           <manual_config>0</manual_config>
@@ -200,7 +193,7 @@
         <options/>
         <ha_peers/>
       </dhcp4>
-      <dhcp6 version="1.0.2" persisted_at="1780800097.02" description="Kea DHCPv6 configuration">
+      <dhcp6 version="1.0.2" description="Kea DHCPv6 configuration">
         <general>
           <enabled>0</enabled>
           <manual_config>0</manual_config>
@@ -231,7 +224,7 @@
         <pd_pools/>
         <ha_peers/>
       </dhcp6>
-      <ddns version="1.0.0" persisted_at="1780800096.93" description="Kea Dynamic DNS configuration">
+      <ddns version="1.0.0" description="Kea Dynamic DNS configuration">
         <general>
           <enabled>0</enabled>
           <manual_config>0</manual_config>
@@ -265,7 +258,7 @@
     </trust>
 {% set _plugins_section = 'agents' %}
 {% include '_plugins.xml.j2' %}
-    <radvd version="1.0.1" persisted_at="1780800097.02" description="Radvd configuration"/>
+    <radvd version="1.0.1" description="Radvd configuration"/>
   </OPNsense>
   <hasync version="1.0.2">
     <disablepreempt>0</disablepreempt>
@@ -279,7 +272,6 @@
     <password/>
     <syncitems/>
   </hasync>
-  <openvpn/>
   <ifgroups version="1.0.0"/>
   <gifs version="1.0.0">
     <gif/>
@@ -329,15 +321,13 @@
   <wireless>
     <clone/>
   </wireless>
-  <ca/>
   <dhcpdv6>
     <lan>
       <enable>-1</enable>
     </lan>
   </dhcpdv6>
 {% include '_certs.xml.j2' %}
-  <syslog/>
-  <dnsmasq version="1.0.9" persisted_at="1780800097.22" description="Dnsmasq DNS and DHCP">
+  <dnsmasq version="1.0.9" description="Dnsmasq DNS and DHCP">
     <enable/>
     <regdhcp/>
     <regdhcpstatic/>

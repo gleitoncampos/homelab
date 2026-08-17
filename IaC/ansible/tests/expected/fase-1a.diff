@@ -1,5 +1,3 @@
---- baseline
-+++ novo
 @@ -22,36 +22,25 @@
        <value>1</value>
        <descr>Do not send ICMP port unreachable messages for closed UDP ports</descr>

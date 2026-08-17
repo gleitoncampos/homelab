@@ -1,0 +1,11 @@
+--- baseline
++++ novo
+@@ -1,7 +1,7 @@
+ <?xml version="1.0"?>
+ <opnsense>
+   <theme>rebellion</theme>
+-  <sysctl description="System Tunables" persisted_at="1780797804.18" version="1.0.2">
++  <sysctl description="System Tunables" version="1.0.2">
+     <item uuid="cb052371-32d8-453e-b4be-a30b40a7955a">
+       <tunable>vfs.read_max</tunable>
+       <value/>

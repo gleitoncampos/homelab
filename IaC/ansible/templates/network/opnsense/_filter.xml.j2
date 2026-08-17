@@ -3,7 +3,7 @@
    tipo de ação/estado), por isso o laço interno itera as chaves do próprio
    dado em vez de uma lista fixa — preserva o conjunto e a ordem exatos de
    cada regra sem introduzir elemento que o baseline não tem. #}
-      <Filter version="1.0.4" persisted_at="1784915020.70" description="Firewall rules (new)">
+      <Filter version="1.0.4" description="Firewall rules (new)">
         <rules>
 {% for r in opnsense_rules %}
           <rule uuid="{{ r.uuid }}">

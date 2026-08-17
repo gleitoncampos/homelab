@@ -1,4 +1,44 @@
-@@ -643,7 +622,7 @@
+@@ -515,16 +494,9 @@
+     </rule>
+   </nat>
+   <filter/>
+-  <rrd>
+-    <enable/>
+-  </rrd>
+   <ntpd>
+     <prefer>0.opnsense.pool.ntp.org</prefer>
+   </ntpd>
+-  <widgets>
+-    <sequence>system_information-container:00000000-col3:show,services_status-container:00000001-col4:show,gateways-container:00000002-col4:show,interface_list-container:00000003-col4:show</sequence>
+-    <column_count>2</column_count>
+-  </widgets>
+   <revision>
+     <username>ansible</username>
+     <description>Provisionado via Ansible</description>
+@@ -539,11 +511,11 @@
+       <general version="0.0.1">
+         <enabled>0</enabled>
+       </general>
+-      <server description="WireGuard instance configuration" persisted_at="1762515612.05" version="1.0.1">
++      <server description="WireGuard instance configuration" version="1.0.1">
+         <servers/>
+       </server>
+     </wireguard>
+-    <IPsec persisted_at="1758076273.00" version="1.0.5">
++    <IPsec version="1.0.5">
+       <general>
+         <enabled/>
+         <preferred_oldsa>0</preferred_oldsa>
+@@ -635,7 +607,7 @@
+       <Instances/>
+       <StaticKeys/>
+     </OpenVPN>
+-    <captiveportal description="Captive portal application model" persisted_at="1780800097.03" version="1.0.5">
++    <captiveportal description="Captive portal application model" version="1.0.5">
+       <zones/>
+       <templates/>
+     </captiveportal>
+@@ -643,7 +615,7 @@
        <jobs>
          <job uuid="29a4a8cb-f14d-4faa-b8f7-6d7ddb0a758c">
            <origin>IDS</origin>
@@ -7,3 +47,21 @@
            <minutes>0</minutes>
            <hours>0</hours>
            <days>*</days>
+@@ -660,7 +632,7 @@
+       <Lvtemplate version="0.0.1">
+         <templates/>
+       </Lvtemplate>
+-      <Alias description="Firewall aliases" persisted_at="1776356932.53" version="1.0.1">
++      <Alias description="Firewall aliases" version="1.0.1">
+         <geoip>
+           <url/>
+         </geoip>
+@@ -1031,7 +1003,7 @@
+       <Category version="1.0.0">
+         <categories/>
+       </Category>
+-      <Filter description="Firewall rules (new)" persisted_at="1784915020.70" version="1.0.4">
++      <Filter description="Firewall rules (new)" version="1.0.4">
+         <rules>
+           <rule uuid="e8d7c6b5-a4f3-2109-8765-554433221188">
+             <enabled>1</enabled>

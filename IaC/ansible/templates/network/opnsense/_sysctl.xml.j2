@@ -1,5 +1,5 @@
 {# Tunables de kernel. Lista em _common/opnsense.yml (política, não topologia). #}
-  <sysctl version="1.0.2" persisted_at="1780797804.18" description="System Tunables">
+  <sysctl version="1.0.2" description="System Tunables">
 {% for t in opnsense_tunables %}
     <item uuid="{{ t.uuid }}">
       <tunable>{{ t.tunable }}</tunable>

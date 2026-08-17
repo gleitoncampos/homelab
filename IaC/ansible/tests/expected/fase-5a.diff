@@ -1,13 +1,70 @@
-@@ -1873,7 +1908,7 @@
+@@ -1524,7 +1552,7 @@
+       <activeTimeout>1800</activeTimeout>
+       <inactiveTimeout>15</inactiveTimeout>
+     </Netflow>
+-    <IDS description="Intrusion detection" persisted_at="1780798715.95" version="1.1.2">
++    <IDS description="Intrusion detection" version="1.1.2">
+       <rules/>
+       <policies/>
+       <userDefinedRules/>
+@@ -1780,7 +1808,7 @@
+       <loopbacks version="1.0.0"/>
+       <neighbors version="1.0.0"/>
+       <vxlans version="1.0.2"/>
+-      <settings description="Global interface settings" persisted_at="1780798714.51" version="1.0.0">
++      <settings description="Global interface settings" version="1.0.0">
+         <disablechecksumoffloading>1</disablechecksumoffloading>
+         <disablesegmentationoffloading>1</disablesegmentationoffloading>
+         <disablelargereceiveoffloading>1</disablelargereceiveoffloading>
+@@ -1800,7 +1828,7 @@
+           <http_port>8000</http_port>
+         </general>
+       </ctrl_agent>
+-      <dhcp4 description="Kea DHCPv4 configuration" persisted_at="1780800096.93" version="1.0.5">
++      <dhcp4 description="Kea DHCPv4 configuration" version="1.0.5">
+         <general>
+           <enabled>0</enabled>
+           <manual_config>0</manual_config>
+@@ -1831,7 +1859,7 @@
+         <options/>
+         <ha_peers/>
+       </dhcp4>
+-      <dhcp6 description="Kea DHCPv6 configuration" persisted_at="1780800097.02" version="1.0.2">
++      <dhcp6 description="Kea DHCPv6 configuration" version="1.0.2">
+         <general>
+           <enabled>0</enabled>
+           <manual_config>0</manual_config>
+@@ -1862,7 +1890,7 @@
+         <pd_pools/>
+         <ha_peers/>
+       </dhcp6>
+-      <ddns description="Kea Dynamic DNS configuration" persisted_at="1780800096.93" version="1.0.0">
++      <ddns description="Kea Dynamic DNS configuration" version="1.0.0">
+         <general>
+           <enabled>0</enabled>
+           <manual_config>0</manual_config>
+@@ -1871,9 +1899,9 @@
+         </general>
+       </ddns>
      </Kea>
-     <monit persisted_at="1758076273.78" version="1.0.14">
+-    <monit persisted_at="1758076273.78" version="1.0.14">
++    <monit version="1.0.14">
        <general>
 -        <enabled>0</enabled>
 +        <enabled>1</enabled>
          <interval>120</interval>
          <startdelay>120</startdelay>
          <mailserver>127.0.0.1</mailserver>
-@@ -2065,18 +2100,18 @@
+@@ -2055,7 +2083,7 @@
+         <path/>
+       </test>
+     </monit>
+-    <Gateways persisted_at="1758205823.23" version="1.0.0">
++    <Gateways version="1.0.0">
+       <gateway_item uuid="f42ac827-3c2e-4237-998d-603930653b98">
+         <disabled>0</disabled>
+         <name>WAN_GW</name>
+@@ -2065,25 +2093,25 @@
          <gateway/>
          <defaultgw>1</defaultgw>
          <fargw>0</fargw>
@@ -32,7 +89,24 @@
          <interval/>
          <time_period/>
          <loss_interval/>
-@@ -2150,7 +2185,7 @@
+         <data_length/>
+       </gateway_item>
+     </Gateways>
+-    <Syslog description="System logging settings" persisted_at="1784917645.73" version="1.0.2">
++    <Syslog description="System logging settings" version="1.0.2">
+       <general>
+         <enabled>1</enabled>
+         <loglocal>1</loglocal>
+@@ -2110,7 +2138,7 @@
+       <queues/>
+       <rules/>
+     </TrafficShaper>
+-    <unboundplus description="Unbound configuration" persisted_at="1784914643.75" version="1.0.15">
++    <unboundplus description="Unbound configuration" version="1.0.15">
+       <general>
+         <enabled>1</enabled>
+         <port>53</port>
+@@ -2150,7 +2178,7 @@
          <ratelimit_size>4m</ratelimit_size>
          <extendedstatistics>1</extendedstatistics>
          <logqueries>1</logqueries>
@@ -41,3 +115,65 @@
          <logtagqueryreply>1</logtagqueryreply>
          <logservfail>1</logservfail>
          <loglocalactions>0</loglocalactions>
+@@ -2306,7 +2334,7 @@
+       </general>
+     </QemuGuestAgent>
+     <crowdsec>
+-      <general persisted_at="1758076264.11" version="1.0.12">
++      <general version="1.0.12">
+         <agent_enabled>1</agent_enabled>
+         <lapi_enabled>1</lapi_enabled>
+         <firewall_bouncer_enabled>1</firewall_bouncer_enabled>
+@@ -2320,7 +2348,7 @@
+         <crowdsec_firewall_verbose>0</crowdsec_firewall_verbose>
+       </general>
+     </crowdsec>
+-    <NodeExporter persisted_at="1759691057.75" version="0.2.0">
++    <NodeExporter version="0.2.0">
+       <enabled>1</enabled>
+       <listenaddress>0.0.0.0</listenaddress>
+       <listenport>9100</listenport>
+@@ -2336,7 +2364,7 @@
+       <ntp>0</ntp>
+       <zfs>0</zfs>
+     </NodeExporter>
+-    <Hostwatch description="Host discovery" persisted_at="1780797804.49" version="1.0.0">
++    <Hostwatch description="Host discovery" version="1.0.0">
+       <general>
+         <enabled>1</enabled>
+         <promisc>0</promisc>
+@@ -2345,7 +2373,7 @@
+         <interface/>
+       </general>
+     </Hostwatch>
+-    <radvd description="Radvd configuration" persisted_at="1780800097.02" version="1.0.1"/>
++    <radvd description="Radvd configuration" version="1.0.1"/>
+   </OPNsense>
+   <hasync version="1.0.2">
+     <disablepreempt>0</disablepreempt>
+@@ -2359,7 +2387,6 @@
+     <password/>
+     <syncitems/>
+   </hasync>
+-  <openvpn/>
+   <ifgroups version="1.0.0"/>
+   <gifs version="1.0.0">
+     <gif/>
+@@ -2414,7 +2441,6 @@
+   <wireless>
+     <clone/>
+   </wireless>
+-  <ca/>
+   <dhcpdv6>
+     <lan>
+       <enable>-1</enable>
+@@ -2428,8 +2454,7 @@
+     <csr/>
+     <prv>RklYVFVSRS1LRVkK</prv>
+   </cert>
+-  <syslog/>
+-  <dnsmasq description="Dnsmasq DNS and DHCP" persisted_at="1780800097.22" version="1.0.9">
++  <dnsmasq description="Dnsmasq DNS and DHCP" version="1.0.9">
+     <enable/>
+     <regdhcp/>
+     <regdhcpstatic/>
