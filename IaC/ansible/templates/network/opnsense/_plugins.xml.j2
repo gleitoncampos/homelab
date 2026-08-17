@@ -1,0 +1,611 @@
+{# Plugins e serviços do OPNsense: IDS, Netflow, monit, crowdsec, NodeExporter,
+   Syslog, upnpd, mdnsrepeater, igmpproxy, Hostwatch, QemuGuestAgent, cron,
+   Gateways.
+
+   Um único arquivo, mas com CINCO pontos de include na skeleton — cada um
+   selecionando sua fatia via `_plugins_section` (set logo antes do include,
+   visto aqui porque Jinja `include` compartilha contexto por padrão). Islands
+   em vez de include único: os 10 elementos que vivem dentro de <OPNsense> não
+   são vizinhos no documento original (Firewall, Interfaces, Kea,
+   TrafficShaper, trust e o DNS/unboundplus ficam intercalados entre eles), e
+   upnpd/mdnsrepeater/igmpproxy são irmãos de <OPNsense>, não filhos — não dá
+   para colocar os dois grupos num só ponto de include sem violar o
+   aninhamento real do config.xml do OPNsense (cada seção só é lida de onde o
+   módulo espera) ou reordenar o documento inteiro. Islands preserva a ordem
+   original byte a byte e mantém os 13 itens num arquivo só, como pedido.
+
+   D3: cron origin=IDS enabled 0 -> 1.
+   D4: Gateways/gateway_item monitor_disable 1 -> 0; monitor recebe
+   opnsense_gateway_monitor_ip (default 9.9.9.9 — Quad9, mesmo default de
+   qualquer instalação); latencylow/high e losslow/high passam a existir
+   porque o modelo exige latencylow < latencyhigh e losslow < losshigh.
+   D5: OPNsense/monit/general/enabled 0 -> 1; os serviços gateway_alert e
+   carp_status_change continuam desabilitados (enabled 0), sem mudança. #}
+{% if _plugins_section == 'cron' %}
+    <cron version="1.0.4">
+      <jobs>
+        <job uuid="29a4a8cb-f14d-4faa-b8f7-6d7ddb0a758c">
+          <origin>IDS</origin>
+          <enabled>0</enabled>
+          <minutes>0</minutes>
+          <hours>0</hours>
+          <days>*</days>
+          <months>*</months>
+          <weekdays>*</weekdays>
+          <who>root</who>
+          <command>ids update</command>
+          <parameters/>
+          <description>ids rule updates</description>
+        </job>
+      </jobs>
+    </cron>
+{% elif _plugins_section == 'netflow_ids' %}
+    <Netflow version="1.0.1">
+      <capture>
+        <interfaces>lan,wan</interfaces>
+        <egress_only>wan</egress_only>
+        <version>v9</version>
+        <targets>127.0.0.1:2056</targets>
+      </capture>
+      <collect>
+        <enable>1</enable>
+      </collect>
+      <activeTimeout>1800</activeTimeout>
+      <inactiveTimeout>15</inactiveTimeout>
+    </Netflow>
+    <IDS version="1.1.2" persisted_at="1780798715.95" description="Intrusion detection">
+      <rules/>
+      <policies/>
+      <userDefinedRules/>
+      <files>
+        <file uuid="d97ba740-3fd1-4297-b498-51d2376a9d82">
+          <filename>compromised.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="60ba6152-2477-4ac6-acc8-8d9b88764365">
+          <filename>drop.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="0e415530-c471-4742-8338-9a7b4a1b178b">
+          <filename>ciarmy.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="e709bbde-492c-47bc-a6df-41dffc606c5c">
+          <filename>botcc.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="3414652d-b4d9-49b1-b20c-77e66b3ecbc5">
+          <filename>emerging-dos.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="5d118f25-53c6-4d1a-bfcf-d205c7b0bf4e">
+          <filename>emerging-exploit.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="1583e120-4569-4a37-bf30-4d677789eca6">
+          <filename>emerging-malware.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="05f4279b-bb47-446b-a25d-8169ce0a456a">
+          <filename>emerging-mobile_malware.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="c151811e-9273-45cf-a49c-583f3e0e7fb5">
+          <filename>emerging-phishing.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="ddfc9020-3d17-4ada-b4a3-cbf913416dc1">
+          <filename>threatview_CS_c2.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="4b2208ee-537a-4d19-bb78-75305dcbbcca">
+          <filename>emerging-worm.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="ba9e72cc-16ee-4d67-9446-8cf32c7f73b2">
+          <filename>emerging-web_specific_apps.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="b0724029-b750-4630-94cc-589a305f2af0">
+          <filename>emerging-web_server.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="334ae88b-7469-46b9-9c9e-2d13ff780ca1">
+          <filename>emerging-web_client.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="faa4e02e-bbf5-45e2-9916-fe6f51c35659">
+          <filename>emerging-voip.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="1480af3f-e14a-452f-a45d-247375144804">
+          <filename>emerging-user_agents.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="f1b13319-47ab-4ae7-85b8-a80b548da061">
+          <filename>emerging-tftp.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="5ebcc7ae-0cd3-4a86-8ef3-6980f88b0ba4">
+          <filename>emerging-telnet.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="6fb97b18-0825-4af3-8dd5-7c24fdba3f5a">
+          <filename>emerging-sql.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="232934ba-9930-43ff-91a0-513b9563ddab">
+          <filename>emerging-snmp.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="7befb1a3-e89b-4b64-88bf-73a668a9ba6e">
+          <filename>emerging-smtp.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="df31daeb-39ef-462d-8b39-10b0d06e0735">
+          <filename>emerging-shellcode.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="74b7eee1-64a2-4b61-93e9-e93f22376f7a">
+          <filename>emerging-scan.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="a6d5874c-0944-4ae6-aa84-bf75571732a1">
+          <filename>emerging-scada.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="77a38e5f-64cd-4d97-a2a9-7948753418b8">
+          <filename>emerging-rpc.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="fb362aae-dc20-4b50-a1ac-4b2fe59fbe00">
+          <filename>emerging-pop3.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="17ffc24d-c2d5-4daf-85ca-b43ab024ec2b">
+          <filename>emerging-policy.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="b548f845-0d0e-4f7e-b599-fd15f62e1577">
+          <filename>emerging-p2p.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="78b07021-7bc9-40fe-9c70-540658640a89">
+          <filename>emerging-netbios.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="935e4ce5-b9e1-4785-9954-8cbf6452f1fa">
+          <filename>emerging-misc.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="21c1d634-9dd1-4a7c-ada9-bd19f1df4590">
+          <filename>emerging-ja3.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="1d0c6958-fb9d-4c8e-9176-729099c78d12">
+          <filename>emerging-info.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="8105a447-1c7d-4d0b-8255-dd86c1c7885b">
+          <filename>emerging-inappropriate.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="0017d845-e265-4938-9bed-f3b2beca6a86">
+          <filename>emerging-imap.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="51686b56-fa1d-46a3-955d-72d71d74ad23">
+          <filename>emerging-icmp_info.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="251751e0-b056-4bb0-8c34-ee6e18ddf0a3">
+          <filename>emerging-icmp.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="b1ae6849-b209-4a04-af45-5c3512bf0845">
+          <filename>emerging-hunting.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="aac81567-d337-421b-8e00-d39e1eb76717">
+          <filename>emerging-games.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="9a4266d9-669d-4731-abef-75ced7dc87f6">
+          <filename>emerging-ftp.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="c2397d15-e4bd-4612-9df3-e23506739d3e">
+          <filename>emerging-exploit_kit.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="327db549-7015-4429-8138-fd4e60cee933">
+          <filename>emerging-dns.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="8c4d6b24-5e6a-4071-9a9b-8a62fe40d6dc">
+          <filename>emerging-deleted.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="89751b94-55a4-4447-aed3-713bc73d29f4">
+          <filename>emerging-current_events.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="1089e5c9-c5c3-4b37-906f-822b8f9cba03">
+          <filename>emerging-coinminer.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="3817e806-64cf-4d03-aba2-14e344b076a1">
+          <filename>emerging-chat.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="133ce537-a39c-4f7b-8128-ce2c19330c0c">
+          <filename>emerging-botcc_portgrouped.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="01740608-9b68-4483-ac93-f74f4b2e1439">
+          <filename>emerging-attack_response.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="127c7514-4778-43a5-b628-b3351122665a">
+          <filename>dshield.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="891faa5d-2285-4302-bc5d-72d04309539a">
+          <filename>emerging-activex.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="7eaeccae-023e-4289-bc6c-35af65a55096">
+          <filename>emerging-adware_pup.rules</filename>
+          <enabled>1</enabled>
+        </file>
+        <file uuid="73900435-d803-4503-9dc7-58382fc5d336">
+          <filename>tor.rules</filename>
+          <enabled>1</enabled>
+        </file>
+      </files>
+      <fileTags>
+        <tag uuid="0a2e6640-19ab-43dd-9e2b-3e3246b649be">
+          <property>et_telemetry.token</property>
+          <value>{{ opnsense_etpro_telemetry_token | default('') }}</value>
+        </tag>
+      </fileTags>
+      <general>
+        <enabled>1</enabled>
+        <mode>pcap</mode>
+        <divert_listeners>1</divert_listeners>
+        <promisc>0</promisc>
+        <interfaces>wan</interfaces>
+        <homenet>{{ opnsense_ids_homenet }}</homenet>
+        <defaultPacketSize/>
+        <UpdateCron>29a4a8cb-f14d-4faa-b8f7-6d7ddb0a758c</UpdateCron>
+        <AlertLogrotate>W0D23</AlertLogrotate>
+        <AlertSaveLogs>4</AlertSaveLogs>
+        <MPMAlgo/>
+        <detect>
+          <Profile/>
+          <toclient_groups/>
+          <toserver_groups/>
+        </detect>
+        <syslog>1</syslog>
+        <syslog_eve>0</syslog_eve>
+        <LogPayload>0</LogPayload>
+        <verbosity/>
+        <eveLog>
+          <http>
+            <enable>0</enable>
+            <extended>0</extended>
+            <dumpAllHeaders/>
+          </http>
+          <tls>
+            <enable>0</enable>
+            <extended>0</extended>
+            <sessionResumption>0</sessionResumption>
+            <custom/>
+          </tls>
+        </eveLog>
+      </general>
+    </IDS>
+{% elif _plugins_section == 'core_services' %}
+    <monit version="1.0.14" persisted_at="1758076273.78">
+      <general>
+        <enabled>0</enabled>
+        <interval>120</interval>
+        <startdelay>120</startdelay>
+        <mailserver>127.0.0.1</mailserver>
+        <port>25</port>
+        <username/>
+        <password/>
+        <ssl>0</ssl>
+        <sslversion>auto</sslversion>
+        <sslverify>1</sslverify>
+        <logfile/>
+        <statefile/>
+        <eventqueuePath/>
+        <eventqueueSlots/>
+        <httpdEnabled>0</httpdEnabled>
+        <httpdUsername>root</httpdUsername>
+        <httpdPassword/>
+        <httpdPort>2812</httpdPort>
+        <httpdAllow/>
+        <mmonitUrl/>
+        <mmonitTimeout>5</mmonitTimeout>
+        <mmonitRegisterCredentials>1</mmonitRegisterCredentials>
+      </general>
+      <alert uuid="cf979477-4770-475d-ac54-be615d2939cf">
+        <enabled>0</enabled>
+        <recipient>root@localhost.local</recipient>
+        <noton>0</noton>
+        <events/>
+        <format/>
+        <reminder/>
+        <description/>
+      </alert>
+      <service uuid="e38a542a-b12d-4f6d-b091-1fe9cc734c1e">
+        <enabled>1</enabled>
+        <name>$HOST</name>
+        <description/>
+        <type>system</type>
+        <pidfile/>
+        <match/>
+        <path/>
+        <timeout>300</timeout>
+        <starttimeout>30</starttimeout>
+        <address/>
+        <interface/>
+        <start/>
+        <stop/>
+        <tests>dcdde5e3-5c80-4694-a4e5-67c2416d9f27,d8231b1c-dafd-40fc-9dce-2883002ef338,26c4c116-c818-4968-8ce4-c9b44c335258,0e43076e-12fc-421c-b9dd-5bdc31ab3414</tests>
+        <depends/>
+        <polltime/>
+      </service>
+      <service uuid="37ad1612-a8a2-45ed-9c51-9a217ebb7a7b">
+        <enabled>1</enabled>
+        <name>RootFs</name>
+        <description/>
+        <type>filesystem</type>
+        <pidfile/>
+        <match/>
+        <path>/</path>
+        <timeout>300</timeout>
+        <starttimeout>30</starttimeout>
+        <address/>
+        <interface/>
+        <start/>
+        <stop/>
+        <tests>d70f3571-e703-4a74-83b6-4504f3f91c84</tests>
+        <depends/>
+        <polltime/>
+      </service>
+      <service uuid="32139ca9-6551-42b0-8aad-bc7b1e8319b7">
+        <enabled>0</enabled>
+        <name>carp_status_change</name>
+        <description/>
+        <type>custom</type>
+        <pidfile/>
+        <match/>
+        <path>/usr/local/opnsense/scripts/monit/carp_status.php</path>
+        <timeout>300</timeout>
+        <starttimeout>30</starttimeout>
+        <address/>
+        <interface/>
+        <start/>
+        <stop/>
+        <tests>715b824d-fe68-489d-bf05-e56b9aa2a5c4</tests>
+        <depends/>
+        <polltime/>
+      </service>
+      <service uuid="d1e9b5e5-19d3-4a99-bab7-ea4a90b35ca7">
+        <enabled>0</enabled>
+        <name>gateway_alert</name>
+        <description/>
+        <type>custom</type>
+        <pidfile/>
+        <match/>
+        <path>/usr/local/opnsense/scripts/monit/gateway_alert.php</path>
+        <timeout>300</timeout>
+        <starttimeout>30</starttimeout>
+        <address/>
+        <interface/>
+        <start/>
+        <stop/>
+        <tests>90db28dc-9c45-4461-bec2-37eb691a057f</tests>
+        <depends/>
+        <polltime/>
+      </service>
+      <test uuid="2008f1e5-3d31-45b4-a4b7-b1fcac37b355">
+        <name>Ping</name>
+        <type>NetworkPing</type>
+        <condition>failed ping</condition>
+        <action>alert</action>
+        <path/>
+      </test>
+      <test uuid="07e8c0e5-f019-4c1e-a12c-ab0a86924f48">
+        <name>NetworkLink</name>
+        <type>NetworkInterface</type>
+        <condition>failed link</condition>
+        <action>alert</action>
+        <path/>
+      </test>
+      <test uuid="ecc900d3-b997-4d03-a61f-ad6bb8b7a5ea">
+        <name>NetworkSaturation</name>
+        <type>NetworkInterface</type>
+        <condition>saturation is greater than 75%</condition>
+        <action>alert</action>
+        <path/>
+      </test>
+      <test uuid="dcdde5e3-5c80-4694-a4e5-67c2416d9f27">
+        <name>MemoryUsage</name>
+        <type>SystemResource</type>
+        <condition>memory usage is greater than 75%</condition>
+        <action>alert</action>
+        <path/>
+      </test>
+      <test uuid="d8231b1c-dafd-40fc-9dce-2883002ef338">
+        <name>CPUUsage</name>
+        <type>SystemResource</type>
+        <condition>cpu usage is greater than 75%</condition>
+        <action>alert</action>
+        <path/>
+      </test>
+      <test uuid="26c4c116-c818-4968-8ce4-c9b44c335258">
+        <name>LoadAvg1</name>
+        <type>SystemResource</type>
+        <condition>loadavg (1min) is greater than 8</condition>
+        <action>alert</action>
+        <path/>
+      </test>
+      <test uuid="0e43076e-12fc-421c-b9dd-5bdc31ab3414">
+        <name>LoadAvg5</name>
+        <type>SystemResource</type>
+        <condition>loadavg (5min) is greater than 6</condition>
+        <action>alert</action>
+        <path/>
+      </test>
+      <test uuid="b5e09682-0205-418c-b1c0-3451f869e00c">
+        <name>LoadAvg15</name>
+        <type>SystemResource</type>
+        <condition>loadavg (15min) is greater than 4</condition>
+        <action>alert</action>
+        <path/>
+      </test>
+      <test uuid="d70f3571-e703-4a74-83b6-4504f3f91c84">
+        <name>SpaceUsage</name>
+        <type>SpaceUsage</type>
+        <condition>space usage is greater than 75%</condition>
+        <action>alert</action>
+        <path/>
+      </test>
+      <test uuid="715b824d-fe68-489d-bf05-e56b9aa2a5c4">
+        <name>ChangedStatus</name>
+        <type>ProgramStatus</type>
+        <condition>changed status</condition>
+        <action>alert</action>
+        <path/>
+      </test>
+      <test uuid="90db28dc-9c45-4461-bec2-37eb691a057f">
+        <name>NonZeroStatus</name>
+        <type>ProgramStatus</type>
+        <condition>status != 0</condition>
+        <action>alert</action>
+        <path/>
+      </test>
+    </monit>
+    <Gateways version="1.0.0" persisted_at="1758205823.23">
+      <gateway_item uuid="f42ac827-3c2e-4237-998d-603930653b98">
+        <disabled>0</disabled>
+        <name>WAN_GW</name>
+        <descr>WAN Gateway</descr>
+        <interface>wan</interface>
+        <ipprotocol>inet</ipprotocol>
+        <gateway/>
+        <defaultgw>1</defaultgw>
+        <fargw>0</fargw>
+        <monitor_disable>1</monitor_disable>
+        <monitor_noroute>0</monitor_noroute>
+        <monitor_killstates>0</monitor_killstates>
+        <monitor_killstates_priority>0</monitor_killstates_priority>
+        <monitor/>
+        <force_down>0</force_down>
+        <priority>255</priority>
+        <weight>1</weight>
+        <latencylow/>
+        <latencyhigh/>
+        <losslow/>
+        <losshigh/>
+        <interval/>
+        <time_period/>
+        <loss_interval/>
+        <data_length/>
+      </gateway_item>
+    </Gateways>
+    <Syslog version="1.0.2" persisted_at="1784917645.73" description="System logging settings">
+      <general>
+        <enabled>1</enabled>
+        <loglocal>1</loglocal>
+        <maxpreserve>7</maxpreserve>
+        <maxfilesize/>
+      </general>
+      <destinations>
+        <destination uuid="436e0027-69c9-45a6-bd71-df189afe534b">
+          <enabled>1</enabled>
+          <transport>udp4</transport>
+          <program>audit,configd.py,dhcpd,filterlog,firewall,dpinger,kernel,ppp,unbound,suricata</program>
+          <level>debug,info,notice,warn,err,crit,alert,emerg</level>
+          <facility>kern,user,daemon,syslog,authpriv,console</facility>
+          <hostname>{{ syslog_server_ip }}</hostname>
+          <certificate/>
+          <port>{{ syslog_server_port | default('1514') }}</port>
+          <rfc5424>1</rfc5424>
+          <description/>
+        </destination>
+      </destinations>
+    </Syslog>
+{% elif _plugins_section == 'agents' %}
+    <QemuGuestAgent version="1.0.0">
+      <general>
+        <Enabled>1</Enabled>
+        <LogDebug>0</LogDebug>
+        <DisabledRPCs/>
+      </general>
+    </QemuGuestAgent>
+    <crowdsec>
+      <general version="1.0.12" persisted_at="1758076264.11">
+        <agent_enabled>1</agent_enabled>
+        <lapi_enabled>1</lapi_enabled>
+        <firewall_bouncer_enabled>1</firewall_bouncer_enabled>
+        <lapi_manual_configuration>0</lapi_manual_configuration>
+        <lapi_listen_address>127.0.0.1</lapi_listen_address>
+        <lapi_listen_port>8080</lapi_listen_port>
+        <rules_enabled>1</rules_enabled>
+        <rules_log>1</rules_log>
+        <rules_tag/>
+        <enroll_key/>
+        <crowdsec_firewall_verbose>0</crowdsec_firewall_verbose>
+      </general>
+    </crowdsec>
+    <NodeExporter version="0.2.0" persisted_at="1759691057.75">
+      <enabled>1</enabled>
+      <listenaddress>0.0.0.0</listenaddress>
+      <listenport>9100</listenport>
+      <cpu>1</cpu>
+      <exec>1</exec>
+      <filesystem>1</filesystem>
+      <loadavg>1</loadavg>
+      <meminfo>1</meminfo>
+      <netdev>1</netdev>
+      <time>1</time>
+      <devstat>1</devstat>
+      <interrupts>0</interrupts>
+      <ntp>0</ntp>
+      <zfs>0</zfs>
+    </NodeExporter>
+    <Hostwatch version="1.0.0" persisted_at="1780797804.49" description="Host discovery">
+      <general>
+        <enabled>1</enabled>
+        <promisc>0</promisc>
+        <verbose>0</verbose>
+        <skip_nets/>
+        <interface/>
+      </general>
+    </Hostwatch>
+{% elif _plugins_section == 'network' %}
+  <mdnsrepeater version="1.0.0">
+    <general>
+      <enabled>1</enabled>
+      <listen_interfaces>lan,vlan30,vlan40</listen_interfaces>
+    </general>
+  </mdnsrepeater>
+  <upnpd>
+    <enable>1</enable>
+    <enable_natpmp>1</enable_natpmp>
+    <enable_upnp>1</enable_upnp>
+    <internal_iface>vlan30</internal_iface>
+    <permuser1>allow 1024-65535 {{ upnp_allowed_source }} 1024-65535</permuser1>
+    <permuser2>deny 0-65535 0.0.0.0/0 0-65535</permuser2>
+  </upnpd>
+  <igmpproxy version="1.0.0">
+    <general>
+      <enabled>1</enabled>
+    </general>
+  </igmpproxy>
+{% endif %}

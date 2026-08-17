@@ -1,0 +1,171 @@
+{# Unbound (DNS recursivo + DNSBL + DoT upstream + host overrides).
+   unbound_host_overrides é a lista variável; blocklist e dots (Cloudflare,
+   Quad9, Google) são política fixa, igual em qualquer instalação.
+
+   D6: logreplies vai de 1 para 0 — o log de cada RESPOSTA de consulta é
+   volume alto para pouco ganho de auditoria; logqueries (a pergunta) continua
+   ligado.
+   D15: forwarding/enabled já nasce em 1 no template original — não há "0
+   para 1" para aplicar aqui; a decisão descrevia um estado que já era este. #}
+    <unboundplus version="1.0.15" persisted_at="1784914643.75" description="Unbound configuration">
+      <general>
+        <enabled>1</enabled>
+        <port>53</port>
+        <stats>1</stats>
+        <active_interface>lan</active_interface>
+        <dnssec>1</dnssec>
+        <dns64>0</dns64>
+        <dns64prefix/>
+        <noarecords>0</noarecords>
+        <regdhcp>1</regdhcp>
+        <regdhcpdomain/>
+        <regdhcpstatic>0</regdhcpstatic>
+        <noreglladdr6>0</noreglladdr6>
+        <noregrecords>0</noregrecords>
+        <txtsupport>0</txtsupport>
+        <cacheflush>1</cacheflush>
+        <safesearch>0</safesearch>
+        <local_zone_type>transparent</local_zone_type>
+        <outgoing_interface/>
+        <enable_wpad>0</enable_wpad>
+      </general>
+      <advanced>
+        <hideidentity>1</hideidentity>
+        <hideversion>1</hideversion>
+        <prefetch>1</prefetch>
+        <prefetchkey>1</prefetchkey>
+        <dnssecstripped>0</dnssecstripped>
+        <belownxdomain>1</belownxdomain>
+        <aggressivensec>1</aggressivensec>
+        <serveexpired>1</serveexpired>
+        <serveexpiredreplyttl>3600</serveexpiredreplyttl>
+        <serveexpiredttl>86400</serveexpiredttl>
+        <serveexpiredttlreset>1</serveexpiredttlreset>
+        <serveexpiredclienttimeout>1800</serveexpiredclienttimeout>
+        <qnameminstrict>1</qnameminstrict>
+        <ratelimit>100</ratelimit>
+        <ratelimit_size>4m</ratelimit_size>
+        <extendedstatistics>1</extendedstatistics>
+        <logqueries>1</logqueries>
+        <logreplies>1</logreplies>
+        <logtagqueryreply>1</logtagqueryreply>
+        <logservfail>1</logservfail>
+        <loglocalactions>0</loglocalactions>
+        <logverbosity>1</logverbosity>
+        <valloglevel>0</valloglevel>
+        <privatedomain/>
+        <privateaddress>{{ opnsense_unbound_privateaddress }}</privateaddress>
+        <insecuredomain/>
+        <msgcachesize/>
+        <rrsetcachesize/>
+        <outgoingnumtcp/>
+        <incomingnumtcp/>
+        <numqueriesperthread/>
+        <outgoingrange/>
+        <jostletimeout/>
+        <discardtimeout/>
+        <cachemaxttl/>
+        <cachemaxnegativettl/>
+        <cacheminttl/>
+        <infrahostttl/>
+        <infrakeepprobing>0</infrakeepprobing>
+        <infracachenumhosts/>
+        <unwantedreplythreshold>10000</unwantedreplythreshold>
+      </advanced>
+      <acls>
+        <default_action>allow</default_action>
+      </acls>
+      <dnsbl>
+        <blocklist uuid="f9b80504-6ec8-4b90-95ff-84c3af6d01ea">
+          <enabled>1</enabled>
+          <type>atf,ag,sb,hgz003,oisd0,oisd1,hgz009,hgz010,hgz014,hgz016</type>
+          <lists/>
+          <allowlists>shop.example,ads.example,bank.example</allowlists>
+          <blocklists>iot-vendor.example,mask.privaterelay.example,mask-h2.privaterelay.example,mask-api.privaterelay.example</blocklists>
+          <wildcards/>
+          <source_nets/>
+          <address/>
+          <nxdomain>0</nxdomain>
+          <cache_ttl>72000</cache_ttl>
+          <description>default</description>
+        </blocklist>
+      </dnsbl>
+      <forwarding>
+        <enabled>1</enabled>
+      </forwarding>
+      <dots>
+        <dot uuid="3894f75d-d0d0-4ad1-b094-c64b460a1f01">
+          <enabled>1</enabled>
+          <type>forward</type>
+          <domain/>
+          <server>1.1.1.1</server>
+          <port>853</port>
+          <verify>one.one.one.one</verify>
+          <forward_tcp_upstream>1</forward_tcp_upstream>
+          <forward_first>1</forward_first>
+          <description>Cloudflare Primary DoT</description>
+        </dot>
+        <dot uuid="b1c2d3e4-f5a6-7890-abcd-111122223333">
+          <enabled>1</enabled>
+          <type>forward</type>
+          <domain/>
+          <server>1.0.0.1</server>
+          <port>853</port>
+          <verify>one.one.one.one</verify>
+          <forward_tcp_upstream>1</forward_tcp_upstream>
+          <forward_first>1</forward_first>
+          <description>Cloudflare Secondary DoT</description>
+        </dot>
+        <dot uuid="c2d3e4f5-a6b7-8901-bcde-444455556666">
+          <enabled>1</enabled>
+          <type>forward</type>
+          <domain/>
+          <server>9.9.9.10</server>
+          <port>853</port>
+          <verify>dns10.quad9.net</verify>
+          <forward_tcp_upstream>1</forward_tcp_upstream>
+          <forward_first>1</forward_first>
+          <description>Quad9 Unfiltered Primary DoT</description>
+        </dot>
+        <dot uuid="d3e4f5a6-b7c8-9012-cdef-777788889999">
+          <enabled>1</enabled>
+          <type>forward</type>
+          <domain/>
+          <server>149.112.112.10</server>
+          <port>853</port>
+          <verify>dns10.quad9.net</verify>
+          <forward_tcp_upstream>1</forward_tcp_upstream>
+          <forward_first>1</forward_first>
+          <description>Quad9 Unfiltered Secondary DoT</description>
+        </dot>
+        <dot uuid="e4f5a6b7-c8d9-0123-def0-888888888888">
+          <enabled>1</enabled>
+          <type>forward</type>
+          <domain/>
+          <server>8.8.8.8</server>
+          <port>853</port>
+          <verify>dns.google</verify>
+          <forward_tcp_upstream>1</forward_tcp_upstream>
+          <forward_first>1</forward_first>
+          <description>Google Unfiltered Primary DoT</description>
+        </dot>
+      </dots>
+      <hosts>
+{% for override in unbound_host_overrides | default([]) %}
+        <host uuid="{{ override.uuid | default('generated-host-override-' ~ loop.index) }}">
+          <enabled>1</enabled>
+          <hostname>{{ override.hostname | default('*') | e }}</hostname>
+          <domain>{{ override.domain | e }}</domain>
+          <rr>A</rr>
+          <mxprio/>
+          <mx/>
+          <ttl/>
+          <server>{{ override.server | e }}</server>
+          <txtdata/>
+          <addptr>1</addptr>
+          <description/>
+        </host>
+{% endfor %}
+      </hosts>
+      <aliases/>
+    </unboundplus>
