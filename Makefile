@@ -112,7 +112,7 @@ render-opnsense: ## Renderiza o template do OPNsense e compara com o baseline co
 	command -v xmllint >/dev/null || { echo "✗ xmllint ausente (pacote libxml2-utils)"; exit 1; }; \
 	python3 -c 'import jinja2, yaml' 2>/dev/null || { echo "✗ Jinja2/PyYAML ausentes"; exit 1; }; \
 	tpl=$(ANSIBLE_DIR)/templates/network/opnsense/config.xml.j2; \
-	[ -f "$$tpl" ] || tpl=$(ANSIBLE_DIR)/templates/network/opnsense_config.xml.j2; \
+	[ -f "$$tpl" ] || { echo "✗ template ausente: $$tpl"; exit 1; }; \
 	tmp="$$(mktemp -d)"; trap 'rm -rf "$$tmp"' EXIT; \
 	python3 $(ANSIBLE_DIR)/tests/render_opnsense.py \
 	  --template "$$tpl" \
