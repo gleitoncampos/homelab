@@ -1,0 +1,33 @@
+{# DHCPv4 da LAN nativa. dhcp_static_maps é a lista de reservas — mesmo
+   padrão de _aliases.xml.j2/_filter.xml.j2 aplicado aqui já era o do
+   template original (staticmap não tem campo variável entre registros, mas
+   a lista em si é o dado, não o número de reservas). #}
+  <dhcpd>
+    <lan>
+      <enable>1</enable>
+      <gateway>{{ lan_ipaddr }}</gateway>
+      <ddnsdomainalgorithm>hmac-md5</ddnsdomainalgorithm>
+      <numberoptions>
+        <item/>
+      </numberoptions>
+      <range>
+        <from>{{ lan_dhcp_range_from }}</from>
+        <to>{{ lan_dhcp_range_to }}</to>
+      </range>
+      <winsserver/>
+      <dnsserver/>
+      <ntpserver/>
+{% for map in dhcp_static_maps | default([]) %}
+      <staticmap>
+        <mac>{{ map.mac | e }}</mac>
+        <cid>{{ map.hostname | e }}</cid>
+        <ipaddr>{{ map.ipaddr | e }}</ipaddr>
+        <hostname>{{ map.hostname | e }}</hostname>
+        <descr>{{ map.descr | default('') | e }}</descr>
+        <winsserver/>
+        <dnsserver/>
+        <ntpserver/>
+      </staticmap>
+{% endfor %}
+    </lan>
+  </dhcpd>

@@ -1,0 +1,11 @@
+{# Certificado TLS da Web GUI. refid é referenciado por system/webgui/ssl-certref
+   em _system.xml.j2 — os dois têm que concordar, por isso o valor fica
+   literal nos dois lugares em vez de introduzir uma variável só para isso. #}
+  <cert uuid="4bf82361-7a09-4069-9249-6924119d02ea">
+    <refid>6761ecc57b05b</refid>
+    <descr>Web GUI TLS certificate</descr>
+    <caref/>
+    <crt>{{ opnsense_gui_cert_crt_b64 }}</crt>
+    <csr/>
+    <prv>{{ opnsense_gui_cert_key_b64 }}</prv>
+  </cert>

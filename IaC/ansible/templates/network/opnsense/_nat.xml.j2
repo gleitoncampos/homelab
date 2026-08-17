@@ -1,0 +1,61 @@
+{#
+  NAT: modo outbound automático e o redirecionamento forçado de DNS. Sem
+  este port forward, a regra de filtro "LAN > Redireciona DNS para o FW" e o
+  alias DNS_REDIRECT_BYPASS existem sem efeito: é o NAT que de fato captura a
+  porta 53.
+
+  A lógica é a dupla negação da regra original: captura tudo que NÃO vem de
+  um IP na allowlist (`source.not = 1`) e que NÃO tem como destino o próprio
+  firewall (`destination.not = 1`) — senão a consulta legítima do Unbound
+  voltaria para ele mesmo em laço.
+
+  `opnsense_dns_redirect_enabled` existe porque a regra está DESABILITADA na
+  caixa de hoje. Deixá-la ligada por padrão é mudança de comportamento
+  deliberada (o desenho-alvo pressupõe DNS forçado); ponha `false` no vault
+  para reproduzir o estado atual.
+#}
+  <nat>
+    <outbound>
+      <mode>automatic</mode>
+    </outbound>
+    <rule uuid="{{ opnsense_dns_redirect_uuid | default('a1000000-0000-4000-8000-00000000d015') }}">
+      <sequence>100</sequence>
+      <disabled>{{ 0 if opnsense_dns_redirect_enabled | default(true) else 1 }}</disabled>
+      <nordr>0</nordr>
+      <interface>lan</interface>
+      <ipprotocol>inet</ipprotocol>
+      <protocol>tcp/udp</protocol>
+      <source>
+        <network>DNS_REDIRECT_BYPASS</network>
+        <port/>
+        <not>1</not>
+      </source>
+      <destination>
+        <network>(self)</network>
+        <port>53</port>
+        <not>1</not>
+      </destination>
+      <target>{{ opnsense_dns_redirect_target | default(lan_ipaddr) | e }}</target>
+      <local-port>53</local-port>
+      <poolopts/>
+      <log>1</log>
+      <category/>
+      <descr>LAN &gt; Redireciona DNS para o FW</descr>
+      <tag/>
+      <tagged/>
+      <nosync>0</nosync>
+      <natreflection/>
+      <pass/>
+      <associated-rule-id/>
+      <created>
+        <username>ansible</username>
+        <time>0</time>
+        <description>Provisionado via Ansible</description>
+      </created>
+      <updated>
+        <username>ansible</username>
+        <time>0</time>
+        <description>Provisionado via Ansible</description>
+      </updated>
+    </rule>
+  </nat>

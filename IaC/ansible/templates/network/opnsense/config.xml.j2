@@ -3,131 +3,9 @@
   <theme>rebellion</theme>
 {% include '_sysctl.xml.j2' %}
 {% include '_system.xml.j2' %}
-  <interfaces>
-    <lan>
-      <if>vtnet0</if>
-      <descr/>
-      <enable>1</enable>
-      <spoofmac/>
-      <ipaddr>{{ lan_ipaddr }}</ipaddr>
-      <subnet>24</subnet>
-      <ipaddrv6>track6</ipaddrv6>
-      <track6-interface>wan</track6-interface>
-      <track6-prefix-id>0</track6-prefix-id>
-    </lan>
-    <lo0>
-      <internal_dynamic>1</internal_dynamic>
-      <descr>Loopback</descr>
-      <enable>1</enable>
-      <if>lo0</if>
-      <ipaddr>127.0.0.1</ipaddr>
-      <ipaddrv6>::1</ipaddrv6>
-      <subnet>8</subnet>
-      <subnetv6>128</subnetv6>
-      <type>none</type>
-      <virtual>1</virtual>
-    </lo0>
-    <wan>
-      <if>pppoe0</if>
-      <descr>WAN</descr>
-      <enable>1</enable>
-      <spoofmac/>
-      <blockpriv>1</blockpriv>
-      <blockbogons>1</blockbogons>
-      <ipaddr>pppoe</ipaddr>
-      <ipaddrv6>pppoev6</ipaddrv6>
-      <mss>1420</mss>
-    </wan>
-  </interfaces>
-  <dhcpd>
-    <lan>
-      <enable>1</enable>
-      <gateway>{{ lan_ipaddr }}</gateway>
-      <ddnsdomainalgorithm>hmac-md5</ddnsdomainalgorithm>
-      <numberoptions>
-        <item/>
-      </numberoptions>
-      <range>
-        <from>{{ lan_dhcp_range_from }}</from>
-        <to>{{ lan_dhcp_range_to }}</to>
-      </range>
-      <winsserver/>
-      <dnsserver/>
-      <ntpserver/>
-{% for map in dhcp_static_maps | default([]) %}
-      <staticmap>
-        <mac>{{ map.mac | e }}</mac>
-        <cid>{{ map.hostname | e }}</cid>
-        <ipaddr>{{ map.ipaddr | e }}</ipaddr>
-        <hostname>{{ map.hostname | e }}</hostname>
-        <descr>{{ map.descr | default('') | e }}</descr>
-        <winsserver/>
-        <dnsserver/>
-        <ntpserver/>
-      </staticmap>
-{% endfor %}
-    </lan>
-  </dhcpd>
-  <nat>
-    <outbound>
-      <mode>automatic</mode>
-    </outbound>
-    {#
-      Redirecionamento forçado de DNS. Sem este port forward, a regra de filtro
-      "LAN > Redireciona DNS para o FW" e o alias DNS_REDIRECT_BYPASS existem
-      sem efeito: é o NAT que de fato captura a porta 53.
-
-      A lógica é a dupla negação da regra original: captura tudo que NÃO vem de
-      um IP na allowlist (`source.not = 1`) e que NÃO tem como destino o próprio
-      firewall (`destination.not = 1`) — senão a consulta legítima do Unbound
-      voltaria para ele mesmo em laço.
-
-      `opnsense_dns_redirect_enabled` existe porque a regra está DESABILITADA na
-      caixa de hoje. Deixá-la ligada por padrão é mudança de comportamento
-      deliberada (o desenho-alvo pressupõe DNS forçado); ponha `false` no vault
-      para reproduzir o estado atual.
-    #}
-    <rule uuid="{{ opnsense_dns_redirect_uuid | default('a1000000-0000-4000-8000-00000000d015') }}">
-      <sequence>100</sequence>
-      <disabled>{{ 0 if opnsense_dns_redirect_enabled | default(true) else 1 }}</disabled>
-      <nordr>0</nordr>
-      <interface>lan</interface>
-      <ipprotocol>inet</ipprotocol>
-      <protocol>tcp/udp</protocol>
-      <source>
-        <network>DNS_REDIRECT_BYPASS</network>
-        <port/>
-        <not>1</not>
-      </source>
-      <destination>
-        <network>(self)</network>
-        <port>53</port>
-        <not>1</not>
-      </destination>
-      <target>{{ opnsense_dns_redirect_target | default(lan_ipaddr) | e }}</target>
-      <local-port>53</local-port>
-      <poolopts/>
-      <log>1</log>
-      <category/>
-      <descr>LAN &gt; Redireciona DNS para o FW</descr>
-      <tag/>
-      <tagged/>
-      <nosync>0</nosync>
-      <natreflection/>
-      <pass/>
-      <associated-rule-id/>
-      <created>
-        <username>ansible</username>
-        <time>0</time>
-        <description>Provisionado via Ansible</description>
-      </created>
-      <updated>
-        <username>ansible</username>
-        <time>0</time>
-        <description>Provisionado via Ansible</description>
-      </updated>
-    </rule>
-  </nat>
+{% include '_interfaces.xml.j2' %}
+{% include '_dhcp.xml.j2' %}
+{% include '_nat.xml.j2' %}
   <filter/>
   <rrd>
     <enable/>
@@ -1173,14 +1051,7 @@
       <enable>-1</enable>
     </lan>
   </dhcpdv6>
-  <cert uuid="4bf82361-7a09-4069-9249-6924119d02ea">
-    <refid>6761ecc57b05b</refid>
-    <descr>Web GUI TLS certificate</descr>
-    <caref/>
-    <crt>{{ opnsense_gui_cert_crt_b64 }}</crt>
-    <csr/>
-    <prv>{{ opnsense_gui_cert_key_b64 }}</prv>
-  </cert>
+{% include '_certs.xml.j2' %}
   <syslog/>
   <dnsmasq version="1.0.9" persisted_at="1780800097.22" description="Dnsmasq DNS and DHCP">
     <enable/>

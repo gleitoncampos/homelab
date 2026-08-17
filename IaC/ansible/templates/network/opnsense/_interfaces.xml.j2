@@ -1,0 +1,38 @@
+{# Interfaces físicas: lan, loopback e wan (PPPoE). lo0 e o corpo de wan são
+   estáticos em qualquer instalação; só o IP da LAN é topologia. #}
+  <interfaces>
+    <lan>
+      <if>vtnet0</if>
+      <descr/>
+      <enable>1</enable>
+      <spoofmac/>
+      <ipaddr>{{ lan_ipaddr }}</ipaddr>
+      <subnet>24</subnet>
+      <ipaddrv6>track6</ipaddrv6>
+      <track6-interface>wan</track6-interface>
+      <track6-prefix-id>0</track6-prefix-id>
+    </lan>
+    <lo0>
+      <internal_dynamic>1</internal_dynamic>
+      <descr>Loopback</descr>
+      <enable>1</enable>
+      <if>lo0</if>
+      <ipaddr>127.0.0.1</ipaddr>
+      <ipaddrv6>::1</ipaddrv6>
+      <subnet>8</subnet>
+      <subnetv6>128</subnetv6>
+      <type>none</type>
+      <virtual>1</virtual>
+    </lo0>
+    <wan>
+      <if>pppoe0</if>
+      <descr>WAN</descr>
+      <enable>1</enable>
+      <spoofmac/>
+      <blockpriv>1</blockpriv>
+      <blockbogons>1</blockbogons>
+      <ipaddr>pppoe</ipaddr>
+      <ipaddrv6>pppoev6</ipaddrv6>
+      <mss>1420</mss>
+    </wan>
+  </interfaces>
