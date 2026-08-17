@@ -1,10 +1,14 @@
-{# Tunables de kernel. Lista em _common/opnsense.yml (política, não topologia). #}
+{# Tunables de kernel. Lista em _common/opnsense.yml (política, não topologia).
+   O laço interno itera as chaves do próprio registro, não uma lista fixa —
+   mesma convenção de _aliases.xml.j2 (ver o comentário de lá): mesmo que hoje
+   todo tunable tenha a mesma forma (tunable/value/descr), uma lista fixa
+   descarta em silêncio qualquer campo que apareça amanhã e não conste nela. #}
   <sysctl version="1.0.2" description="System Tunables">
 {% for t in opnsense_tunables %}
     <item uuid="{{ t.uuid }}">
-      <tunable>{{ t.tunable }}</tunable>
-      <value>{{ t.value }}</value>
-      <descr>{{ t.descr }}</descr>
+{% for campo in t if campo != 'uuid' %}
+      <{{ campo }}>{{ t[campo] }}</{{ campo }}>
+{% endfor %}
     </item>
 {% endfor %}
   </sysctl>
