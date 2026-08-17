@@ -50,6 +50,43 @@
   loop_control:
     label: "{{ item }}"
 
+# Motivo desta task: a anterior só recusa AUSENTE ou VAZIO. Um placeholder como
+# `TROCAR-psk-main` está definido e não é vazio — passava aprovado, e o
+# `02-openwrt-setup.yml` reescrevia as senhas de Wi-Fi da casa para a string
+# literal do exemplo. A forma é detectada, não uma lista de nomes de variável:
+# prefixo `TROCAR-` (convenção deste repositório, ver vault.yml.example),
+# `SUBSTITUIR` (mesmo arquivo, usado onde não há um prefixo natural),
+# `<CHANGEME>`/`<CHANGE-ME>`/`<CHANGE_ME>` (convenção comum fora deste repo,
+# para quando alguém colar um vault de outro projeto), valor inteiro embrulhado em
+# `<...>` ou `${...}` (placeholder de template/env não expandido) e string
+# vazia disfarçada de espaços.
+#
+# SEM no_log aqui: o NOME da variável (`item`) precisa aparecer no erro para o
+# operador saber qual segredo trocar. O fail_msg abaixo nunca ecoa
+# `vars[item]` — só compara o valor contra o padrão e nomeia a variável.
+# `quiet: true` (como nas tasks vizinhas) evita que o Ansible reimprima o
+# resultado do assert; a condição em si nunca contém o valor literal do
+# segredo, então não há necessidade de `no_log` para não vazar nada.
+- name: Recusar segredo com valor de placeholder ainda não trocado
+  ansible.builtin.assert:
+    that:
+      - not (vars[item] is search(vault_placeholder_pattern, ignorecase=true))
+    fail_msg: >-
+      Segredo '{{ item }}' ainda está com valor de placeholder (prefixo
+      TROCAR-/SUBSTITUIR, <CHANGEME>, valor embrulhado em <...> ou ${...}, ou
+      string em branco) — não é o segredo real.
+      Edite o Vault do ambiente em uso e defina o valor real antes de aplicar:
+        cd ansible/
+        ansible-vault edit inventories/prod/group_vars/all/vault.yml   # ou dev/
+      Nunca aplique um playbook com placeholder no lugar de segredo real.
+    success_msg: "Segredo '{{ item }}' não tem forma de placeholder."
+    quiet: true
+  vars:
+    vault_placeholder_pattern: '^\s*$|TROCAR|SUBSTITUIR|CHANGE[-_]?ME|^<.*>$|^\$\{.*\}$'
+  loop: "{{ required_secrets }}"
+  loop_control:
+    label: "{{ item }}"
+
 - name: Exigir comprimento mínimo da senha de admin do Portainer
   ansible.builtin.assert:
     that:
