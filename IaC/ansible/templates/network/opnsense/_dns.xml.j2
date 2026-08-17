@@ -1,6 +1,15 @@
 {# Unbound (DNS recursivo + DNSBL + DoT upstream + host overrides).
-   unbound_host_overrides é a lista variável; blocklist e dots (Cloudflare,
-   Quad9, Google) são política fixa, igual em qualquer instalação.
+   unbound_host_overrides e as listas de domínio do DNSBL (allow/blocklists)
+   são dado real; os dots (Cloudflare, Quad9, Google) e o conjunto de
+   categorias do blocklist (type=) são política fixa, igual em qualquer
+   instalação.
+
+   opnsense_dnsbl_allowlists/opnsense_dnsbl_blocklists: nome de domínio não
+   aciona nenhum padrão de segredo do gate (é dado público por definição),
+   mas ainda assim identifica o operador — que site de compra/banco ele usa,
+   que marca de dispositivo IoT está na LAN. Por isso são variável, com
+   default vazio na camada versionada (group_vars/network/10-defaults.yml) e
+   o valor real só no 99-local.yml gitignorado ao lado.
 
    host: enabled/rr/mxprio/mx/ttl/txtdata/addptr/description são sempre os
    mesmos em todo override, não campo do registro — hostname/domain/server
@@ -86,8 +95,8 @@
           <enabled>1</enabled>
           <type>atf,ag,sb,hgz003,oisd0,oisd1,hgz009,hgz010,hgz014,hgz016</type>
           <lists/>
-          <allowlists>shop.example,ads.example,bank.example</allowlists>
-          <blocklists>iot-vendor.example,mask.privaterelay.example,mask-h2.privaterelay.example,mask-api.privaterelay.example</blocklists>
+          <allowlists>{{ opnsense_dnsbl_allowlists | default('') | e }}</allowlists>
+          <blocklists>{{ opnsense_dnsbl_blocklists | default('') | e }}</blocklists>
           <wildcards/>
           <source_nets/>
           <address/>

@@ -2183,8 +2183,8 @@ https://raw.githubusercontent.com/hagezi/dns-blocklists/main/ips/doh.txt</conten
           <enabled>1</enabled>
           <type>atf,ag,sb,hgz003,oisd0,oisd1,hgz009,hgz010,hgz014,hgz016</type>
           <lists/>
-          <allowlists>shop.example,ads.example,bank.example</allowlists>
-          <blocklists>iot-vendor.example,mask.privaterelay.example,mask-h2.privaterelay.example,mask-api.privaterelay.example</blocklists>
+          <allowlists>shop.example,bank.example</allowlists>
+          <blocklists>iot-vendor.example,privaterelay.example</blocklists>
           <wildcards/>
           <source_nets/>
           <address/>

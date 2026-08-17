@@ -44,6 +44,14 @@ lan_dhcp_range_from: "192.0.2.170"
 lan_dhcp_range_to: "192.0.2.254"
 upnp_allowed_source: "198.51.100.0/24"
 
+# Listas de domínio do DNSBL (_dns.xml.j2) — sobrescrevem o default vazio de
+# group_vars/network/10-defaults.yml para exercitar o caminho não-vazio do
+# template, mesmo padrão de opnsense_gateway_monitor_ip abaixo. Domínio de
+# documentação (RFC 2606, sufixo .example), nunca o site ou dispositivo real
+# de ninguém.
+opnsense_dnsbl_allowlists: "shop.example,bank.example"
+opnsense_dnsbl_blocklists: "iot-vendor.example,privaterelay.example"
+
 # Constantes de PROTOCOLO (Suricata HOME_NET / lista de privatização do
 # Unbound): em _common/opnsense.yml elas guardam o RFC1918 completo — o
 # default de qualquer instalação OPNsense, não a topologia deste lab. Aqui o

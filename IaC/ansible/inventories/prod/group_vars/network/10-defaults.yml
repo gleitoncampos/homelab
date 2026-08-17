@@ -74,6 +74,15 @@ lan_network_cidr: "192.0.2.0/24"
 # template) — a VLAN 30 "MAIN" abaixo, de uso diário.
 upnp_allowed_source: "198.18.30.0/24"
 
+# Listas de domínio do DNSBL do Unbound (_dns.xml.j2). Vazias aqui de
+# propósito: nome de domínio não aciona nenhum padrão de segredo do gate — é
+# dado público por definição — mas ainda assim identifica o operador (que
+# site de compra ou banco ele libera, qual marca de dispositivo IoT está na
+# LAN e que ele "telefona pra casa"). A lista real vive só em `99-local.yml`,
+# gitignorado.
+opnsense_dnsbl_allowlists: ""
+opnsense_dnsbl_blocklists: ""
+
 # ⚠️ `vlans` é LISTA, e YAML não funde lista entre arquivos: o `99-local.yml`
 # redeclara a lista INTEIRA, não um item. Ao acrescentar uma VLAN aqui,
 # acrescente no arquivo local também, ou ela desaparece na máquina que tem os

@@ -129,7 +129,7 @@ consumindo dado de `inventories/_common/opnsense.yml` ou de `group_vars/network/
 | `_aliases.xml.j2` | aliases de firewall | `opnsense_aliases` |
 | `_filter.xml.j2` | regras de filtro | `opnsense_rules` |
 | `_plugins.xml.j2` | lista única de plugins — incluído em 5 pontos do esqueleto, um por seção do XML onde o OPNsense declara plugin | `opnsense_plugins` |
-| `_dns.xml.j2` | Unbound, DNSBL, DoT, host overrides | `opnsense_unbound_privateaddress`, `opnsense_ids_homenet` |
+| `_dns.xml.j2` | Unbound, DNSBL, DoT, host overrides | `opnsense_unbound_privateaddress`, `unbound_host_overrides`, `opnsense_dnsbl_allowlists`, `opnsense_dnsbl_blocklists` |
 | `_certs.xml.j2` | certificado da WebGUI | `opnsense_gui_cert_crt_b64` |
 
 Nenhum partial declara endereço de rede, alias ou usuário como literal dentro do `.j2` — é a
