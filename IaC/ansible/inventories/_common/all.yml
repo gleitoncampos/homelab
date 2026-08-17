@@ -129,8 +129,8 @@ fqdn_ittools: "tools.{{ homelab_domain }}"
 # acesso interno a todos os serviços atrás do Traefik.
 #
 # Precisa estar aqui, e não só no vault, porque o `<hosts>` do Unbound é
-# reescrito inteiro pelo opnsense_config.xml.j2: uma lista vazia não "mantém o
-# que já existe", ela APAGA. A produção tem exatamente este curinga, e perdê-lo
+# reescrito inteiro por templates/network/opnsense/_dns.xml.j2: uma lista vazia
+# não "mantém o que já existe", ela APAGA. A produção tem exatamente este curinga, e perdê-lo
 # derruba o acesso interno a todos os serviços de uma vez.
 #
 # Para acrescentar overrides pontuais sem perder este, defina

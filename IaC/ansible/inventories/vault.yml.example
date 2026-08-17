@@ -99,7 +99,7 @@ wifi_media_password: "TROCAR-psk-media"
 wifi_guest_ssid: "Homelab-Guest"
 wifi_guest_password: "TROCAR-psk-guest"
 
-# --- OPNsense (usado por templates/network/opnsense_config.xml.j2) ----------
+# --- OPNsense (usado pelos partials de templates/network/opnsense/) --------
 # Só obrigatório ao rodar playbooks/network/01-opnsense-setup.yml.
 #
 # ⚠️ ATENÇÃO AO FORMATO. Este playbook SUBSTITUI o /conf/config.xml inteiro e
@@ -144,13 +144,13 @@ opnsense_gui_cert_key_b64: "TROCAR-base64-da-chave-privada-pem"
 
 dhcp_static_maps: []
 # Reservas DHCP estáticas do OPNsense: MAC + hostname + IP são dado pessoal e
-# mapa da rede. Lista de dicts consumida por opnsense_config.xml.j2, cada item
-# com as chaves mac, ipaddr, hostname, descr.
+# mapa da rede. Lista de dicts consumida por templates/network/opnsense/_dhcp.xml.j2,
+# cada item com as chaves mac, ipaddr, hostname, descr.
 
 dns_redirect_bypass_ips: []
 # IPs que ficam de fora do redirecionamento forçado de DNS (alias
-# DNS_REDIRECT_BYPASS, consumida por opnsense_config.xml.j2). Lista simples de
-# strings de IP, uma por linha no config.xml renderizado. Mapa de topologia
+# DNS_REDIRECT_BYPASS, consumida por templates/network/opnsense/_aliases.xml.j2).
+# Lista simples de strings de IP, uma por linha no config.xml renderizado. Mapa de topologia
 # interna — mesmo motivo do dhcp_static_maps acima.
 
 # O port forward que de fato captura a porta 53. Sem ele, a regra de filtro e o
@@ -159,14 +159,14 @@ dns_redirect_bypass_ips: []
 # o DNS forçado que o desenho-alvo pressupõe.
 opnsense_dns_redirect_enabled: true
 # IP para onde a porta 53 é redirecionada — o próprio firewall na LAN.
-opnsense_dns_redirect_target: "198.51.100.1"
+opnsense_dns_redirect_target: "TROCAR-ip-do-firewall-na-lan"
 
 unbound_host_overrides_extra: []
 # Overrides de DNS interno ADICIONAIS. O curinga `*.<homelab_domain>` apontando
 # para o manager do Swarm já é gerado automaticamente em
 # inventories/_common/all.yml — não repita aqui.
 #
-# ⚠️ O <hosts> do Unbound é reescrito INTEIRO pelo opnsense_config.xml.j2: o que
+# ⚠️ O <hosts> do Unbound é reescrito INTEIRO por templates/network/opnsense/_dns.xml.j2: o que
 # não estiver aqui (nem no curinga derivado) é APAGADO no primeiro apply, e com
 # ele o acesso interno aos serviços correspondentes. Cada item é um dict com as
 # chaves hostname, domain, server.
