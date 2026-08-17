@@ -22,7 +22,7 @@ ansible/
 │   │   ├── hosts.ini.example  # Modelo rastreado, base para criar o hosts.ini real
 │   │   └── group_vars/
 │   │       ├── all/
-│   │       │   ├── 00-common.yml  # symlink -> ../../../_common/all.yml
+│   │       │   ├── 00-common.yml  # cópia de ../../../_common/all.yml (make check-common-copies garante identidade)
 │   │       │   ├── main.yml       # Camada 2: só o que difere de dev (homelab_env, branch, ACME)
 │   │       │   └── vault.yml      # Camada 3: segredos de PROD, cifrado (gitignorado, você cria)
 │   │       └── network/           # Variáveis de rede (OPNsense/OpenWrt) — duas camadas
@@ -33,7 +33,7 @@ ansible/
 │       ├── hosts.ini.example
 │       └── group_vars/
 │           ├── all/
-│           │   ├── 00-common.yml  # symlink -> ../../../_common/all.yml
+│           │   ├── 00-common.yml  # cópia de ../../../_common/all.yml, idem prod
 │           │   ├── main.yml       # homelab_env: dev, branch develop, ACME staging
 │           │   └── vault.yml      # segredos de DEV — valores DIFERENTES dos de prod
 │           └── network/           # dev não tem OPNsense/OpenWrt próprio: só a VLAN do CT 210
@@ -95,7 +95,7 @@ Dentro de `group_vars/all/`, o Ansible faz merge de **todos** os arquivos, em or
 o que carrega depois **sobrescreve** o que carrega antes, chave por chave:
 
 ```
-00-common.yml  (symlink p/ inventories/_common/all.yml)
+00-common.yml  (cópia de inventories/_common/all.yml — make check-common-copies garante identidade)
       │  comum aos dois ambientes: timezone, pacotes, portas, fqdn_* derivados
       ▼
 main.yml       (por ambiente: prod/ ou dev/)

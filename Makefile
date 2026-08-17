@@ -23,8 +23,8 @@ PLAYBOOKS   := $(wildcard $(ANSIBLE_DIR)/playbooks/*.yml $(ANSIBLE_DIR)/playbook
 
 # Um alvo por ferramenta, para que a saída diga qual falhou.
 .PHONY: help hooks check lint lint-yaml lint-ansible lint-shell lint-tf \
-        validate-compose validate-ansible validate-patterns secrets links \
-        snapshot discover clean render-opnsense
+        validate-compose validate-ansible validate-patterns check-common-copies \
+        secrets links snapshot discover clean render-opnsense
 
 help: ## Lista os alvos
 	@echo "Alvos disponíveis:"
@@ -50,7 +50,7 @@ bootstrap: ## Gera vault, inventário, tfvars e chave SSH a partir de uma fonte 
 test-bootstrap: ## Testa os renderizadores do bootstrap contra os consumidores reais
 	@python3 IaC/bootstrap/test_render.py
 
-check: lint validate-compose validate-ansible validate-patterns links test-bootstrap render-opnsense ## Tudo que a CI roda
+check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense ## Tudo que a CI roda
 	@echo
 	@echo "✓ check completo"
 
@@ -103,6 +103,21 @@ validate-ansible: ## ansible-playbook --syntax-check
 
 validate-patterns: ## Valida os arquivos de padrões (separadores, isenção não vira catch-all, regex casa amostra conhecida-ruim)
 	@bash .githooks/validate-patterns.sh
+
+# prod/ e dev/group_vars/all/00-common.yml são CÓPIAS de _common/all.yml, não
+# symlinks (o git não preserva symlink de forma confiável entre clones — ver
+# o cabeçalho do próprio all.yml). Cópia manual diverge sem avisar; já
+# divergiu uma vez nesta base. Nada mais aqui compara as três, então falhar
+# rápido é este alvo.
+check-common-copies: ## Falha se as cópias de 00-common.yml divergirem da fonte em _common/all.yml
+	@src=$(ANSIBLE_DIR)/inventories/_common/all.yml; fail=0; \
+	for env in prod dev; do \
+	  dst=$(ANSIBLE_DIR)/inventories/$$env/group_vars/all/00-common.yml; \
+	  if ! diff -u "$$src" "$$dst"; then \
+	    echo "✗ $$dst diverge de $$src (ver diff acima)"; fail=1; \
+	  fi; \
+	done; \
+	[ "$$fail" -eq 0 ] && echo "✓ 00-common.yml idêntico em _common/, prod/ e dev/" || exit 1
 
 # O baseline (tests/baseline/opnsense-fase0.xml) fica congelado a partir da
 # fase 0 do plano OPNsense Plano A — ele MESMO é regenerado uma vez, na tarefa
