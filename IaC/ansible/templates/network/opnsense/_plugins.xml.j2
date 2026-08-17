@@ -26,7 +26,7 @@
       <jobs>
         <job uuid="29a4a8cb-f14d-4faa-b8f7-6d7ddb0a758c">
           <origin>IDS</origin>
-          <enabled>0</enabled>
+          <enabled>1</enabled>
           <minutes>0</minutes>
           <hours>0</hours>
           <days>*</days>
@@ -308,7 +308,7 @@
 {% elif _plugins_section == 'core_services' %}
     <monit version="1.0.14" persisted_at="1758076273.78">
       <general>
-        <enabled>0</enabled>
+        <enabled>1</enabled>
         <interval>120</interval>
         <startdelay>120</startdelay>
         <mailserver>127.0.0.1</mailserver>
@@ -500,18 +500,18 @@
         <gateway/>
         <defaultgw>1</defaultgw>
         <fargw>0</fargw>
-        <monitor_disable>1</monitor_disable>
+        <monitor_disable>0</monitor_disable>
         <monitor_noroute>0</monitor_noroute>
         <monitor_killstates>0</monitor_killstates>
         <monitor_killstates_priority>0</monitor_killstates_priority>
-        <monitor/>
+        <monitor>{{ opnsense_gateway_monitor_ip | default('9.9.9.9') }}</monitor>
         <force_down>0</force_down>
         <priority>255</priority>
         <weight>1</weight>
-        <latencylow/>
-        <latencyhigh/>
-        <losslow/>
-        <losshigh/>
+        <latencylow>200</latencylow>
+        <latencyhigh>1000</latencyhigh>
+        <losslow>10</losslow>
+        <losshigh>20</losshigh>
         <interval/>
         <time_period/>
         <loss_interval/>

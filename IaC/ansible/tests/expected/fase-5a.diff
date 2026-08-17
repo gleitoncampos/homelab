@@ -1,0 +1,43 @@
+@@ -1873,7 +1908,7 @@
+     </Kea>
+     <monit persisted_at="1758076273.78" version="1.0.14">
+       <general>
+-        <enabled>0</enabled>
++        <enabled>1</enabled>
+         <interval>120</interval>
+         <startdelay>120</startdelay>
+         <mailserver>127.0.0.1</mailserver>
+@@ -2065,18 +2100,18 @@
+         <gateway/>
+         <defaultgw>1</defaultgw>
+         <fargw>0</fargw>
+-        <monitor_disable>1</monitor_disable>
++        <monitor_disable>0</monitor_disable>
+         <monitor_noroute>0</monitor_noroute>
+         <monitor_killstates>0</monitor_killstates>
+         <monitor_killstates_priority>0</monitor_killstates_priority>
+-        <monitor/>
++        <monitor>192.0.2.9</monitor>
+         <force_down>0</force_down>
+         <priority>255</priority>
+         <weight>1</weight>
+-        <latencylow/>
+-        <latencyhigh/>
+-        <losslow/>
+-        <losshigh/>
++        <latencylow>200</latencylow>
++        <latencyhigh>1000</latencyhigh>
++        <losslow>10</losslow>
++        <losshigh>20</losshigh>
+         <interval/>
+         <time_period/>
+         <loss_interval/>
+@@ -2150,7 +2185,7 @@
+         <ratelimit_size>4m</ratelimit_size>
+         <extendedstatistics>1</extendedstatistics>
+         <logqueries>1</logqueries>
+-        <logreplies>1</logreplies>
++        <logreplies>0</logreplies>
+         <logtagqueryreply>1</logtagqueryreply>
+         <logservfail>1</logservfail>
+         <loglocalactions>0</loglocalactions>

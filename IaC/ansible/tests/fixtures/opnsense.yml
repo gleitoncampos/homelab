@@ -54,6 +54,11 @@ upnp_allowed_source: "198.51.100.0/24"
 opnsense_ids_homenet: "198.51.100.0/24,203.0.113.0/24"
 opnsense_unbound_privateaddress: "192.0.2.0/24,198.51.100.0/24,203.0.113.0/24"
 
+# D4: sobrescreve o default de _common/opnsense.yml (9.9.9.9) para exercitar o
+# caminho não-default do template, mesmo padrão de opnsense_webgui_althostname
+# acima. RFC 5737, não IP real.
+opnsense_gateway_monitor_ip: "192.0.2.9"
+
 vlans:
   - tag: 10
     name: "MGMT"

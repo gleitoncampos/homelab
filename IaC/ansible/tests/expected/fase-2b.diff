@@ -1,0 +1,9 @@
+@@ -643,7 +622,7 @@
+       <jobs>
+         <job uuid="29a4a8cb-f14d-4faa-b8f7-6d7ddb0a758c">
+           <origin>IDS</origin>
+-          <enabled>0</enabled>
++          <enabled>1</enabled>
+           <minutes>0</minutes>
+           <hours>0</hours>
+           <days>*</days>

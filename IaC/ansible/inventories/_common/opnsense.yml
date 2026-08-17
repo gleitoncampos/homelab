@@ -15,6 +15,12 @@
 # manter duas cópias que podem divergir sem ninguém notar.
 opnsense_ids_homenet: "192.168.0.0/16,10.0.0.0/8,172.16.0.0/12"
 opnsense_unbound_privateaddress: "0.0.0.0/8,10.0.0.0/8,100.64.0.0/10,169.254.0.0/16,172.16.0.0/12,192.0.2.0/24,192.168.0.0/16,198.18.0.0/15,198.51.100.0/24,203.0.113.0/24,233.252.0.0/24,::1/128,2001:db8::/32,fc00::/8,fd00::/8,fe80::/10"
+
+# D4: alvo padrão de monitoramento (dpinger) do gateway WAN_GW. 9.9.9.9 (Quad9)
+# é o mesmo default sugerido por qualquer instalação de OPNsense — não é
+# endereço deste lab. Antes o monitoramento vinha desabilitado
+# (monitor_disable=1); D4 liga e usa este IP como alvo de latência/perda.
+opnsense_gateway_monitor_ip: "9.9.9.9"
 opnsense_tunables:
   - uuid: cb052371-32d8-453e-b4be-a30b40a7955a
     tunable: vfs.read_max
