@@ -17,7 +17,3 @@ cabeçalho e tira as duas linhas do antigo primeiro.
 Gere um fragmento novo com `diff -u --label baseline --label novo baseline
 novo.xml` — sem os `--label`, o cabeçalho embute caminho de tmpdir e mtime,
 e o arquivo nunca mais bate.
-
-`fase-2a.diff` (fase sem efeito líquido no XML) foi removido nesta rodada:
-vazio, não contribuía nada à concatenação, e um arquivo de teste vazio numa
-pasta de testes lê como um teste que passa.

@@ -1,6 +1,9 @@
 # Restauração dos convidados do Swarm
 
-Procedimento de verificação do backup, e de recuperação real.
+Procedimento de verificação do backup, e de recuperação real. Quem cria o
+backup que este runbook restaura é
+[`IaC/ansible/playbooks/06-backup.yml`](../../IaC/ansible/playbooks/06-backup.yml),
+agendado no Proxmox — não faz parte de `site.yml`, roda à parte.
 
 ⚠️ **Este runbook precisa ser executado pelo menos uma vez antes de qualquer
 mudança em produção.** Backup nunca restaurado é uma suposição, não um
@@ -140,10 +143,17 @@ trabalho e sem os quais a automação não roda:
 |---|---|
 | `IaC/ansible/.ansible_vault_pass` | os vaults são irrecuperáveis |
 | `IaC/homelab.local.yml` | regenera inventário e tfvars — é o único que basta guardar |
-| `IaC/terraform/proxmox/terraform.tfstate` | o Terraform perde o rastro da infraestrutura |
 
-Guarde os três no mesmo cofre, e confira a cópia junto com a verificação
+Guarde os dois no mesmo cofre, e confira a cópia junto com a verificação
 trimestral acima.
+
+`IaC/terraform/proxmox/terraform.tfstate` — **ainda não existe.** Hoje nada
+está sob gestão do Terraform (só provisionamento manual); o arquivo passa a
+existir, e a entrar de fato neste conjunto de recuperação, assim que o
+procedimento de `terraform import` descrito no aviso crítico de
+[`IaC/terraform/proxmox/README.md`](../../IaC/terraform/proxmox/README.md) for
+executado. Até lá, perder a estação de trabalho não perde rastro nenhum de
+Terraform — porque não há rastro para perder.
 
 ## Limite conhecido
 

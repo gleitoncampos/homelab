@@ -6,24 +6,20 @@ Esta pasta centraliza todas as definições de serviços e infraestrutura contai
 
 ## 🚀 Fluxo de Inicialização do Cluster
 
-Para subir a infraestrutura do zero, siga a ordem de prioridade de inicialização:
-
 ### 1. Ingress & Gerenciamento Base
-1. **Rede Externa Swarm**: Certifique-se de que a rede overlay `traefik_public` exista no Docker Swarm:
-   ```bash
-   docker network create --driver=overlay traefik_public
-   ```
-2. **Traefik** (`docker/traefik/`): Atua como Reverse Proxy central, resolvendo certificados SSL/TLS (Cloudflare / Let's Encrypt) e roteando domínios.
-3. **Portainer** (`docker/portainer/`): Interface visual de gerenciamento das Stacks.
+1. **Traefik** (`docker/traefik/`): Reverse Proxy central, resolve certificados SSL/TLS (Cloudflare / Let's Encrypt) e roteia domínios.
+2. **Portainer** (`docker/portainer/`): Interface visual de gerenciamento das Stacks.
    - O `${FQDN}` desta stack é injetado pelo Ansible (`02-bootstrap-cluster.yml`) via `environment:` no `docker stack deploy` — não há `.env` para copiar; o valor vem de `fqdn_portainer`, derivado de `homelab_domain` no vault.
+
+A rede overlay `traefik_public` e o `docker swarm init` são feitos por `02-bootstrap-cluster.yml`, não à mão — ver o aviso no [`README.md`](../README.md) da raiz.
 
 ### 2. Monitoramento & Observabilidade
 - **Monitoring Stack** (`docker/monitoring/`): Grafana + Prometheus + Loki + Grafana Alloy para centralização de métricas e logs de containers e do host.
   - **Só o Grafana é publicado pelo Traefik** (rota `${FQDN_GRAFANA}`). **Prometheus, Loki e InfluxDB não têm mais label de roteamento** e ficam acessíveis apenas dentro da rede overlay interna `monitoring` — nenhum dos três tem autenticação própria, e o middleware `forwardAuth` de um futuro SSO não serve para eles: o portal de login redireciona para uma página HTML, o que quebra qualquer cliente de máquina (Grafana consultando o Prometheus como datasource, Alloy fazendo `remote_write` para o Loki). Expor os três exigiria autenticação nativa própria de cada um — nenhum tem hoje — então a decisão de arquitetura foi não publicá-los.
 - **Statping** (`docker/_catalog/statping/`): Dashboard de status de serviços e alertas de uptime.
 
-### 3. Demais Stacks de Aplicação
-Qualquer outro serviço nesta pasta é considerado um **serviço fixo e de produção** do cluster. O deploy é feito importando os arquivos `compose.yml` da pasta correspondente através da interface de Stacks do Portainer.
+### 3. Demais stacks
+As 24 restantes chegam ao cluster por um destes dois caminhos, nunca por edição manual do serviço já no ar: 12 são implantadas pelos playbooks `03` a `05` (11 direto de `_catalog/`); as outras 12 — Dozzle inclusive, apesar de já estar fora de `_catalog/` — não têm playbook e sobem pelo formulário de Stacks do Portainer. `docker/` vs. `docker/_catalog/` não é "implantado" vs. "não implantado": é "convenção de Swarm ok para promover" vs. "ainda precisa adequação" — ver [`docker/_catalog/README.md`](./_catalog/README.md).
 
 ---
 
@@ -35,7 +31,7 @@ Qualquer outro serviço nesta pasta é considerado um **serviço fixo e de produ
 
 ---
 
-## 📋 Lista Completa de Serviços Expostos
+## 📋 Lista Completa de Serviços
 
 | Categoria | Serviço | Caminho | Descrição |
 | :--- | :--- | :--- | :--- |
@@ -65,22 +61,3 @@ Qualquer outro serviço nesta pasta é considerado um **serviço fixo e de produ
 | | JDownloader | `docker/_catalog/jdownloader/` | Gerenciador de Downloads |
 | | KASM Workspaces | `docker/_catalog/kasm/` | Ambientes Desktop / Navegador isolados |
 | | ZoneMinder | `docker/_catalog/zoneminder/` | Sistema NVR / Monitoramento de Câmeras |
-
----
-
-## 📌 TO-DO / Próximos Passos
-- [ ] Implementar IaC para provisionamento automático do nó Swarm e Portainer.
-- [ ] Automação de backup dos volumes em `/srv/containers/` via Restic ou BorgBackup.
----
-
-## 📚 Referências de monitoramento
-
-Migradas de `docker/monitoring/README.md`.
-
-- [Loki: instalação por pacote](https://grafana.com/docs/loki/latest/setup/install/local/#install-using-apt-or-rpm-package-manager)
-- [Alloy: instalação em Linux](https://grafana.com/docs/alloy/latest/set-up/install/linux/) · [migração do Promtail](https://grafana.com/docs/alloy/latest/set-up/migrate/from-promtail/)
-- [Centralizar logs de aplicação no Grafana](https://dev.to/onticdani/how-to-centralize-and-visualize-your-app-logs-in-grafana-483c) · [logs de containers com Loki](https://dev.to/onticdani/centralize-and-visualize-docker-logs-in-grafana-with-loki-27c9)
-- [6 formas de melhorar dashboards de log](https://grafana.com/blog/2023/05/18/6-easy-ways-to-improve-your-log-dashboards-with-grafana-and-grafana-loki/)
-- [Monitorar OpenWrt com Prometheus](https://www.cloudrocket.at/posts/monitor-openwrt-nodes-with-prometheus/) · [com Grafana Cloud](https://grafana.com/blog/2021/02/09/how-i-monitor-my-openwrt-router-with-grafana-cloud-and-prometheus/)
-- [Rotação de log por tamanho no rsyslog](https://www.rsyslog.com/doc/tutorials/log_rotation_fix_size.html)
-- [Setup de referência de homelab](https://giuliomagnifico.blog/post/2024-07-08-home-setup-v5/#log-monitoring-in-grafana)
