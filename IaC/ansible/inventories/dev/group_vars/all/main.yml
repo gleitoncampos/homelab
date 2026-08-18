@@ -12,7 +12,11 @@
 homelab_env: "dev"
 
 # Branch que o Portainer clona nas stacks GitOps. Mudar isto muda o que roda.
-github_repo_branch: "refs/heads/develop"
+# Dev aponta para `development` (branch de trabalho corrente), nunca para
+# `main`: main é o que o Portainer de produção clona (ver
+# ../../../prod/group_vars/all/main.yml). Se os dois apontassem para a
+# mesma ref, um push de teste em dev chegaria a produção antes de revisão.
+github_repo_branch: "refs/heads/development"
 
 # CA do ACME usada pelo resolver `cloudflare` do Traefik.
 # Dev fica de propósito na CA de staging do Let's Encrypt, nunca na real:
