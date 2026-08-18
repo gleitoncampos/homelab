@@ -43,7 +43,7 @@ Use sempre:
 | em vez de | use |
 |---|---|
 | IP da sua rede | RFC 5737: `192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24` |
-| seu domínio | `exemplo.com`, `homelab.example` |
+| seu domínio | `example.com`, `homelab.example` |
 | hostname do seu servidor | o papel: `manager-01`, `nas`, `firewall` |
 | endereço MAC | faixa de documentação `00:00:5e:00:53:xx` |
 | senha, token, chave | `${VARIAVEL}`, resolvida pelo Portainer ou pelo vault |
@@ -63,10 +63,11 @@ Use sempre:
 ## Stack nova
 
 Vai em `docker/_catalog/<servico>/swarm/compose.yml`, não em `docker/`.
-`docker/` guarda o que sobe pelo formulário de Stacks do Portainer; o catálogo
-guarda a definição — parte dela já implantada direto de lá por um playbook do
-Ansible, parte ainda sem playbook e sem deploy algum. Promover uma stack é uma
-decisão de operação, não de contribuição — ver
+`docker/` vs. `docker/_catalog/` não é "implantado" vs. "não implantado": é
+"convenção de Swarm ok para promover" vs. "ainda precisa adequação" — a
+maioria dos dois lados já sobe por playbook do Ansible, parte ainda sem
+playbook e sem deploy algum. Promover uma stack é uma decisão de operação, não
+de contribuição — ver
 [`docker/_catalog/README.md`](./docker/_catalog/README.md).
 
 O checklist do compose (rede `traefik_public`, labels em `deploy.labels`, volume

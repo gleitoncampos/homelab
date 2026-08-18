@@ -21,11 +21,11 @@ do PR — são dois alvos, e o segundo é a varredura de vazamento na árvore. O
 ```bash
 # 1. Gate de qualidade (uma vez por clone — o git não versiona .git/hooks/)
 make hooks
-$EDITOR .githooks/secret-patterns.local.txt    # hostnames e domínios da SUA topologia
 
 # 2. Entradas do Terraform e do Ansible (fonte única; rodar de novo não repergunta)
 make bootstrap ARGS=--dry-run                  # mostra o que faria
-make bootstrap                                 # gera de verdade
+make bootstrap                                 # gera de verdade, inclusive secret-patterns.local.txt
+# $EDITOR .githooks/secret-patterns.local.txt  # opcional: acrescentar hostname/domínio extra
 
 # 3. Validar o repositório (os dois alvos que a CI roda, em passos separados)
 make check                                     # lint, sintaxe, links, renders
@@ -143,8 +143,9 @@ Stacks do Portainer. A tabela completa, com categoria, caminho e descrição, es
 ## ✅ Qualidade & Convenções
 
 O gate roda em três alcances. O `pre-commit` varre as linhas *adicionadas* contra vazamento de segredo, e checa
-links, `stack_compose_path`, sintaxe e linters. `make check` repete tudo isso na árvore inteira — lint, sintaxe
-de compose, `ansible-lint`, `yamllint`, `shellcheck`, `terraform fmt`, links e os renders. ⚠️ **`make secrets` é
+links, `stack_compose_path`, sintaxe e linters. `make check` repete tudo isso na árvore inteira, mais
+`validate-patterns`, `check-common-copies` e `test-bootstrap` — a lista completa, na ordem em que roda, está no
+[`CLAUDE.md`](./CLAUDE.md#-gate-de-qualidade). ⚠️ **`make secrets` é
 um alvo separado e não é dependência de `check`**: é ele, e só ele, que varre a árvore rastreada inteira contra
 vazamento de segredo. A CI roda os dois em passos distintos, e é por isso que o caminho do contribuidor, lá em
 cima, pede os dois antes do PR.

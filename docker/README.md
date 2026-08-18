@@ -14,12 +14,12 @@ Esta pasta centraliza todas as definições de serviços e infraestrutura contai
 A rede overlay `traefik_public` e o `docker swarm init` são feitos por `02-bootstrap-cluster.yml`, não à mão — ver o aviso no [`README.md`](../README.md) da raiz.
 
 ### 2. Monitoramento & Observabilidade
-- **Monitoring Stack** (`docker/monitoring/`): Grafana + Prometheus + Loki + Grafana Alloy para centralização de métricas e logs de containers e do host.
+- **Monitoring Stack** ([`docker/monitoring/`](./monitoring/README.md)): Grafana + Prometheus + Loki + Grafana Alloy para centralização de métricas e logs de containers e do host.
   - **Só o Grafana é publicado pelo Traefik** (rota `${FQDN_GRAFANA}`). **Prometheus, Loki e InfluxDB não têm mais label de roteamento** e ficam acessíveis apenas dentro da rede overlay interna `monitoring` — nenhum dos três tem autenticação própria, e o middleware `forwardAuth` de um futuro SSO não serve para eles: o portal de login redireciona para uma página HTML, o que quebra qualquer cliente de máquina (Grafana consultando o Prometheus como datasource, Alloy fazendo `remote_write` para o Loki). Expor os três exigiria autenticação nativa própria de cada um — nenhum tem hoje — então a decisão de arquitetura foi não publicá-los.
 - **Statping** (`docker/_catalog/statping/`): Dashboard de status de serviços e alertas de uptime.
 
 ### 3. Demais stacks
-As 24 restantes chegam ao cluster por um destes dois caminhos, nunca por edição manual do serviço já no ar: 12 são implantadas pelos playbooks `03` a `05` (11 de `_catalog/` mais a Monitoring Stack); as outras 12 — Dozzle inclusive, apesar de já estar fora de `_catalog/` — não têm playbook e sobem pelo formulário de Stacks do Portainer. `docker/` vs. `docker/_catalog/` não é "implantado" vs. "não implantado": é "convenção de Swarm ok para promover" vs. "ainda precisa adequação" — ver [`docker/_catalog/README.md`](./_catalog/README.md).
+Das 26 no total, tirando Traefik e Portainer já apresentadas na §1, sobram 24. Elas chegam ao cluster por um destes dois caminhos, nunca por edição manual do serviço já no ar: 12 são implantadas pelos playbooks `03` a `05` (11 de `_catalog/` mais a Monitoring Stack); as outras 12 — Dozzle inclusive, apesar de já estar fora de `_catalog/` — não têm playbook e sobem pelo formulário de Stacks do Portainer. `docker/` vs. `docker/_catalog/` não é "implantado" vs. "não implantado": é "convenção de Swarm ok para promover" vs. "ainda precisa adequação" — ver [`docker/_catalog/README.md`](./_catalog/README.md).
 
 ---
 

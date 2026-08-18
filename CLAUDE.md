@@ -206,9 +206,11 @@ mão, carregando junto senha, chave privada e a topologia inteira.
     └── <servico>/swarm/compose.yml
 ```
 
-> `docker/` guarda o que sobe pelo formulário de Stacks do Portainer. Tudo o
-> mais vive em `docker/_catalog/` — inclusive stacks que os playbooks do
-> Ansible já implantam direto de lá, sem passar por `docker/`.
+> `docker/` vs. `docker/_catalog/` não é "implantado" vs. "não implantado": é
+> "convenção de Swarm ok para promover" vs. "ainda precisa adequação" — a
+> maioria dos dois lados sobe por playbook do Ansible; só o que não tem
+> playbook sobe pelo formulário de Stacks do Portainer. Ver
+> [`docker/README.md`](./docker/README.md).
 
 ### Regra: toda ferramenta de IaC vive sob `IaC/`
 
@@ -391,13 +393,17 @@ Duas ocorrências reais no refactor do OPNsense, e nas duas o erro foi isentar o
 depois, auditado ou não. Isento `tests/fixtures/` inteiro, um revisor plantou ali
 senha real, chave de acesso AWS e token pessoal do GitHub, e o `make secrets`
 aprovou com `rc=0`; isento o baseline do render, ele carregava gateway da LAN,
-range de DHCP e sub-rede de VLAN reais. Nos dois casos a correção foi **remover**
-a isenção, nunca estreitá-la até o commit passar.
+range de DHCP e sub-rede de VLAN reais. Na fixture a correção foi remover a
+isenção de diretório e trocar o valor por um que nunca precisasse dela. No
+baseline só a isenção de **IP privado** saiu; a de **endereço MAC** continua —
+é a legítima da seção anterior, porque o baseline ainda carrega um MAC de
+documentação depois de o IP ter sido parametrizado.
 
-A única direção legítima de mudança numa isenção é estreitar ou remover: as duas
-de diretório inteiro citadas acima (`group_vars/network\.yml$` e
-`^IaC/ansible/templates/network/`) saíram porque o arquivo que protegiam parou
-de carregar dado real, nunca porque alguém decidiu relaxar o gate. O comentário
+A única direção legítima de mudança numa isenção é estreitar ou remover: a
+isenção de arquivo `group_vars/network\.yml$` e a de diretório inteiro
+`^IaC/ansible/templates/network/` — cobrindo o plano de VLANs e os templates de
+rede da seção anterior — saíram porque o arquivo que protegiam parou de
+carregar dado real, nunca porque alguém decidiu relaxar o gate. O comentário
 que isenta `IaC/ansible/tests/fixtures/opnsense.yml` no padrão "endereço MAC" em
 [`secret-patterns.txt`](./.githooks/secret-patterns.txt) é o modelo a seguir:
 nomeia o arquivo exato e explica o motivo.
@@ -482,8 +488,8 @@ autoria dos commits não entra aqui: identidade em commit é o funcionamento
 normal do Git, e não é dado sensível neste repositório.
 
 ⚠️ **Ao mudar hostname, domínio ou faixa de rede, atualizar
-`.githooks/secret-patterns.local.txt` no mesmo commit** — os três vão nele, que é
-gitignorado. O [`secret-patterns.txt`](./.githooks/secret-patterns.txt)
+`.githooks/secret-patterns.local.txt` no mesmo dia** — os três vão nele, que é
+gitignorado, então não há commit que o registre. O [`secret-patterns.txt`](./.githooks/secret-patterns.txt)
 versionado só muda quando aparece uma CLASSE genérica nova de segredo: o padrão
 "IP privado" dele já cobre 10/8, 172.16/12 e 192.168/16 inteiros, então trocar a
 sua faixa não pede edição nenhuma ali. Padrão desatualizado é pior que padrão

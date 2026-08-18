@@ -1,10 +1,13 @@
 # Catálogo — stacks definidas; nem toda fora do ar
 
-Aqui vive a **definição** de cada stack. `docker/` guarda o que sobe pelo
-formulário de Stacks do Portainer; os playbooks `03-`, `04-` e `05-` do
-Ansible já implantam 11 das stacks abaixo direto deste diretório, sem passar
-por `docker/`. As demais são só definição — sem playbook, sem deploy — mantidas
-aqui para que a árvore não misture o que roda com o que ainda não roda.
+Aqui vive a **definição** de cada stack. `docker/` vs. `docker/_catalog/` não é
+"implantado" vs. "não implantado": é "convenção de Swarm ok para promover" vs.
+"ainda precisa adequação" — ver [`docker/README.md`](../README.md). Os
+playbooks `02-` a `05-` do Ansible já implantam Traefik, Portainer e Monitoring
+direto de `docker/`, e 11 das stacks abaixo direto deste diretório, sem passar
+por `docker/`. As demais são só definição — sem playbook, sem deploy —
+mantidas aqui para que a árvore não misture o que roda com o que ainda não
+roda.
 
 Um levantamento da produção mostrou 4 stacks em execução contra 26 diretórios no
 repositório (4 em `docker/` e 22 aqui) — duas medições de naturezas diferentes: o

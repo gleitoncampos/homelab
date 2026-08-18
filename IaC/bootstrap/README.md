@@ -47,16 +47,19 @@ Confundir os dois produz timeout de SSH, cujo sintoma não diz nada sobre a caus
 ## Como os segredos são tratados
 
 As 23 chaves de segredo tratadas pelo `bootstrap.py` não são todas do mesmo
-tipo, e é isso que decide o comportamento (esse 23 é menor que as 37 chaves de
-topo do `vault.yml.example`: o exemplo inclui SSID, nome de usuário e outras
-chaves que o bootstrap não trata):
+tipo, e é isso que decide o comportamento. Também não são todas subconjunto do
+vault: das 23, 21 vão para `group_vars/all/vault.yml` — subconjunto das **41**
+chaves de topo do `vault.yml.example` (o exemplo inclui ainda SSID, nome de
+usuário e outras chaves que o bootstrap não trata); as **2** restantes, os
+tokens do Terraform, vão para o `terraform.tfvars` e não estão listadas no
+`vault.yml.example`:
 
 - **12 geráveis** — senhas de banco, chaves de assinatura, JWT, senhas de
   Wi-Fi. Nenhuma pergunta: 32 bytes aleatórios são melhores que qualquer senha
   escolhida à mão, e quem as lê é o Ansible.
-- **9 externas** — Cloudflare, tokens do Proxmox, GeoIP, ETPro. Impossíveis de
-  gerar. O script imprime a URL do console e o comando que as produz, e aceita
-  vazio: o `validate_vault.yml` cobra depois.
+- **9 externas** — Cloudflare, tokens do Proxmox (destino: `terraform.tfvars`),
+  GeoIP, ETPro. Impossíveis de gerar. O script imprime a URL do console e o
+  comando que as produz, e aceita vazio: o `validate_vault.yml` cobra depois.
 - **2 pendentes** — os hashes bcrypt do OPNsense. bcrypt não sai de `openssl`
   nem da stdlib do Python; gerar um hash de algoritmo errado produziria firewall
   sem acesso à GUI depois do apply, então o script deixa marcador e instrução.
