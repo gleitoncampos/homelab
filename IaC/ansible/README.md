@@ -34,18 +34,21 @@ ansible/
 │       └── group_vars/
 │           ├── all/
 │           │   ├── 00-common.yml  # cópia de ../../../_common/all.yml, idem prod
-│           │   ├── main.yml       # homelab_env: dev, branch develop, ACME staging
+│           │   ├── main.yml       # homelab_env: dev, branch development, ACME staging
 │           │   └── vault.yml      # segredos de DEV — valores DIFERENTES dos de prod
 │           └── network/           # dev não tem OPNsense/OpenWrt próprio: só a VLAN do CT 210
 │               ├── 10-defaults.yml  # Versionado, endereço de documentação
 │               └── 99-local.yml     # ⚠️ GITIGNORADO: a faixa real
 ├── tasks/
+│   ├── docker_user_rules.yml  # Regras na chain DOCKER-USER: publish de porta ignora o UFW
 │   ├── portainer_login.yml    # Task reutilizável de Login & Token JWT na API do Portainer
 │   ├── portainer_stack.yml    # Create-or-update de stack via API (usada por 02, 04 e 05)
 │   └── validate_vault.yml     # Exige que os segredos existam antes de provisionar
-├── templates/network/
-│   ├── opnsense/              # Esqueleto (config.xml.j2) + 10 partials orientados a dado — ver seção abaixo
-│   └── openwrt_*.j2           # 4 templates do AP/roteador Wi-Fi, ainda monolíticos (fora deste refactor)
+├── templates/
+│   ├── network/
+│   │   ├── opnsense/          # Esqueleto (config.xml.j2) + 10 partials orientados a dado — ver seção abaixo
+│   │   └── openwrt_*.j2       # 4 templates do AP/roteador Wi-Fi, ainda monolíticos (fora deste refactor)
+│   └── proxmox/                # datacenter.cfg, interfaces e storage.cfg do host Proxmox VE
 ├── tests/                     # Render do OPNsense fora da caixa — ver "make render-opnsense" abaixo
 │   ├── render_opnsense.py     # Jinja2 com trim_blocks=True, igual ao Ansible; nenhum inventário real
 │   ├── fixtures/opnsense.yml  # Variáveis de exemplo — RFC 5737, MAC de documentação IANA
@@ -60,6 +63,7 @@ ansible/
     ├── 03-stack-monitoring.yml   # Deploy de Observabilidade (Grafana/Loki/Prometheus/Alloy/Statping)
     ├── 04-stack-management.yml  # Deploy de Gestão & Finanças (Paperless/Actual/Vikunja/Wallos/Thrifty)
     ├── 05-stack-utilities.yml   # Deploy de Utilitários (Cronicle/Linkwarden/Stirling-PDF/ByteStash/IT-Tools)
+    ├── 06-backup.yml            # Backup agendado dos convidados do Proxmox que sustentam o Swarm
     └── network/
         ├── 01-opnsense-setup.yml # Provisionamento do firewall (só roda contra o inventário de prod)
         └── 02-openwrt-setup.yml  # Provisionamento do AP/roteador Wi-Fi
@@ -69,25 +73,12 @@ ansible/
 > com os blocos antigos de `POST .../create/swarm/repository` aceitando `[200, 409, 500]` como
 > sucesso. A migração é acompanhada no backlog de hardening, mantido fora do versionamento.
 
-### Por que `group_vars/` mudou de lugar
+### Por que `group_vars/` vive dentro do inventário
 
-Antes deste restructure, o layout era `ansible/group_vars/all/main.yml` com um único
-`ansible/inventory/hosts.ini`. Isso **parecia** funcionar porque `site.yml` (que importa todos os
-playbooks) carregava as variáveis — mas qualquer comando que rodasse **um playbook isolado**
-(`ansible-playbook playbooks/01-bootstrap-os.yml`, por exemplo) falhava com erro de variável
-indefinida (`timezone`, `system_user`, etc.).
-
-A causa: o Ansible carrega `group_vars/` **adjacente ao arquivo de inventário** e **adjacente ao
-playbook que está rodando** — não existe um `group_vars/` "global" para o projeto todo. Com
-`inventory = inventory/hosts.ini` no `ansible.cfg` e `group_vars/all/` vivendo em `ansible/`
-(não dentro de `ansible/inventory/`), aquele diretório de variáveis nunca era, de fato,
-adjacente a nada que o Ansible resolvesse sozinho — só funcionava via `site.yml`, que por acaso
-roda com o cwd em `ansible/`.
-
-A correção foi mover `group_vars/` para **dentro** de cada inventário
-(`inventories/<env>/group_vars/`), que é onde o Ansible sempre olha primeiro. Como efeito
-colateral (desejado), isso também resolveu a separação entre prod e dev: cada inventário agora
-carrega só as suas próprias variáveis.
+O Ansible carrega `group_vars/` **adjacente ao arquivo de inventário**, nunca num diretório
+"global" do projeto. `group_vars/` fora de `inventories/<env>/` só carrega via `site.yml` (que
+roda com o cwd certo) e falha com variável indefinida em qualquer playbook rodado isolado — por
+isso ele vive dentro de cada inventário, o único lugar que o Ansible sempre resolve sozinho.
 
 ### Precedência de três camadas
 
@@ -180,32 +171,20 @@ ambiente**. Não existe valor default: playbook sem vault falha na largada, de p
 ### Instalar as collections (uma vez, ou após clonar)
 
 ```bash
-cd ansible/
+cd IaC/ansible/
 ansible-galaxy collection install -r requirements.yml
 ```
 
 ### Caminho curto: `make bootstrap`
 
-Da raiz do repositório, um comando faz tudo o que esta seção descreve — gera a
-senha do vault, os segredos, os dois vaults cifrados, os dois `hosts.ini` e a
-chave SSH:
-
-```bash
-make bootstrap
-```
-
-Ele pede só o que não tem como ser gerado (tokens de Cloudflare e Proxmox) e
-preserva segredo que já exista. Ver [`IaC/bootstrap/README.md`](../bootstrap/README.md).
-
-O resto desta seção descreve o **caminho manual**, que continua válido e é o que
-o bootstrap automatiza. Vale ler para entender o que ele faz — e é o caminho a
-seguir quando só um valor precisa mudar, já que `ansible-vault edit` é mais
-direto que regenerar tudo.
+`make bootstrap`, da raiz do repositório, automatiza tudo o que o restante desta
+seção descreve — ver [`IaC/bootstrap/README.md`](../bootstrap/README.md). O caminho manual
+abaixo continua válido para quando só um valor precisa mudar.
 
 ### Criar o vault (uma vez por ambiente)
 
 ```bash
-cd ansible/
+cd IaC/ansible/
 
 # 1. Senha que protege o vault (arquivo gitignorado, permissão 600) — a MESMA
 #    senha abre o vault de prod e o de dev (ver inventories/vault.yml.example).
@@ -264,15 +243,14 @@ configura a rede errada.
 
 ### Criar o `hosts.ini` real num clone novo
 
-`make bootstrap` gera os dois, com os IPs de HOJE — que é o que importa aqui,
-porque é por eles que o Ansible alcança os hosts. O plano de VLANs descreve o
-destino e vive em `group_vars/network/`; confundir os dois produz timeout de
-SSH, cujo sintoma não diz nada sobre a causa.
+`make bootstrap` gera os dois automaticamente, com os IPs de hoje — ver
+[`IaC/bootstrap/README.md`](../bootstrap/README.md#as-duas-redes) sobre a
+diferença entre esses IPs e o plano de VLANs alvo.
 
 Manualmente:
 
 ```bash
-cd ansible/
+cd IaC/ansible/
 cp inventories/prod/hosts.ini.example inventories/prod/hosts.ini
 cp inventories/dev/hosts.ini.example inventories/dev/hosts.ini
 $EDITOR inventories/prod/hosts.ini   # preencher com o IP real dos nós de produção
@@ -282,19 +260,20 @@ $EDITOR inventories/dev/hosts.ini    # idem, nós de dev
 ### Ainda fora do vault
 
 Estas stacks não têm playbook, então seus segredos existem apenas no banco do Portainer
-(digitados na UI), sem registro nem rotação: **firefly3, pricebuddy, cronicle**
+(digitados na UI), sem registro nem rotação: **firefly3, pricebuddy**
 e as demais anotadas no backlog de hardening, que fica fora do versionamento.
-Serão migradas aos poucos. (**grafana** já saiu desta lista:
-`03-stack-monitoring.yml` injeta `grafana_admin_password` do vault.)
+Serão migradas aos poucos. (**cronicle** e **grafana** já saíram desta lista:
+`05-stack-utilities.yml` injeta `cronicle_secret_key` e `03-stack-monitoring.yml`
+injeta `grafana_admin_password`, ambos do vault.)
 
 ---
 
 ## 🚀 Como Executar os Playbooks (Modular vs Completo)
 
-Acesse a pasta `IaC/ansible/`:
+Acesse a pasta `IaC/ansible/`, a partir da raiz do repositório:
 
 ```bash
-cd /home/nuvidio/git/homelab/ansible
+cd IaC/ansible
 ```
 
 Todo exemplo abaixo é para **produção**. Para rodar contra **dev**, troque
