@@ -6,8 +6,10 @@ Ansible já implantam 11 das stacks abaixo direto deste diretório, sem passar
 por `docker/`. As demais são só definição — sem playbook, sem deploy — mantidas
 aqui para que a árvore não misture o que roda com o que ainda não roda.
 
-Um levantamento da produção mostrou 4 stacks em execução contra 25 diretórios no
-repositório. Misturar as duas coisas fazia o repositório parecer um retrato da
+Um levantamento da produção mostrou 4 stacks em execução contra 26 diretórios no
+repositório (4 em `docker/` e 22 aqui) — duas medições de naturezas diferentes: o
+que estava no ar naquele dia contra o que o repositório define. Misturar as duas
+coisas fazia o repositório parecer um retrato da
 infraestrutura quando era, em boa parte, uma lista de desejos — e foi o que levou
 os playbooks a apontarem para stacks inexistentes sem que ninguém percebesse.
 
