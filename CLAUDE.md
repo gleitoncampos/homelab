@@ -215,11 +215,9 @@ mão, carregando junto senha, chave privada e a topologia inteira.
 Ansible, Terraform e qualquer ferramenta futura — Packer, Vagrant, Pulumi,
 cloud-init — entram como um subdiretório de `IaC/`, **nunca** na raiz.
 
-O motivo: a raiz deve responder *o que este repositório é*, não *quais
-ferramentas ele usa*. Com `ansible/` e `terraform/` soltos no topo, cada
-ferramenta nova custava mais uma entrada na raiz. Agrupadas, a raiz diz: aqui se
-provisiona infraestrutura (`IaC/`), aqui se definem serviços (`docker/`), aqui
-se documenta (`docs/`).
+O motivo: a raiz deve dizer *o que este repositório é* — aqui se provisiona
+(`IaC/`), aqui se definem serviços (`docker/`), aqui se documenta (`docs/`) —
+nunca *quais ferramentas ele usa*.
 
 A ordem de execução é: **`make bootstrap`** (gera as entradas) → `terraform`
 (cria VMs e CTs) → `ansible` (sistema, cluster e stacks).
@@ -314,10 +312,11 @@ gateway literal em dois playbooks, escrito antes de o gate existir e portanto
 invisível para o hook. E a CI existe porque hook é local: `--no-verify` some com
 ele, e num PR de terceiro nem chega a rodar.
 
-Ativar uma vez por clone — o Git não compartilha `.git/hooks/`:
+Ativar uma vez por clone — o Git não compartilha `.git/hooks/`, e sem isso os
+hooks existem no repositório e não rodam, o modo de falha mais silencioso daqui:
 
 ```bash
-make hooks     # equivale a: git config core.hooksPath .githooks
+make hooks     # core.hooksPath = .githooks; cria o secret-patterns.local.txt
 make check     # o mesmo conjunto que a CI roda
 ```
 
@@ -387,17 +386,13 @@ para destravar commit que insiste em falhar, e a pergunta antes de tocar em
 arquivo precisa mesmo do dado real", nunca "como faço o `make secrets` parar de
 reclamar".
 
-Duas ocorrências reais no refactor do OPNsense, ambas revertidas, e nas duas o
-erro foi isentar o **diretório** em vez do **arquivo** — diretório isento vale
-para todo arquivo que alguém criar ali depois, auditado ou não. Bloqueado pelos
-padrões de senha e de MAC, um implementador isentou `IaC/ansible/tests/fixtures/`
-inteiro, e um revisor plantou ali um fixture com senha real, chave de acesso AWS
-e token pessoal do GitHub que o `make secrets` aprovou com `rc=0`; um segundo
-isentou o baseline congelado do render, que carregava gateway da LAN, range de
-DHCP e sub-rede de VLAN reais. Nos dois casos a correção foi **remover** a
-isenção — trocar o valor do fixture por um que nunca precisasse dela, antecipar
-a parametrização para que o baseline nascesse limpo —, nunca estreitá-la o
-bastante para o commit passar.
+Duas ocorrências reais no refactor do OPNsense, e nas duas o erro foi isentar o
+**diretório** em vez do **arquivo** — que vale para todo arquivo criado ali
+depois, auditado ou não. Isento `tests/fixtures/` inteiro, um revisor plantou ali
+senha real, chave de acesso AWS e token pessoal do GitHub, e o `make secrets`
+aprovou com `rc=0`; isento o baseline do render, ele carregava gateway da LAN,
+range de DHCP e sub-rede de VLAN reais. Nos dois casos a correção foi **remover**
+a isenção, nunca estreitá-la até o commit passar.
 
 A única direção legítima de mudança numa isenção é estreitar ou remover: as duas
 de diretório inteiro citadas acima (`group_vars/network\.yml$` e
@@ -419,7 +414,10 @@ um caminho arbitrário — em qualquer motor de regex, não só no que roda nest
 máquina. E fecha o lado do regex: cada padrão precisa de uma amostra
 conhecida-ruim em `secret-patterns.samples.txt`, e o alvo falha se ela faltar ou
 se o regex não casar com ela — regex que não casa nada é o mesmo defeito do `|`
-órfão, do outro lado do separador.
+órfão, do outro lado do separador. ⚠️ A checagem estrita vale para o
+`secret-patterns.txt` e para o `.example`; para o `secret-patterns.local.txt` do
+operador o alvo só **avisa**, porque o arquivo de amostras dele é gitignorado
+como ele — padrão local sem amostra passa em amarelo, e quem confere é você.
 
 ### `commit-msg`
 
@@ -455,9 +453,8 @@ mensagem do commit.
 
 ### 1. Ativar o gate, uma vez por clone
 
-`make hooks` ativa `core.hooksPath` e cria o `secret-patterns.local.txt` a
-partir do `.example`. O Git não versiona `.git/hooks/`: sem esse passo os hooks
-existem no repositório e não rodam — o modo de falha silencioso mais comum aqui.
+`make hooks`. O que ele faz e o modo de falha que ele evita estão na seção
+"Gate de qualidade".
 
 ### 2. Modelo de branches
 
@@ -480,11 +477,13 @@ Exemplos usam as faixas de documentação da RFC 5737 (`192.0.2.0/24`,
 interna, e-mail pessoal e chave SSH real ficam em `.local/`, no vault ou no
 inventário gitignorado.
 
-⚠️ **Ao mudar hostname, domínio ou faixa de rede, atualizar os padrões no mesmo
-commit** — hostname e domínio em `.githooks/secret-patterns.local.txt`, que é
-gitignorado, e faixa de rede em
-[`.githooks/secret-patterns.txt`](./.githooks/secret-patterns.txt). Padrão
-desatualizado é pior que padrão nenhum: dá sensação de proteção sem proteger.
+⚠️ **Ao mudar hostname, domínio ou faixa de rede, atualizar
+`.githooks/secret-patterns.local.txt` no mesmo commit** — os três vão nele, que é
+gitignorado. O [`secret-patterns.txt`](./.githooks/secret-patterns.txt)
+versionado só muda quando aparece uma CLASSE genérica nova de segredo: o padrão
+"IP privado" dele já cobre 10/8, 172.16/12 e 192.168/16 inteiros, então trocar a
+sua faixa não pede edição nenhuma ali. Padrão desatualizado é pior que padrão
+nenhum: dá sensação de proteção sem proteger.
 
 ### 4. Linter limpo é o estado normal, não a meta
 

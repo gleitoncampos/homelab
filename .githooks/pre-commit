@@ -96,13 +96,18 @@ if compose="$(staged_matching '^docker/.*compose\.ya?ml$')" && [[ -n "$compose" 
   if command -v docker >/dev/null; then
     while read -r f; do
       [[ -f "$f" ]] || continue
-      # Duas réguas, de propósito. O que está no ar tem de passar no schema do
-      # Swarm — é literalmente o que o Portainer vai aplicar. O catálogo, não:
-      # estar lá significa justamente que a definição ainda não foi adequada
-      # (zoneminder ainda declara `version: 2`, que o Swarm recusa). Cobrar a
-      # régua estrita ali travaria todo commit no diretório cuja função é
-      # guardar rascunho, então vale a checagem frouxa, que ainda pega YAML
-      # quebrado e chave inexistente.
+      # Duas réguas, de propósito. O que está em docker/ tem de passar no
+      # schema do Swarm — é literalmente o que o Portainer vai aplicar. O
+      # catálogo, não: PARTE dele ainda não foi adequada ao Swarm (zoneminder
+      # declara `version: 2`, que o Swarm recusa), e cobrar a régua estrita
+      # ali travaria todo commit num diretório que também guarda rascunho.
+      # Vale a checagem frouxa, que ainda pega YAML quebrado e chave
+      # inexistente.
+      #
+      # ⚠️ Estar no catálogo NÃO quer dizer "não implantado": há stacks ali
+      # que os playbooks do Ansible sobem direto de lá, sem passar por
+      # docker/. A régua frouxa é sobre o SCHEMA do arquivo, nunca sobre o
+      # serviço estar no ar.
       if [[ "$f" == docker/_catalog/* ]]; then
         if err="$(docker compose -f "$f" config 2>&1 >/dev/null)"; then
           ok "compose config (catálogo): $f"
