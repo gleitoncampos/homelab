@@ -46,13 +46,15 @@ Confundir os dois produz timeout de SSH, cujo sintoma não diz nada sobre a caus
 
 ## Como os segredos são tratados
 
-As 36 chaves do vault não são todas do mesmo tipo, e é isso que decide o
-comportamento:
+As 23 chaves de segredo tratadas pelo `bootstrap.py` não são todas do mesmo
+tipo, e é isso que decide o comportamento (esse 23 é menor que as 37 chaves de
+topo do `vault.yml.example`: o exemplo inclui SSID, nome de usuário e outras
+chaves que o bootstrap não trata):
 
-- **~15 geráveis** — senhas de banco, chaves de assinatura, JWT, senhas de
+- **12 geráveis** — senhas de banco, chaves de assinatura, JWT, senhas de
   Wi-Fi. Nenhuma pergunta: 32 bytes aleatórios são melhores que qualquer senha
   escolhida à mão, e quem as lê é o Ansible.
-- **~9 externas** — Cloudflare, tokens do Proxmox, GeoIP, ETPro. Impossíveis de
+- **9 externas** — Cloudflare, tokens do Proxmox, GeoIP, ETPro. Impossíveis de
   gerar. O script imprime a URL do console e o comando que as produz, e aceita
   vazio: o `validate_vault.yml` cobra depois.
 - **2 pendentes** — os hashes bcrypt do OPNsense. bcrypt não sai de `openssl`

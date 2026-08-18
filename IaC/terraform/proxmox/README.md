@@ -6,7 +6,7 @@ Este diretório centraliza o provisionamento declarativo da **Infraestrutura Vir
 
 ## ⚠️⚠️⚠️ AVISO CRÍTICO - LEIA ANTES DE RODAR QUALQUER `apply` ⚠️⚠️⚠️
 
-**Hoje nada neste diretório está sob gestão do Terraform.** Não existe `.tfstate`, `.terraform/` nem `terraform.tfvars` neste repositório - o provisionamento até agora foi feito por caminho manual (via `pveum`/console/scripts ad-hoc direto no Proxmox), inclusive os **CTs 200 e 201** do Docker Swarm, que já rodam em produção.
+**Hoje nada neste diretório está sob gestão do Terraform.** Não existe `.tfstate` nem `terraform.tfvars` - só um `.terraform/` local (cache de provider, gitignorado, sem estado nenhum dentro) pode existir depois de um `terraform init` isolado. Sem `.tfstate`, o Terraform não tem "recurso existente" para nenhum guest: o provisionamento até agora foi feito por caminho manual (via `pveum`/console/scripts ad-hoc direto no Proxmox), inclusive os **CTs 200 e 201** do Docker Swarm, que já rodam em produção.
 
 Isso muda a análise de risco de um jeito específico: o risco imediato de um primeiro `apply` **não é "replacement" de recurso já gerenciado" - é COLISÃO DE VMID**:
 
@@ -81,7 +81,7 @@ terraform/
 3. **VM 300 (`openmediavault-nas`)**:
    - **SO**: OpenMediaVault (OMV 7) sobre **Debian 12 "genericcloud"**, provisionado via `proxmox_virtual_environment_download_file` + `disk.file_id` + cloud-init (não mais via ISO).
    - **Hardware**: 2 CPU Cores, 4GB RAM, disco importado e redimensionado para `var.omv_disk_size` (64GB por padrão).
-   - **Rede**: IP Estático (`var.omv_nas_ip`) na VLAN homelab, definido via cloud-init - é a **única rota determinística** pela qual `ansible/playbooks/00-omv-setup.yml` consegue alcançar a máquina depois do boot.
+   - **Rede**: IP Estático (`var.omv_nas_ip`) na VLAN homelab, definido via cloud-init - é a **única rota determinística** pela qual `IaC/ansible/playbooks/00-omv-setup.yml` consegue alcançar a máquina depois do boot.
    - **Guest agent**: habilitado desde o primeiro `apply` (a imagem `genericcloud` já traz `qemu-guest-agent` de fábrica, sem o problema de "esperar um agente que ninguém instalou" que existe na OPNsense).
 
    > A ISO/imagem de boot desta VM **nunca** pode vir do storage `NAS_STORAGE` (CIFS/NFS servido pela própria VM 300): seria uma dependência circular - o compartilhamento de rede não existe enquanto a VM que o serve ainda não bootou. A imagem cloud vem de `var.omv_cloud_image_url` (Debian oficial) para um datastore de arquivo local (`var.file_datastore_id`) e o download é validado por `checksum`/`checksum_algorithm`.
@@ -108,7 +108,7 @@ Fica no nó `<no-secundario>` (mesmo nó do CT 201), para não competir com a OP
 
 > ⚠️ **`lifecycle.ignore_changes = [started]`**: o nó dev fica desligado fora de janelas de teste (é assim que se economiza recurso do host `<no-secundario>`). Sem esse `ignore_changes`, **todo `terraform apply` religaria o CT automaticamente**, mesmo que alguém o tenha desligado de propósito.
 
-> ⚠️ **`initialization.user_account.keys` em LXC só escreve em `/root/.ssh/authorized_keys`** - não cria o usuário `nuvidio` que `ansible/inventories/prod/hosts.ini` usa com `become` via sudo. Quem cria esse usuário é `IaC/ansible/playbooks/00-node-bootstrap.yml` (playbook de responsabilidade de outro fluxo de trabalho, não criado a partir deste diretório), que roda como root usando a mesma chave pública e provisiona o usuário de automação antes de qualquer outro playbook assumir `ansible_user=nuvidio`. Rode esse bootstrap antes do restante do Ansible contra o CT 210.
+> ⚠️ **`initialization.user_account.keys` em LXC só escreve em `/root/.ssh/authorized_keys`** - não cria o usuário `nuvidio` que `IaC/ansible/inventories/prod/hosts.ini` usa com `become` via sudo. Quem cria esse usuário é `IaC/ansible/playbooks/00-node-bootstrap.yml` (playbook de responsabilidade de outro fluxo de trabalho, não criado a partir deste diretório), que roda como root usando a mesma chave pública e provisiona o usuário de automação antes de qualquer outro playbook assumir `ansible_user=nuvidio`. Rode esse bootstrap antes do restante do Ansible contra o CT 210.
 
 ---
 
@@ -148,7 +148,7 @@ Guarde o `token-id` (`terraform@pve!terraform`) e o `secret-value` gerado - o se
 ### 1. Configurar o Arquivo de Variáveis
 
 ```bash
-cd /home/nuvidio/git/homelab/terraform/proxmox
+cd IaC/terraform/proxmox
 # Atalho: `make bootstrap` (na raiz) gera este arquivo já preenchido, a partir
 # da mesma fonte que produz o inventário do Ansible — ver IaC/bootstrap/README.md.
 # Manualmente:
@@ -188,7 +188,7 @@ terraform apply   # ou tofu apply
 Depois do provisionamento (Terraform) e da instalação manual em duas fases da OPNsense (ver seção acima), utilize o Ansible para a configuração interna dos sistemas operacionais:
 
 ```bash
-cd /home/nuvidio/git/homelab/ansible
+cd IaC/ansible
 ansible-playbook site.yml --ask-become-pass
 ```
 
