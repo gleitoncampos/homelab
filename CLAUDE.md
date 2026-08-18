@@ -477,6 +477,10 @@ Exemplos usam as faixas de documentação da RFC 5737 (`192.0.2.0/24`,
 interna, e-mail pessoal e chave SSH real ficam em `.local/`, no vault ou no
 inventário gitignorado.
 
+A regra vale para **conteúdo de arquivo e mensagem de commit**. O e-mail de
+autoria dos commits não entra aqui: identidade em commit é o funcionamento
+normal do Git, e não é dado sensível neste repositório.
+
 ⚠️ **Ao mudar hostname, domínio ou faixa de rede, atualizar
 `.githooks/secret-patterns.local.txt` no mesmo commit** — os três vão nele, que é
 gitignorado. O [`secret-patterns.txt`](./.githooks/secret-patterns.txt)
