@@ -1,7 +1,10 @@
-# Catálogo — stacks descritas, mas não implantadas
+# Catálogo — stacks definidas; nem toda fora do ar
 
-Nada aqui está no ar. São definições prontas para uso futuro, mantidas fora de
-`docker/` para que aquele diretório descreva **só o que roda de verdade**.
+Aqui vive a **definição** de cada stack. `docker/` guarda o que sobe pelo
+formulário de Stacks do Portainer; os playbooks `03-`, `04-` e `05-` do
+Ansible já implantam 11 das stacks abaixo direto deste diretório, sem passar
+por `docker/`. As demais são só definição — sem playbook, sem deploy — mantidas
+aqui para que a árvore não misture o que roda com o que ainda não roda.
 
 Um levantamento da produção mostrou 4 stacks em execução contra 25 diretórios no
 repositório. Misturar as duas coisas fazia o repositório parecer um retrato da

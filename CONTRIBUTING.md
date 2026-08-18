@@ -63,9 +63,11 @@ Use sempre:
 ## Stack nova
 
 Vai em `docker/_catalog/<servico>/swarm/compose.yml`, não em `docker/`.
-`docker/` contém apenas o que está de fato no ar; o catálogo guarda o que está
-definido e ainda não subiu. Promover uma stack é uma decisão de operação, não de
-contribuição — ver [`docker/_catalog/README.md`](./docker/_catalog/README.md).
+`docker/` guarda o que sobe pelo formulário de Stacks do Portainer; o catálogo
+guarda a definição — parte dela já implantada direto de lá por um playbook do
+Ansible, parte ainda sem playbook e sem deploy algum. Promover uma stack é uma
+decisão de operação, não de contribuição — ver
+[`docker/_catalog/README.md`](./docker/_catalog/README.md).
 
 O checklist do compose (rede `traefik_public`, labels em `deploy.labels`, volume
 sob `/srv/containers/`, tag fixada, `deploy.resources.limits`) está no

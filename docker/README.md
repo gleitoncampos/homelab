@@ -42,12 +42,14 @@ Qualquer outro serviço nesta pasta é considerado um **serviço fixo e de produ
 | **Infra & Ingress** | Traefik | `docker/traefik/` | Reverse Proxy & SSL Auto-Certificates |
 | | Portainer | `docker/portainer/` | Interface de Gerenciamento do Swarm |
 | **Monitoramento** | Monitoring Stack | `docker/monitoring/` | Grafana, Prometheus, Loki, Alloy |
+| | Dozzle | `docker/dozzle/` | Visualizador de Logs de Containers em Tempo Real |
 | | Statping | `docker/_catalog/statping/` | Status Page & Uptime Monitoring |
 | | Glance | `docker/_catalog/glance/` | Dashboard Unificado de Homelab |
 | | Organizr | `docker/_catalog/organizr/` | Hub de Serviços e Dashboard |
 | **Produtividade & Cloud**| Nextcloud | `docker/_catalog/nextcloud/` | Armazenamento em Nuvem & Fotos |
 | | Paperless-ngx | `docker/_catalog/paperless-ngx/` | Gestão e OCR de Documentos |
 | | Obsidian Sync | `docker/_catalog/obsidian/` | Sincronização de Notas |
+| | Syncthing | `docker/_catalog/syncthing/` | Sincronização de Arquivos P2P entre Dispositivos |
 | | Stirling-PDF | `docker/_catalog/stirling-pdf/` | Ferramentas Avançadas para PDF |
 | | Linkwarden | `docker/_catalog/linkwarden/` | Arquivamento de Links e Bookmarks |
 | | ByteStash | `docker/_catalog/bytestash/` | Gerenciador de Snippets de Código |

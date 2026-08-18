@@ -198,12 +198,13 @@ mão, carregando junto senha, chave privada e a topologia inteira.
 │   └── discover.sh         # Descobre hosts na rede e sugere o hosts.ini
 └── docker/                 # Stacks de serviço
     ├── README.md           # Instruções de deploy
-    ├── _catalog/           # Definidas mas NÃO implantadas — ver o README de lá
+    ├── _catalog/           # Definidas; parte já implantada por playbook — ver o README de lá
     └── <servico>/swarm/compose.yml
 ```
 
-> `docker/` contém apenas o que está no ar. Tudo o mais vive em
-> `docker/_catalog/`, para que a árvore não descreva serviços inexistentes.
+> `docker/` guarda o que sobe pelo formulário de Stacks do Portainer. Tudo o
+> mais vive em `docker/_catalog/` — inclusive stacks que os playbooks do
+> Ansible já implantam direto de lá, sem passar por `docker/`.
 
 ### Regra: toda ferramenta de IaC vive sob `IaC/`
 

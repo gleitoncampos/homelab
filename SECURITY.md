@@ -37,9 +37,12 @@ Para poupar seu tempo e o meu:
   isento no gate — ver [`.githooks/secret-patterns.txt`](./.githooks/secret-patterns.txt).
 - **Versão de imagem desatualizada.** O [Renovate](./.renovaterc.json) abre PR
   de atualização; um CVE numa imagem pinada é backlog, não incidente.
-- **Serviço sem autenticação no catálogo.** As stacks em `docker/_catalog/` não
-  estão implantadas — são definições guardadas, e várias precisam de ajuste
-  antes de subir. Só `docker/` descreve o que roda.
+- **Serviço sem autenticação numa stack do catálogo que nenhum playbook
+  implanta.** Definição não implantada não é vulnerabilidade — a maior parte
+  das stacks em `docker/_catalog/` ainda precisa de ajuste antes de subir. Mas
+  a stack cujo `stack_compose_path` já aparece num playbook do Ansible conta
+  como implantada, esteja ela em `docker/` ou em `docker/_catalog/`: falha
+  nela é reportável como em qualquer outra.
 - **Ausência de hardening que o próprio README já lista como pendente.** O
   backlog de hardening é mantido fora do versionamento, justamente por
   enumerar o que ainda não está protegido; item conhecido não vira advisory.
