@@ -157,8 +157,11 @@ mão, carregando junto senha, chave privada e a topologia inteira.
 │   ├── lib.sh              # Leitura dos padrões, compartilhada pelos hooks
 │   ├── scan-refs.sh        # stack_compose_path e links (usado por make links)
 │   ├── scan-tree.sh        # Árvore inteira (usado por make secrets e pela CI)
+│   ├── validate-patterns.sh   # Forma dos padrões (usado por make validate-patterns)
 │   ├── secret-patterns.txt # Genérico; VERSIONADO e público
-│   └── secret-patterns.local.txt.example  # Sua topologia; a cópia é ignorada
+│   ├── secret-patterns.samples.txt  # Amostra ruim por padrão; prova que o regex casa
+│   ├── secret-patterns.local.txt.example  # Sua topologia; a cópia é ignorada
+│   └── secret-patterns.local.txt.samples.example  # As amostras dos padrões locais
 ├── .gitignore              # vault.yml, hosts.ini, .tfvars, .tfstate, .local/
 ├── .yamllint               # Estilo de YAML; `yes`/`no` truthy é erro
 ├── .local/                 # IGNORADO. Diretório padrão de documentação de trabalho
@@ -183,14 +186,15 @@ mão, carregando junto senha, chave privada e a topologia inteira.
 │   │   │   │   └── opnsense.yml    # Constante de protocolo do OPNsense (HOME_NET, privateaddress) — não a rede deste lab
 │   │   │   ├── prod/           # hosts.ini (gitignorado) + group_vars/, com network/ em duas camadas (10-defaults.yml versionado, 99-local.yml gitignorado com a topologia real)
 │   │   │   └── dev/            # idem, ambiente de desenvolvimento
-│   │   ├── tasks/              # Tasks reutilizáveis (Portainer, validação do vault)
-│   │   ├── templates/network/opnsense/  # config.xml.j2 (esqueleto de includes) + 10 partials orientados a dado — ver IaC/ansible/README.md
+│   │   ├── tasks/              # Tasks reutilizáveis (Portainer, regras do usuário docker, validação do vault)
+│   │   ├── templates/network/  # openwrt_{system,dhcp,firewall,wireless}.j2 + opnsense/: config.xml.j2 (esqueleto de includes) e 10 partials orientados a dado — ver IaC/ansible/README.md
+│   │   ├── templates/proxmox/  # proxmox_{datacenter,interfaces,storage}.j2
 │   │   ├── tests/               # Render do template do OPNsense fora da caixa (make render-opnsense)
 │   │   │   ├── render_opnsense.py  # Jinja com trim_blocks=True, igual ao Ansible
 │   │   │   ├── fixtures/       # Variáveis de exemplo (RFC 5737, MAC de documentação IANA); isenção por ARQUIVO no gate, nunca por diretório
 │   │   │   ├── baseline/       # Render congelado da fase 0 — nunca regenerar
 │   │   │   └── expected/       # Diff aprovado por fase, comparado byte a byte
-│   │   └── playbooks/          # 00-node-bootstrap, 01-05, network/
+│   │   └── playbooks/          # 00-node-bootstrap/-omv-setup/-proxmox-setup, 01-05 (SO, cluster, stacks), 06-backup, network/ (OPNsense, OpenWrt)
 │   └── terraform/          # Hardware virtual (Proxmox VE — VMs e CTs LXC)
 │       └── proxmox/        # Provider bpg/proxmox; runbook de import no README de lá
 ├── prod-snapshot/          # Ferramentas de coleta do estado real (só os scripts)
@@ -211,12 +215,11 @@ mão, carregando junto senha, chave privada e a topologia inteira.
 Ansible, Terraform e qualquer ferramenta futura — Packer, Vagrant, Pulumi,
 cloud-init — entram como um subdiretório de `IaC/`, **nunca** na raiz.
 
-O motivo é o mesmo que separou `docker/` de `docker/_catalog/`: a raiz deve
-responder *o que este repositório é*, não *quais ferramentas ele usa*. Com
-`ansible/` e `terraform/` soltos no topo, cada ferramenta nova custava mais uma
-entrada na raiz, e a leitura passava a ser um inventário de tecnologias em vez de
-um mapa do sistema. Agrupadas, a raiz diz: aqui se provisiona infraestrutura
-(`IaC/`), aqui se definem serviços (`docker/`), aqui se documenta (`docs/`).
+O motivo: a raiz deve responder *o que este repositório é*, não *quais
+ferramentas ele usa*. Com `ansible/` e `terraform/` soltos no topo, cada
+ferramenta nova custava mais uma entrada na raiz. Agrupadas, a raiz diz: aqui se
+provisiona infraestrutura (`IaC/`), aqui se definem serviços (`docker/`), aqui
+se documenta (`docs/`).
 
 A ordem de execução é: **`make bootstrap`** (gera as entradas) → `terraform`
 (cria VMs e CTs) → `ansible` (sistema, cluster e stacks).
@@ -318,6 +321,15 @@ make hooks     # equivale a: git config core.hooksPath .githooks
 make check     # o mesmo conjunto que a CI roda
 ```
 
+`make check` encadeia, nesta ordem: `lint` (yamllint, `ansible-lint`,
+`shellcheck`, `terraform fmt`), `validate-compose`, `validate-ansible`,
+`validate-patterns` (a forma dos dois arquivos de padrões),
+`check-common-copies` (as cópias de `00-common.yml` em `prod/` e `dev/` não
+divergiram de `_common/all.yml`), `links`, `test-bootstrap` e `render-opnsense`
+(o render do template contra o baseline congelado). `make secrets` fica de fora,
+e a CI o chama por último em passo próprio: a falha dele não é "corrija o
+estilo", é "isto não pode ser publicado".
+
 ### `pre-commit`
 
 Na ordem em que os problemas custam caro:
@@ -329,10 +341,12 @@ Na ordem em que os problemas custam caro:
 2. **Referências.** Todo `stack_compose_path` aponta para arquivo existente, e
    todo link relativo de markdown resolve. As duas já quebraram de verdade nesta
    base, ao mover stacks para `_catalog/` e ao criar `docs/`.
-3. **Sintaxe.** Compose validado com **duas réguas**: o que está no ar passa por
-   `docker stack config`, que é o schema que o Portainer vai aplicar; o catálogo
-   passa por `docker compose config`, porque estar lá significa que a definição
-   ainda não foi adequada. Mais `yamllint` e `ansible-playbook --syntax-check`.
+3. **Sintaxe.** Compose validado com **duas réguas**: `docker/` passa por
+   `docker stack config`, que é o schema que o Portainer vai aplicar; o
+   catálogo passa pela régua frouxa do `docker compose config`, porque parte
+   dele ainda não foi adequada ao Swarm (o `zoneminder` declara `version: 2`) e
+   cobrar a régua estrita ali travaria todo commit no diretório que também
+   guarda rascunho. Mais `yamllint` e `ansible-playbook --syntax-check`.
 4. **Linters.** `ansible-lint`, `shellcheck`, `terraform fmt`. Ausente do
    sistema, o linter é pulado com aviso em vez de falhar.
 
@@ -366,43 +380,32 @@ seção seguinte).
 ### Isenção de gate não é ferramenta de desbloqueio
 
 ⚠️ Bloqueado pelo gate, a resposta certa é entender por que o commit carrega o
-que carrega — nunca alargar o terceiro campo até ele passar. Isenção de
-caminho existe para o legítimo já conhecido e já auditado (`.example`, o
-plano de VLANs, um fixture revisado); não é um mecanismo para destravar um
-commit que insiste em falhar. A pergunta antes de tocar em
-[`secret-patterns.txt`](./.githooks/secret-patterns.txt) é sempre "por que
-este arquivo precisa mesmo do dado real", nunca "como faço o `make secrets`
-parar de reclamar".
+que carrega — nunca alargar o terceiro campo até ele passar. A lista de isenções
+legítimas é a da seção acima, inteira; fora dela, nada. Isenção não é mecanismo
+para destravar commit que insiste em falhar, e a pergunta antes de tocar em
+[`secret-patterns.txt`](./.githooks/secret-patterns.txt) é sempre "por que este
+arquivo precisa mesmo do dado real", nunca "como faço o `make secrets` parar de
+reclamar".
 
-Duas ocorrências reais, na mesma tarefa de refactor do OPNsense, ambas
-revertidas:
+Duas ocorrências reais no refactor do OPNsense, ambas revertidas, e nas duas o
+erro foi isentar o **diretório** em vez do **arquivo** — diretório isento vale
+para todo arquivo que alguém criar ali depois, auditado ou não. Bloqueado pelos
+padrões de senha e de MAC, um implementador isentou `IaC/ansible/tests/fixtures/`
+inteiro, e um revisor plantou ali um fixture com senha real, chave de acesso AWS
+e token pessoal do GitHub que o `make secrets` aprovou com `rc=0`; um segundo
+isentou o baseline congelado do render, que carregava gateway da LAN, range de
+DHCP e sub-rede de VLAN reais. Nos dois casos a correção foi **remover** a
+isenção — trocar o valor do fixture por um que nunca precisasse dela, antecipar
+a parametrização para que o baseline nascesse limpo —, nunca estreitá-la o
+bastante para o commit passar.
 
-- Um implementador, bloqueado pelos padrões de senha e de MAC, isentou o
-  diretório inteiro `IaC/ansible/tests/fixtures/` em vez do arquivo que de
-  fato precisava do valor de documentação. Um revisor plantou
-  `fixtures/futuro.yml` com senha real, chave de acesso AWS e token pessoal
-  do GitHub — e o `make secrets` aprovou tudo com `rc=0`. A correção não foi
-  apertar a isenção: foi removê-la e trocar o valor do fixture por um que
-  nunca precisasse dela.
-- Um segundo implementador, bloqueado de novo, isentou o baseline congelado
-  do render — que carregava o gateway real da LAN, o range real de DHCP e uma
-  sub-rede real de VLAN, porque o template ainda tinha esses literais
-  hardcoded. A correção não foi manter a isenção: foi antecipar a
-  parametrização já planejada para tasks futuras, para que o baseline
-  nascesse limpo.
-
-A única direção legítima de mudança numa isenção é **estreitar**. Duas
-isenções de diretório inteiro foram removidas neste mesmo refactor —
-`group_vars/network\.yml$` e `^IaC/ansible/templates/network/` — nos dois
-casos porque o arquivo que protegiam parou de carregar dado real, nunca
-porque alguém decidiu relaxar o gate.
-
-Isente por **arquivo**, nunca por diretório: um diretório isento vale para
-todo arquivo que alguém criar ali no futuro, auditado ou não. O comentário
-que isenta `IaC/ansible/tests/fixtures/opnsense.yml` no padrão "endereço MAC"
-em [`secret-patterns.txt`](./.githooks/secret-patterns.txt) é o modelo a
-seguir: nomeia o arquivo exato, explica o motivo, e diz por que o diretório
-inteiro nunca deve virar a isenção.
+A única direção legítima de mudança numa isenção é estreitar ou remover: as duas
+de diretório inteiro citadas acima (`group_vars/network\.yml$` e
+`^IaC/ansible/templates/network/`) saíram porque o arquivo que protegiam parou
+de carregar dado real, nunca porque alguém decidiu relaxar o gate. O comentário
+que isenta `IaC/ansible/tests/fixtures/opnsense.yml` no padrão "endereço MAC" em
+[`secret-patterns.txt`](./.githooks/secret-patterns.txt) é o modelo a seguir:
+nomeia o arquivo exato e explica o motivo.
 
 ⚠️ Uma isenção malformada é pior que uma isenção errada: ela pode desarmar o
 padrão inteiro sem avisar ninguém. Um `|` órfão deixado na ponta de um campo
@@ -413,7 +416,10 @@ existe: valida a FORMA dos dois arquivos de padrões (separador presente nas
 duas posições, os dois campos de regex compilam) e confirma, com um
 caminho-canário (`zz-canary-not-exempt`), que o campo de isenção nunca casa
 um caminho arbitrário — em qualquer motor de regex, não só no que roda nesta
-máquina.
+máquina. E fecha o lado do regex: cada padrão precisa de uma amostra
+conhecida-ruim em `secret-patterns.samples.txt`, e o alvo falha se ela faltar ou
+se o regex não casar com ela — regex que não casa nada é o mesmo defeito do `|`
+órfão, do outro lado do separador.
 
 ### `commit-msg`
 
@@ -449,13 +455,9 @@ mensagem do commit.
 
 ### 1. Ativar o gate, uma vez por clone
 
-```bash
-make hooks
-```
-
-Ativa `core.hooksPath` e cria o `secret-patterns.local.txt` a partir do
-`.example`. O Git não versiona `.git/hooks/`: sem esse passo os hooks existem no
-repositório e não rodam — o modo de falha silencioso mais comum aqui.
+`make hooks` ativa `core.hooksPath` e cria o `secret-patterns.local.txt` a
+partir do `.example`. O Git não versiona `.git/hooks/`: sem esse passo os hooks
+existem no repositório e não rodam — o modo de falha silencioso mais comum aqui.
 
 ### 2. Modelo de branches
 
@@ -478,10 +480,11 @@ Exemplos usam as faixas de documentação da RFC 5737 (`192.0.2.0/24`,
 interna, e-mail pessoal e chave SSH real ficam em `.local/`, no vault ou no
 inventário gitignorado.
 
-⚠️ **Ao mudar hostname, domínio ou faixa de rede, atualizar
-[`.githooks/secret-patterns.txt`](./.githooks/secret-patterns.txt) no mesmo
-commit.** Padrão desatualizado é pior que padrão nenhum: dá sensação de proteção
-sem proteger.
+⚠️ **Ao mudar hostname, domínio ou faixa de rede, atualizar os padrões no mesmo
+commit** — hostname e domínio em `.githooks/secret-patterns.local.txt`, que é
+gitignorado, e faixa de rede em
+[`.githooks/secret-patterns.txt`](./.githooks/secret-patterns.txt). Padrão
+desatualizado é pior que padrão nenhum: dá sensação de proteção sem proteger.
 
 ### 4. Linter limpo é o estado normal, não a meta
 
@@ -537,10 +540,8 @@ compatibilidade, funcionalidade específica. Fora isso, deixe o bot abrir o PR:
 
 ## 🗣️ Estilo de resposta dos assistentes
 
-Este arquivo é a fonte única: `AGENTS.md` é um symlink para cá, de modo que
-todas as ferramentas leiam as mesmas regras. Antes existiam seis cópias
-(`.clinerules/`, `.cursor/`, `.github/`, `.opencode/`, `.windsurf/` e a raiz),
-quatro idênticas byte a byte e duas já divergidas.
+Este arquivo é a fonte única: `AGENTS.md` é um symlink para cá — uma fonte,
+todas as ferramentas.
 
 - Responder de forma direta e comprimida. Toda substância técnica permanece; só
   o enfeite sai.
