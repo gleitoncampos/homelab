@@ -22,9 +22,9 @@ comportamento errado.
 Aqui as respostas ficam em **um** arquivo e se espalham.
 
 ```
-IaC/homelab.local.yml  ──┬──▶  inventories/{prod,dev}/hosts.ini
-   (fonte única,         ├──▶  inventories/*/group_vars/all/vault.yml (cifrado)
-    gitignorada)         ├──▶  terraform/proxmox/terraform.tfvars
+IaC/homelab.local.yml  ──┬──▶  IaC/ansible/inventories/{prod,dev}/hosts.ini
+   (fonte única,         ├──▶  IaC/ansible/inventories/*/group_vars/all/vault.yml (cifrado)
+    gitignorada)         ├──▶  IaC/terraform/proxmox/terraform.tfvars
                          └──▶  .githooks/secret-patterns.local.txt
 ```
 
@@ -78,7 +78,7 @@ shred -u IaC/bootstrap/CREDENCIAIS.local.txt
 ```
 
 As demais nunca são exibidas. Para consultar uma:
-`ansible-vault view inventories/prod/group_vars/all/vault.yml`.
+`ansible-vault view IaC/ansible/inventories/prod/group_vars/all/vault.yml`.
 
 ## Garantias de segurança
 
