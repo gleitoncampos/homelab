@@ -253,6 +253,46 @@ ela, em três meses não há como saber se descreve o estado atual. Documento qu
 ficou obsoleto é marcado como tal no índice, não apagado: o raciocínio de por que
 uma decisão foi tomada sobrevive ao fato de ela já ter sido executada.
 
+#### Um documento por pergunta, não por assunto
+
+⚠️ **Antes de criar um documento, diga em voz alta a pergunta que ele responde.
+Se a pergunta já tem dono, ele não é um arquivo novo — é uma seção num arquivo
+existente.**
+
+Organizar por *assunto* parece natural e é a origem do problema: "segurança",
+"rede" e "backup" são assuntos, e cada documento novo sobre eles se acha
+legítimo. Assim nasceram cinco listas de pendências concorrentes neste
+repositório, cada uma se achando a boa, e três delas acabaram cedendo por
+escrito às outras.
+
+As perguntas que já têm dono:
+
+| pergunta | dono |
+|---|---|
+| o que cada equipamento **é** hoje | `.local/docs/INVENTARIO.md` |
+| o que está **quebrado**, e o que queremos **construir** | `.local/docs/TODO-E-ROADMAP.md` |
+| o que **poderia** melhorar (bruto, sem triagem) | `.local/docs/SUGESTOES.md` |
+| **como** se faz | `.local/docs/runbooks/` |
+
+O fluxo entre eles não é óbvio e é o que impede a mistura: o inventário descreve
+o estado, as sugestões propõem sobre esse estado, e **só o que sobrevive à
+triagem entra no roadmap**. Sugestão bruta nunca vira item de roadmap — é por
+isso que a parte de backlog triado nasceu vazia.
+
+#### Registro de execução vive em `docs/historico/`, e a regra é física
+
+Plano executado, spec cumprida, sessão encerrada e auditoria superada **não
+ficam soltos na raiz**: vão para `.local/docs/historico/`, no subdiretório do
+seu tipo (`planos/`, `specs/`, `sessoes/`, `auditorias/`).
+
+A fronteira é um diretório, não uma convenção a lembrar. Antes disso, documento
+vivo e registro de execução dividiam a mesma raiz e só a tabela do índice os
+separava — o que faz a raiz acumular a cada sessão, porque ninguém consulta o
+índice antes de criar um arquivo. Com a pasta, a regra se aplica sozinha.
+
+⚠️ Arquivar **não** é apagar. Documento no histórico continua legível e continua
+indexado; alguns seguem em uso ativo mesmo arquivados, e o índice diz quais.
+
 #### Documento que enumera fraqueza não corrigida NUNCA é versionado
 
 ⚠️ Lista de pendências de segurança, inventário do que ainda está aberto, plano
