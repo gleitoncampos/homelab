@@ -47,12 +47,17 @@ Confundir os dois produz timeout de SSH, cujo sintoma não diz nada sobre a caus
 ## Como os segredos são tratados
 
 As 23 chaves de segredo tratadas pelo `bootstrap.py` não são todas do mesmo
-tipo, e é isso que decide o comportamento. Também não são todas subconjunto do
-vault: das 23, 21 vão para `group_vars/all/vault.yml` — subconjunto das **41**
-chaves de topo do `vault.yml.example` (o exemplo inclui ainda SSID, nome de
-usuário e outras chaves que o bootstrap não trata); as **2** restantes, os
-tokens do Terraform, vão para o `terraform.tfvars` e não estão listadas no
-`vault.yml.example`:
+tipo, e é isso que decide o comportamento. As 23 vão para o
+`group_vars/all/vault.yml` gerado; **2 delas — os tokens de API do Proxmox — vão
+também para o `terraform.tfvars`**, porque o Terraform não lê o vault. Elas ficam
+nos dois arquivos.
+
+⚠️ **O `vault.yml.example` tem 41 chaves de topo e não é o mesmo conjunto.** Ele
+inclui SSID, nome de usuário e outras chaves que o bootstrap não trata; e, na
+outra direção, **não lista os dois tokens do Proxmox**, embora o gerador os
+escreva no vault. Ou seja, o exemplo não é um retrato fiel do que o
+`make bootstrap` produz — conferir um contra o outro vai acusar diferença, e a
+diferença é conhecida.
 
 - **12 geráveis** — senhas de banco, chaves de assinatura, JWT, senhas de
   Wi-Fi. Nenhuma pergunta: 32 bytes aleatórios são melhores que qualquer senha
