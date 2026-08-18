@@ -51,6 +51,37 @@ depois", "ninguém mais mexe nesse equipamento". Foi exatamente assim que
 `/conf/config.xml` vivo, commitado para não perder o que havia sido feito à
 mão, carregando junto senha, chave privada e a topologia inteira.
 
+### O repositório define o ALVO. Produção é backup, não autoridade
+
+⚠️ **O alvo é o que está sendo construído nos templates, não o que o equipamento
+faz hoje. Ele vai e deve divergir da produção — a divergência é o objetivo, não
+um defeito a corrigir.**
+
+O retrato da produção existe (`prod-snapshot/` coleta, o resultado fica em
+`.local/`) e serve para duas coisas: **backup** e **garimpo**. Nunca para
+decidir o que o repositório deveria dizer.
+
+Ao comparar produção e repositório, só uma das três leituras é achado:
+
+| situação | leitura |
+|---|---|
+| existe no template, não em produção | o alvo ainda não foi aplicado — **normal** |
+| existe nos dois, com valores diferentes | o alvo decidiu divergir — **normal** |
+| existe em produção, e o template **não tem nada equivalente** | ⚠️ **garimpar, ou decidir matar** |
+
+Só a terceira linha vira trabalho, e o motivo é preciso: aplicar o IaC hoje
+faria aquilo desaparecer **sem que ninguém tivesse decidido** que devia
+desaparecer. É perda por omissão. As outras duas são o projeto funcionando.
+
+⚠️ **A confusão entre "alvo" e "o que está no ar" já custou muito tempo aqui.**
+Durante meses o repositório foi tratado como retrato da infraestrutura quando
+era, em boa parte, uma lista de desejos — e foi isso que deixou playbooks
+apontando para stacks inexistentes sem ninguém perceber. A correção **não** é
+fazer o repositório descrever a produção: é manter explícito que ele descreve o
+alvo. Por isso o inventário consolidado rotula **todo** número de estado como
+`ALVO` ou `REAL`: sem o rótulo, os dois viram fatos contraditórios sobre o mesmo
+objeto.
+
 ---
 
 ## 🏗️ Premissas de Arquitetura & Padrões Tecnológicos
