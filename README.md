@@ -14,8 +14,9 @@ Alloy). As premissas de arquitetura, com o motivo de cada uma, estão em [`CLAUD
 
 ## TL;DR
 
-Dois públicos, dois caminhos. **Contribuir com código:** `make hooks && make check`, e o resto está em
-[`CONTRIBUTING.md`](./CONTRIBUTING.md) — nada abaixo é necessário. **Operar um homelab:** siga na ordem.
+Dois públicos, dois caminhos. **Contribuir com código:** `make hooks`, depois `make check && make secrets` antes
+do PR — são dois alvos, e o segundo é a varredura de vazamento na árvore. O resto está em
+[`CONTRIBUTING.md`](./CONTRIBUTING.md); nada abaixo é necessário. **Operar um homelab:** siga na ordem.
 
 ```bash
 # 1. Gate de qualidade (uma vez por clone — o git não versiona .git/hooks/)
@@ -26,16 +27,18 @@ $EDITOR .githooks/secret-patterns.local.txt    # hostnames e domínios da SUA to
 make bootstrap ARGS=--dry-run                  # mostra o que faria
 make bootstrap                                 # gera de verdade
 
-# 3. Validar o repositório (o mesmo conjunto que a CI roda)
-make check
+# 3. Validar o repositório (os dois alvos que a CI roda, em passos separados)
+make check                                     # lint, sintaxe, links, renders
+make secrets                                   # varredura de vazamento na árvore inteira
 
 # 4. Hardware virtual — PULE se as VMs e os CTs já existem
 cd IaC/terraform/proxmox
 terraform init
 terraform plan
 terraform apply
+cd -                                           # de volta à raiz do repositório
 
-# 5. Sistema, cluster e stacks
+# 5. Sistema, cluster e stacks — ⚠️ site.yml TAMBÉM reconfigura o host Proxmox e o NAS
 cd IaC/ansible
 ansible-galaxy collection install -r requirements.yml
 ansible-playbook site.yml --ask-become-pass    # prod é o inventário default
@@ -57,15 +60,30 @@ obrigatória antes do primeiro apply.
 
 ⚠️ **Passo 5, contra um convidado recém-criado pelo Terraform:** ele ainda não tem o usuário de automação, só
 acesso root por chave. Rode antes o playbook `00-node-bootstrap.yml`, que é a ponte de root para o usuário de
-automação.
+automação — e **em produção informe o host explicitamente**, porque o playbook tem
+`hosts: "{{ target | default('dev_bootstrap') }}"` e o grupo `dev_bootstrap` não existe no inventário de prod:
 
-`site.yml` importa sete playbooks, nessa ordem: host Proxmox, host OpenMediaVault, sistema operacional, cluster
-Swarm e as três de stacks (`03`, `04`, `05`). Ficam **fora** dele, e são disparados à mão: `00-node-bootstrap.yml`,
-`06-backup.yml` e os de `playbooks/network/`.
+```bash
+cd IaC/ansible
+ansible-playbook -i inventories/prod/hosts.ini playbooks/00-node-bootstrap.yml -e target=<host>
+```
+
+Sem o `-e target=`, o Ansible não casa host nenhum, imprime "no hosts matched" e **sai com código 0**. A ponte
+não foi feita, nada avisa isso, e a falha só aparece no passo 5, contra um host que nunca foi preparado.
+
+⚠️ **`site.yml` não toca só os nós de aplicação.** Ele importa sete playbooks, nessa ordem: host Proxmox, host
+OpenMediaVault, sistema operacional, cluster Swarm e as três de stacks (`03`, `04`, `05`). Os dois primeiros
+reconfiguram o hipervisor e o NAS — `00-proxmox-setup.yml` reescreve `/etc/apt/sources.list` e `/etc/hosts`,
+remove os repositórios Enterprise, desativa o `systemd-resolved`, aplica blacklist de módulos de kernel e
+desliga os serviços de HA (`pve-ha-crm`, `pve-ha-lrm`); `00-omv-setup.yml` faz o equivalente no NAS. Rodar
+`site.yml` sem saber disso reconfigura duas máquinas que você talvez não pretendesse tocar.
+
+Ficam **fora** de `site.yml`, e são disparados à mão: `00-node-bootstrap.yml`, `06-backup.yml` e os de
+`playbooks/network/`.
 
 Não rode `docker swarm init` nem `docker network create traefik_public` à mão: o `02-bootstrap-cluster.yml` faz
 os dois, e configuração manual não parametrizada é perdida na próxima execução — ver
-[IaC é a fonte da verdade](./CLAUDE.md).
+[IaC é a fonte da verdade](./CLAUDE.md#-iac-é-a-fonte-da-verdade--divergência-é-destruída-não-preservada).
 
 ---
 
@@ -76,7 +94,7 @@ A árvore comentada, com o papel de cada diretório e a regra de onde cada coisa
 | diretório | o que guarda |
 |---|---|
 | `IaC/` | **toda** ferramenta de infraestrutura como código: `bootstrap/` (gera as entradas das outras duas), `ansible/` (sistema, cluster e stacks), `terraform/` (VMs e CTs no Proxmox). Ferramenta nova entra como subdiretório, nunca solta na raiz |
-| `docker/` | as stacks de serviço; as ainda não promovidas ficam em `docker/_catalog/` |
+| `docker/` | as stacks de serviço. `docker/_catalog/` guarda a **definição** das demais — o que está lá não é sinônimo de não implantado: 11 dessas stacks sobem por playbook direto de `_catalog/`. Ver [`docker/_catalog/README.md`](./docker/_catalog/README.md) |
 | `prod-snapshot/` | scripts que coletam o estado real da produção para comparar com o descrito aqui |
 | `docs/` | runbooks operacionais. ⚠️ Documento que enumera fraqueza ainda não corrigida — backlog de segurança, lista de pendências, plano de hardening — **não** entra aqui: vive fora do versionamento. Ver [`CLAUDE.md`](./CLAUDE.md#regra-documento-de-trabalho-vive-em-local) |
 
@@ -94,23 +112,47 @@ Stacks do Portainer. A tabela completa, com categoria, caminho e descrição, es
 
 ## 🛡️ Boas Práticas & Segurança
 
-- **IaC é a fonte da verdade, e divergência é destruída**: ⚠️ configuração feita à mão (GUI do OPNsense, LuCI, interface do Proxmox, Portainer, `ssh` no host) que não esteja parametrizada aqui **é perdida** na próxima execução, por projeto — o playbook do OPNsense escreve `/conf/config.xml` inteiro em vez de fazer merge. Ajuste emergencial pela GUI vira variável ou template no mesmo dia. Estado de aplicação (banco, mídia, log, certificado emitido) não entra nessa regra: vive em `/srv/containers/` e em volume. Contrato completo em [`CLAUDE.md`](./CLAUDE.md#-iac-é-a-fonte-da-verdade--divergência-é-destruída-não-preservada).
-- **Ansible Vault como fonte única, um por ambiente**: os segredos vivem em dois arquivos cifrados e gitignorados, `IaC/ansible/inventories/{prod,dev}/group_vars/all/vault.yml`. O Ansible os injeta no campo `env` da API do Portainer, que resolve os `${VAR}` do `compose.yml` — nenhum segredo entra no repositório. ⚠️ Variável de segredo **nunca** usa `| default('...')`: os playbooks abortam via `tasks/validate_vault.yml` se um segredo faltar, em vez de provisionar com valor público. Setup em [`IaC/ansible/README.md`](./IaC/ansible/README.md) → **Passo 0**.
-- **Split produção/desenvolvimento**: dois ambientes independentes de inventário, variáveis e vault. O Portainer de produção acompanha a branch `main` (`refs/heads/main`); o de dev acompanha `development` (`refs/heads/development`).
-- **Assimetria push vs. Ansible**: ⚠️ mudar um `compose.yml` é invisível para a stack em execução até o commit ser **enviado ao GitHub** — é de lá que o Portainer clona via GitOps. Já um arquivo de config *sidecar* (ex.: `docker/monitoring/swarm/loki-config.yml`, listado em `monitoring_sidecar_files`) chega ao host pelo **working tree local**, via Ansible, e não depende de push. Confundir os dois é o erro mais comum ao editar uma stack já rodando.
-- ⚠️ **O sidecar `prometheus.yml.j2` referenciado em `monitoring_sidecar_files` ainda não existe**: o `prometheus.yml` do repositório é sintaxe Alloy River, não YAML do Prometheus, então o arquivo que o Prometheus lê hoje no host não está no git. Ver [`prod-snapshot/`](./prod-snapshot/README.md).
-- **Roteamento e persistência**: nenhum serviço é exposto em HTTP puro — o Traefik redireciona para HTTPS com TLS 1.2/1.3 — e todo dado persistente fica sob `/srv/containers/<servico>`.
+- **IaC é a fonte da verdade, e divergência é destruída**: ⚠️ configuração feita à mão — GUI do OPNsense, LuCI,
+  interface do Proxmox, Portainer, `ssh` no host — que não esteja parametrizada aqui **é perdida** na próxima
+  execução, por projeto. O playbook do OPNsense escreve `/conf/config.xml` inteiro em vez de fazer merge.
+  Ajuste emergencial pela GUI vira variável ou template no mesmo dia. Estado de aplicação (banco, mídia, log,
+  certificado emitido) não entra nessa regra: vive em `/srv/containers/` e em volume. Contrato completo em
+  [`CLAUDE.md`](./CLAUDE.md#-iac-é-a-fonte-da-verdade--divergência-é-destruída-não-preservada).
+- **Ansible Vault como fonte única, um por ambiente**: os segredos vivem em dois arquivos cifrados e
+  gitignorados, `IaC/ansible/inventories/{prod,dev}/group_vars/all/vault.yml`. O Ansible os injeta no campo
+  `env` da API do Portainer, que resolve os `${VAR}` do `compose.yml` — nenhum segredo entra no repositório.
+  ⚠️ Variável de segredo **nunca** usa `| default('...')`: os playbooks abortam via `tasks/validate_vault.yml`
+  se um segredo faltar, em vez de provisionar com valor público. Setup em
+  [`IaC/ansible/README.md`](./IaC/ansible/README.md) → **Passo 0**.
+- **Split produção/desenvolvimento**: dois ambientes independentes de inventário, variáveis e vault. O Portainer
+  de produção acompanha a branch `main` (`refs/heads/main`); o de dev acompanha `development`
+  (`refs/heads/development`).
+- **Assimetria push vs. Ansible**: ⚠️ mudar um `compose.yml` é invisível para a stack em execução até o commit
+  ser **enviado ao GitHub** — é de lá que o Portainer clona via GitOps. Já um arquivo de config *sidecar*
+  (ex.: `docker/monitoring/swarm/loki-config.yml`, listado em `monitoring_sidecar_files`, em
+  `IaC/ansible/inventories/_common/all.yml`) chega ao host pelo **working tree local**, via Ansible, e não
+  depende de push. Confundir os dois é o erro mais comum ao editar uma stack já rodando.
+- ⚠️ **O sidecar `prometheus.yml.j2` referenciado em `monitoring_sidecar_files` ainda não existe**: o
+  `prometheus.yml` do repositório é sintaxe Alloy River, não YAML do Prometheus, então o arquivo que o
+  Prometheus lê hoje no host não está no git. Ver [`prod-snapshot/`](./prod-snapshot/README.md).
+- **Roteamento e persistência**: nenhum serviço é exposto em HTTP puro — o Traefik redireciona para HTTPS com
+  TLS 1.2/1.3 — e todo dado persistente fica sob `/srv/containers/<servico>`.
 
 ---
 
 ## ✅ Qualidade & Convenções
 
-O gate roda em três alcances: o `pre-commit` varre as linhas *adicionadas*, `make check` varre a árvore inteira,
-e a CI repete sem poder ser pulada. Ele cobre vazamento de segredo, links e `stack_compose_path` que resolvem,
-sintaxe de compose, `ansible-lint`, `yamllint`, `shellcheck`, `terraform fmt` e o formato da mensagem de commit
-([Conventional Commits](https://www.conventionalcommits.org/pt-br/)). As regras completas, com o motivo de cada
-uma, estão no [contrato de contribuição](./CLAUDE.md#-contrato-de-contribuição-obrigatório) do `CLAUDE.md`, que
-é a fonte única lida também pelos assistentes de IA (`AGENTS.md` é symlink para lá).
+O gate roda em três alcances. O `pre-commit` varre as linhas *adicionadas* contra vazamento de segredo, e checa
+links, `stack_compose_path`, sintaxe e linters. `make check` repete tudo isso na árvore inteira — lint, sintaxe
+de compose, `ansible-lint`, `yamllint`, `shellcheck`, `terraform fmt`, links e os renders. ⚠️ **`make secrets` é
+um alvo separado e não é dependência de `check`**: é ele, e só ele, que varre a árvore rastreada inteira contra
+vazamento de segredo. A CI roda os dois em passos distintos, e é por isso que o caminho do contribuidor, lá em
+cima, pede os dois antes do PR.
+
+As regras completas, com o motivo de cada uma, estão no
+[contrato de contribuição](./CLAUDE.md#-contrato-de-contribuição-obrigatório) do `CLAUDE.md`, que é a fonte
+única lida também pelos assistentes de IA (`AGENTS.md` é symlink para lá). O formato da mensagem de commit segue
+[Conventional Commits](https://www.conventionalcommits.org/pt-br/), validado no hook e revalidado na CI.
 
 ⚠️ Sem `make hooks` o gate existe no repositório e simplesmente não roda — é o modo de falha silencioso mais provável aqui.
 
