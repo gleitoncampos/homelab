@@ -19,7 +19,7 @@ A rede overlay `traefik_public` e o `docker swarm init` são feitos por `02-boot
 - **Statping** (`docker/_catalog/statping/`): Dashboard de status de serviços e alertas de uptime.
 
 ### 3. Demais stacks
-As 24 restantes chegam ao cluster por um destes dois caminhos, nunca por edição manual do serviço já no ar: 12 são implantadas pelos playbooks `03` a `05` (11 direto de `_catalog/`); as outras 12 — Dozzle inclusive, apesar de já estar fora de `_catalog/` — não têm playbook e sobem pelo formulário de Stacks do Portainer. `docker/` vs. `docker/_catalog/` não é "implantado" vs. "não implantado": é "convenção de Swarm ok para promover" vs. "ainda precisa adequação" — ver [`docker/_catalog/README.md`](./_catalog/README.md).
+As 24 restantes chegam ao cluster por um destes dois caminhos, nunca por edição manual do serviço já no ar: 12 são implantadas pelos playbooks `03` a `05` (11 de `_catalog/` mais a Monitoring Stack); as outras 12 — Dozzle inclusive, apesar de já estar fora de `_catalog/` — não têm playbook e sobem pelo formulário de Stacks do Portainer. `docker/` vs. `docker/_catalog/` não é "implantado" vs. "não implantado": é "convenção de Swarm ok para promover" vs. "ainda precisa adequação" — ver [`docker/_catalog/README.md`](./_catalog/README.md).
 
 ---
 

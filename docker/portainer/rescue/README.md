@@ -11,4 +11,10 @@ Corrige o `portainer.db` (BoltDB) depois de restaurar o backup de um convidado S
 1. Pare o Portainer (`docker service scale portainer=0`, ou remova a stack) antes de tocar no arquivo: o BoltDB só admite um processo escrevendo por vez, e editar o `.db` com o Portainer ainda rodando arrisca corromper os dois.
 2. Copie o `portainer.db` para fora deste diretório (o backup real, ver aviso acima).
 3. Rode `./portainer_rescue.sh` sem argumento, se o `portainer.db` estiver na mesma pasta dos scripts, ou `./portainer_rescue.sh /caminho/para/portainer.db` apontando o arquivo.
+
+   ⚠️ **Se aparecer `Backup criado (hardlink)` na tela, isso não é um backup.** Hardlink aponta para o mesmo
+   arquivo, e ele será alterado junto com o original. O seu backup de verdade é a cópia que você fez no passo 2.
+   O programa só cria uma cópia independente quando origem e destino estão em sistemas de arquivos diferentes —
+   o que quase nunca acontece aqui, porque ele grava o `.bak` no mesmo diretório do `portainer.db`.
+
 4. Suba o Portainer de novo e confira que os ambientes e as stacks aparecem íntegros.
