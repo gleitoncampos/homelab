@@ -1,262 +1,129 @@
 # 🏠 HomeLab & Self-Hosted Infrastructure
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Debian-A81D33?style=for-the-badge&logo=debian&logoColor=white" alt="Debian" />
-  <img src="https://img.shields.io/badge/Docker_Swarm-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker Swarm" />
-  <img src="https://img.shields.io/badge/Traefik-24A148?style=for-the-badge&logo=traefik&logoColor=white" alt="Traefik" />
-  <img src="https://img.shields.io/badge/Portainer-13BEF9?style=for-the-badge&logo=portainer&logoColor=white" alt="Portainer" />
-  <img src="https://img.shields.io/badge/Grafana-F46800?style=for-the-badge&logo=grafana&logoColor=white" alt="Grafana" />
-  <img src="https://img.shields.io/badge/Renovate-17A2B8?style=for-the-badge&logo=renovatebot&logoColor=white" alt="Renovate" />
+  <img src="https://img.shields.io/badge/Debian-A81D33?style=for-the-badge&logo=debian&logoColor=white" alt="Debian" /> <img src="https://img.shields.io/badge/Docker_Swarm-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker Swarm" /> <img src="https://img.shields.io/badge/Traefik-24A148?style=for-the-badge&logo=traefik&logoColor=white" alt="Traefik" />
+  <img src="https://img.shields.io/badge/Portainer-13BEF9?style=for-the-badge&logo=portainer&logoColor=white" alt="Portainer" /> <img src="https://img.shields.io/badge/Grafana-F46800?style=for-the-badge&logo=grafana&logoColor=white" alt="Grafana" /> <img src="https://img.shields.io/badge/Renovate-17A2B8?style=for-the-badge&logo=renovatebot&logoColor=white" alt="Renovate" />
 </p>
 
-Repositório central de configurações, automações e arquivos de implantação (**Docker Swarm / Docker Compose**) da infraestrutura do meu HomeLab pessoal.
+Configurações, automações e arquivos de implantação da infraestrutura do meu HomeLab pessoal — serviços
+auto-hospedados no lugar da nuvem proprietária, por soberania de dados e privacidade. Docker Swarm sobre
+Debian 12/13, TLS wildcard via DNS-01 na Cloudflare, observabilidade em LGTM (Grafana, Loki, Prometheus,
+Alloy). As premissas de arquitetura, com o motivo de cada uma, estão em [`CLAUDE.md`](./CLAUDE.md).
 
 ---
 
-## 🎯 A Motivação: Emancipação Digital & Self-Hosting
+## TL;DR
 
-Tudo começou quando, por questões de segurança após fazer uma compra no AliExpress, precisei gravar um vídeo detalhado do *unboxing*. Pouco tempo depois, recebi um alerta do **Google Photos** avisando que meu armazenamento de 15 GB havia atingido 80% da capacidade — acompanhado de uma oferta "imperdível" para assinar um plano pago de 100 GB.
+Dois públicos, dois caminhos. **Contribuir com código:** `make hooks && make check`, e o resto está em
+[`CONTRIBUTING.md`](./CONTRIBUTING.md) — nada abaixo é necessário. **Operar um homelab:** siga na ordem.
 
-Após alguns segundos de reflexão, ficou evidente que pagar uma assinatura mensal contínua não fazia sentido:
-- Não costumo tirar fotos ou gravar vídeos com frequência.
-- Os anos que levei para ocupar 12 GB seriam multiplicados até chegar aos 100 GB offered, mas eu pagaria a mensalidade durante todo esse período.
+```bash
+# 1. Gate de qualidade (uma vez por clone — o git não versiona .git/hooks/)
+make hooks
+$EDITOR .githooks/secret-patterns.local.txt    # hostnames e domínios da SUA topologia
 
-Esse gatilho reacendeu a paixão por infraestrutura e redes, abrindo as portas para um universo fascinante: o **Self-Hosting**. O objetivo principal deste repositório é documentar a transição para serviços auto-hospedados, garantindo **soberania de dados, privacidade e total controle da infraestrutura**.
+# 2. Entradas do Terraform e do Ansible (fonte única; rodar de novo não repergunta)
+make bootstrap ARGS=--dry-run                  # mostra o que faria
+make bootstrap                                 # gera de verdade
 
----
+# 3. Validar o repositório (o mesmo conjunto que a CI roda)
+make check
 
-## 🏗️ Arquitetura da Infraestrutura
+# 4. Hardware virtual — PULE se as VMs e os CTs já existem
+cd IaC/terraform/proxmox
+terraform init
+terraform plan
+terraform apply
 
-A infraestrutura foi desenhada priorizando estabilidade, facilidade de manutenção e segurança:
+# 5. Sistema, cluster e stacks
+cd IaC/ansible
+ansible-galaxy collection install -r requirements.yml
+ansible-playbook site.yml --ask-become-pass    # prod é o inventário default
+```
 
-- **Sistema Operacional Base**: [Debian 12/13](https://www.debian.org/) (Bookworm/Trixie) em instâncias dedicadas.
-- **Orquestração de Containers**: **Docker Swarm** para gerenciamento de serviços em alta disponibilidade e facilidade de deploy.
-- **Ingress & TLS**: [Traefik v3](https://traefik.io/) como Reverse Proxy centralizado, integrado à API da Cloudflare para emissão automática de certificados SSL/TLS wildcard via Let's Encrypt (DNS-01 Challenge).
-- **Gerenciamento Visual**: [Portainer](https://www.portainer.io/) para controle visual das Stacks, Containers e redes Swarm.
-- **Observabilidade & Métricas**: LGTM Stack ([Grafana](https://grafana.com/), [Loki](https://grafana.com/oss/loki/), [Prometheus](https://prometheus.io/), [Grafana Alloy](https://grafana.com/docs/alloy/latest/)) para centralização de logs e métricas.
-- **Manutenção de Dependências**: [Renovate Bot](https://docs.renovatebot.com/) para auditoria e atualização automatizada de imagens Docker.
+O passo 2 gera, a partir de um arquivo de respostas gitignorado: os dois `hosts.ini`, os dois `vault.yml` cifrados,
+o `terraform.tfvars`, o `secret-patterns.local.txt`, a chave SSH, a senha do vault em `IaC/ansible/.ansible_vault_pass`
+e o `CREDENCIAIS.local.txt` com as senhas de uso humano. Ele **não provisiona nada**. Das 23 chaves de segredo que
+ele trata, 12 são geradas sem pergunta alguma, 9 são pedidas com a URL do console impressa ao lado, e 2 ficam
+pendentes — os hashes bcrypt do OPNsense, que só o próprio firewall calcula. Detalhe em
+[`IaC/bootstrap/`](./IaC/bootstrap/README.md).
+
+⚠️ **Faça backup de `IaC/ansible/.ansible_vault_pass`.** Sem essa senha os dois vaults são irrecuperáveis, e não existe segunda cópia em lugar nenhum.
+
+⚠️ **Passo 4, se algum convidado já existe no Proxmox:** rode `terraform import` antes de qualquer `plan` ou
+`apply`. Sem o import, o Terraform tenta **criar** um CT ou VM duplicado com o mesmo IP estático de um nó em
+produção. O procedimento está em [`IaC/terraform/proxmox/`](./IaC/terraform/proxmox/README.md) e é leitura
+obrigatória antes do primeiro apply.
+
+⚠️ **Passo 5, contra um convidado recém-criado pelo Terraform:** ele ainda não tem o usuário de automação, só
+acesso root por chave. Rode antes o playbook `00-node-bootstrap.yml`, que é a ponte de root para o usuário de
+automação.
+
+`site.yml` importa sete playbooks, nessa ordem: host Proxmox, host OpenMediaVault, sistema operacional, cluster
+Swarm e as três de stacks (`03`, `04`, `05`). Ficam **fora** dele, e são disparados à mão: `00-node-bootstrap.yml`,
+`06-backup.yml` e os de `playbooks/network/`.
+
+Não rode `docker swarm init` nem `docker network create traefik_public` à mão: o `02-bootstrap-cluster.yml` faz
+os dois, e configuração manual não parametrizada é perdida na próxima execução — ver
+[IaC é a fonte da verdade](./CLAUDE.md).
 
 ---
 
 ## 📂 Estrutura do Repositório
 
-A árvore comentada, com o papel de cada diretório, vive em
-[`CLAUDE.md`](./CLAUDE.md#-estrutura-do-repositório) — junto das regras que
-governam onde cada coisa entra. Mantê-la em um lugar só evita a divergência
-que já aconteceu entre os dois arquivos.
+A árvore comentada, com o papel de cada diretório e a regra de onde cada coisa entra, vive em [`CLAUDE.md`](./CLAUDE.md#-estrutura-do-repositório).
 
 | diretório | o que guarda |
 |---|---|
-| `IaC/` | **toda** ferramenta de infraestrutura como código. Hoje `bootstrap/` (gera as entradas das outras duas), `ansible/` (sistema, cluster e stacks) e `terraform/` (VMs e containers no Proxmox); amanhã Packer, Vagrant ou o que vier — sempre como subdiretório, nunca solto na raiz |
-| `docker/` | as stacks que sobem pelo formulário de Stacks do Portainer. As demais ficam em `docker/_catalog/` — algumas já implantadas direto de lá por um playbook do Ansible |
-| `prod-snapshot/` | ferramentas que coletam o estado real da produção para comparar com o que está descrito aqui |
+| `IaC/` | **toda** ferramenta de infraestrutura como código: `bootstrap/` (gera as entradas das outras duas), `ansible/` (sistema, cluster e stacks), `terraform/` (VMs e CTs no Proxmox). Ferramenta nova entra como subdiretório, nunca solta na raiz |
+| `docker/` | as stacks de serviço; as ainda não promovidas ficam em `docker/_catalog/` |
+| `prod-snapshot/` | scripts que coletam o estado real da produção para comparar com o descrito aqui |
 | `docs/` | runbooks operacionais. ⚠️ Documento que enumera fraqueza ainda não corrigida — backlog de segurança, lista de pendências, plano de hardening — **não** entra aqui: vive fora do versionamento. Ver [`CLAUDE.md`](./CLAUDE.md#regra-documento-de-trabalho-vive-em-local) |
 
-A regra do `IaC/` existe para que a raiz responda *o que este repositório é*, e
-não *quais ferramentas ele usa* — com cada ferramenta solta no topo, a leitura
-vira um inventário de tecnologias. Ver
-[`CLAUDE.md`](./CLAUDE.md#regra-toda-ferramenta-de-iac-vive-sob-iac).
-
 ---
 
-## 🌐 Catálogo de Serviços Self-Hosted
+## 🌐 Serviços
 
-Os serviços estão organizados por domínio funcional dentro da pasta [`docker/`](./docker):
-
-### 1. Ingress, Segurança & Gerenciamento
-| Serviço | Descrição | Link da Configuração |
-| :--- | :--- | :--- |
-| **Traefik** | Reverse Proxy dinâmico com roteamento HTTPS e certificados wildcard Cloudflare | [`docker/traefik`](./docker/traefik) |
-| **Portainer** | Gestão visual do Docker Swarm, Stacks e volumes + Rescue Scripts | [`docker/portainer`](./docker/portainer) |
-
-### 2. Monitoramento, Observabilidade & Dashboards
-| Serviço | Descrição | Link da Configuração |
-| :--- | :--- | :--- |
-| **Monitoring Stack** | Grafana + Loki + Prometheus + Alloy para métricas do host e logs de containers | [`docker/monitoring`](./docker/monitoring) |
-| **Statping** | Monitoramento de disponibilidade (uptime) e página de status dos serviços | [`docker/statping`](./docker/_catalog/statping) |
-| **Glance** | Dashboard minimalista para centralizar links e widgets do homelab | [`docker/glance`](./docker/_catalog/glance) |
-| **Organizr** | Hub e portal de acesso unificado para múltiplos serviços self-hosted | [`docker/organizr`](./docker/_catalog/organizr) |
-
-### 3. Armazenamento, Fotos & Documentos (Substitutos Google)
-| Serviço | Descrição | Link da Configuração |
-| :--- | :--- | :--- |
-| **Nextcloud** | Substituição direta do Google Photos e Google Drive com sincronização mobile/desktop | [`docker/nextcloud`](./docker/_catalog/nextcloud) |
-| **Paperless-ngx** | Indexação, busca textual por OCR e organização de documentos físicos escaneados | [`docker/paperless-ngx`](./docker/_catalog/paperless-ngx) |
-| **Obsidian Sync** | Sincronização CouchDB/LiveSync para notas de base de conhecimento | [`docker/obsidian`](./docker/_catalog/obsidian) |
-| **Stirling-PDF** | Suíte completa para divisão, fusão, OCR e conversão de arquivos PDF | [`docker/stirling-pdf`](./docker/_catalog/stirling-pdf) |
-| **Linkwarden** | Gerenciador de marcadores e arquivador de páginas web | [`docker/linkwarden`](./docker/_catalog/linkwarden) |
-| **ByteStash** | Repositório de trechos de código e anotações técnicas | [`docker/bytestash`](./docker/_catalog/bytestash) |
-| **IT-Tools** | Coleção offline de utilitários para sysadmins e desenvolvedores | [`docker/it-tools`](./docker/_catalog/it-tools) |
-| **Composerize** | Ferramenta para converter comandos `docker run` em `docker-compose.yml` | [`docker/composerize`](./docker/_catalog/composerize) |
-
-### 4. Gestão de Tarefas, Finanças & Assinaturas
-| Serviço | Descrição | Link da Configuração |
-| :--- | :--- | :--- |
-| **Vikunja** | Gestão de tarefas, listas e projetos (Kanban, GANTT e listas encadeadas) | [`docker/vikunja`](./docker/_catalog/vikunja) |
-| **Actual Budget** | Sistema de orçamento pessoal baseado em orçamento base zero | [`docker/actual-budget`](./docker/_catalog/actual-budget) |
-| **Firefly III** | Gerenciador financeiro avançado para contas, relatórios e transações | [`docker/firefly3`](./docker/_catalog/firefly3) |
-| **Wallos** | Acompanhamento de custos com assinaturas de serviços recorrentes | [`docker/wallos`](./docker/_catalog/wallos) |
-| **Thrifty** | Controle de despesas diárias ágil e leve | [`docker/thrifty`](./docker/_catalog/thrifty) |
-| **PriceBuddy** | Rastreador de variação de preços e promoções | [`docker/pricebuddy`](./docker/_catalog/pricebuddy) |
-
-### 5. Automação, Ambientes Isolados & Mídia
-| Serviço | Descrição | Link da Configuração |
-| :--- | :--- | :--- |
-| **Cronicle** | Agendador centralizado de tarefas, scripts e rotinas periódicas | [`docker/cronicle`](./docker/_catalog/cronicle) |
-| **JDownloader** | Gerenciador de downloads remotos com controle web | [`docker/jdownloader`](./docker/_catalog/jdownloader) |
-| **KASM Workspaces** | Execução de navegadores e desktops em containers isolados via web | [`docker/kasm`](./docker/_catalog/kasm) |
-| **ZoneMinder** | Sistema de videomonitoramento NVR e análise de câmeras de segurança | [`docker/zoneminder`](./docker/_catalog/zoneminder) |
-
----
-
-## 🚀 Ponto de partida
-
-Num clone novo, três comandos antes de qualquer outra coisa:
-
-```bash
-git config core.hooksPath .githooks   # ou: make hooks
-make bootstrap                        # gera vault, inventário, tfvars e chave SSH
-make check                            # valida o repositório
-```
-
-O [`make bootstrap`](./IaC/bootstrap/) é o que transforma um clone em algo
-executável. Ele **não provisiona nada** — produz as *entradas* que o Terraform e
-o Ansible consomem, e para aí:
-
-```
-IaC/homelab.local.yml  ──┬──▶  inventories/{prod,dev}/hosts.ini
-   (fonte única,         ├──▶  inventories/*/group_vars/all/vault.yml (cifrado)
-    gitignorada)         ├──▶  terraform/proxmox/terraform.tfvars
-                         └──▶  .githooks/secret-patterns.local.txt
-```
-
-Existe porque o mesmo valor era pedido em vários arquivos — a chave SSH pública
-em dois, os IPs dos nós em dois, hostname e domínio ainda alimentando o gate.
-Divergência entre inventário e `tfvars` não produz erro: produz comportamento
-errado, que é pior. Com uma fonte só, **rodar de novo não repergunta nada**;
-para corrigir um IP, edite uma linha e rode outra vez.
-
-Dos 36 segredos, **15 são gerados sem pergunta alguma** e 9 são pedidos com a URL
-do console impressa ao lado. Segredo que já existe no vault é preservado —
-rotação é decisão, não efeito colateral de rodar um comando.
-
-⚠️ **Ele pergunta dois conjuntos de endereços, e não é redundância.** O
-inventário recebe os IPs de **hoje**, porque é por eles que o Ansible alcança os
-hosts; o `tfvars` e o plano de VLANs recebem os IPs-**alvo**, porque o Terraform
-cria as VMs já onde elas devem ficar. Enquanto a migração de rede não acontece, é
-esperado que sejam diferentes.
-
-Detalhes, garantias de escrita e o tratamento de cada tipo de segredo em
-[`IaC/bootstrap/README.md`](./IaC/bootstrap/README.md).
-
----
-
-## 🚀 Guia Rápidos de Implantação
-
-A ordem é **`make bootstrap` → Terraform → Ansible**: o primeiro gera as
-entradas, o segundo cria as VMs e os CTs, o terceiro configura sistema, cluster e
-stacks.
-
-### 1. Provisionamento do Host (Debian 12/13)
-Do control node, com o inventário já gerado pelo bootstrap:
-
-```bash
-cd IaC/ansible
-ansible-galaxy collection install -r requirements.yml
-ansible-playbook -i inventories/prod/hosts.ini playbooks/01-bootstrap-os.yml
-```
-
-O playbook instala Docker CE, aplica o hardening de SSH e UFW e cria a árvore
-em `/srv/containers`. Para um nó recém-criado, sem o usuário administrativo
-ainda, rode antes `playbooks/00-node-bootstrap.yml` com `-e target=<host>`.
-
-### 2. Inicialização do Cluster Swarm
-Inicialize o Docker Swarm na máquina principal (Manager):
-
-```bash
-docker swarm init
-```
-
-Crie a rede overlay externa necessária para o Traefik e Portainer:
-
-```bash
-docker network create --driver=overlay traefik_public
-```
-
-### 3. Deploy do Ingress & Portainer
-1. Suba a stack do **Traefik** para habilitar o roteamento de domínios.
-2. Suba o **Portainer** para gerenciar as demais Stacks via interface gráfica. Consulte as instruções detalhadas em [`docker/README.md`](./docker/README.md).
+São 26 stacks definidas: 4 em [`docker/`](./docker) e 22 em `docker/_catalog/`. Dessas, **14 são implantadas por
+automação** — Portainer e Traefik pelo playbook `02`, e mais 12 pelos playbooks `03` a `05`, das quais 11 saem
+direto de `_catalog/`. As 12 restantes não têm playbook: o deploy, quando existe, é manual, pelo formulário de
+Stacks do Portainer. A tabela completa, com categoria, caminho e descrição, está em
+[`docker/README.md`](./docker/README.md).
 
 ---
 
 ## 🛡️ Boas Práticas & Segurança
 
-- **IaC é a fonte da verdade, e divergência é destruída**: este repositório não descreve o que está configurado nos equipamentos — ele **define** o que deve estar. ⚠️ Configuração feita à mão (GUI do OPNsense, LuCI, interface do Proxmox, Portainer, `ssh` no host) que não esteja parametrizada aqui **é perdida** na próxima execução, por projeto. Por isso o playbook do OPNsense escreve `/conf/config.xml` inteiro em vez de fazer merge. Mudança começa no repositório; ajuste emergencial pela GUI vira variável ou template no mesmo dia, ou a próxima execução o cobra. Estado de aplicação — banco, mídia, log, certificado emitido — não entra nessa regra: vive em `/srv/containers/` e em volume. O detalhe, com o contrato completo, está em [`CLAUDE.md`](./CLAUDE.md#-iac-é-a-fonte-da-verdade--divergência-é-destruída-não-preservada).
-- **Segredos e Variáveis de Ambiente**: Arquivos `.env` contendo senhas, chaves de API Cloudflare e tokens são mantidos fora do controle de versão via `.gitignore`.
-- **Ansible Vault como fonte única, um por ambiente**: Os segredos consumidos pela automação vivem em dois arquivos criptografados — `IaC/ansible/inventories/prod/group_vars/all/vault.yml` e `IaC/ansible/inventories/dev/group_vars/all/vault.yml` (ambos gitignorados). O Ansible injeta os valores no campo `env` da API do Portainer, que resolve os `${VAR}` do `compose.yml` — assim nenhum segredo entra no repositório. Setup em [`IaC/ansible/README.md`](./IaC/ansible/README.md) → **Passo 0**. Variável de segredo **nunca** usa `| default('...')`: os playbooks abortam via `tasks/validate_vault.yml` se um segredo faltar, em vez de provisionar com valor público.
-- **Split produção/desenvolvimento**: o inventário Ansible tem dois ambientes independentes, `IaC/ansible/inventories/prod/` e `IaC/ansible/inventories/dev/`, cada um com seu próprio inventário, variáveis e vault. O Portainer de **produção** acompanha a branch `main` deste repositório (`github_repo_branch: refs/heads/main`); o Portainer de **dev** acompanha a branch `develop` (`refs/heads/develop`). Isso significa que uma mudança em `compose.yml` só chega a cada ambiente depois do `push` para a branch correspondente — ver assimetria abaixo.
-- **Assimetria push vs. Ansible**: mudar um `compose.yml` (ou qualquer arquivo dentro de `docker/`) é invisível para a stack já em execução até o commit ser enviado ao GitHub — é de lá que o Portainer clona via GitOps. Já uma mudança num arquivo de config *sidecar* (ex.: `docker/monitoring/swarm/loki-config.yml`, listado em `monitoring_sidecar_files` em `inventories/_common/all.yml`) chega ao host pelo **working tree local** via Ansible (`ansible.builtin.template`/`copy`) na próxima execução do playbook, e **não depende de push**. ⚠️ O sidecar `prometheus.yml.j2` referenciado em `monitoring_sidecar_files` **ainda não existe** — o `prometheus.yml` atual do repo é sintaxe Alloy River, não YAML do Prometheus; templatá-lo é trabalho pendente. Confundir os dois caminhos é o erro mais comum ao editar uma stack já rodando.
-- **Roteamento HTTPS**: Nenhum serviço é exposto em HTTP puro. O Traefik força o redirecionamento automático para HTTPS com TLS 1.2/1.3.
-- **Persistência de Dados**: Os dados persistentes de cada aplicação devem ser armazenados sob a pasta padrão `/srv/containers/<nome-do-servico>`.
+- **IaC é a fonte da verdade, e divergência é destruída**: ⚠️ configuração feita à mão (GUI do OPNsense, LuCI, interface do Proxmox, Portainer, `ssh` no host) que não esteja parametrizada aqui **é perdida** na próxima execução, por projeto — o playbook do OPNsense escreve `/conf/config.xml` inteiro em vez de fazer merge. Ajuste emergencial pela GUI vira variável ou template no mesmo dia. Estado de aplicação (banco, mídia, log, certificado emitido) não entra nessa regra: vive em `/srv/containers/` e em volume. Contrato completo em [`CLAUDE.md`](./CLAUDE.md#-iac-é-a-fonte-da-verdade--divergência-é-destruída-não-preservada).
+- **Ansible Vault como fonte única, um por ambiente**: os segredos vivem em dois arquivos cifrados e gitignorados, `IaC/ansible/inventories/{prod,dev}/group_vars/all/vault.yml`. O Ansible os injeta no campo `env` da API do Portainer, que resolve os `${VAR}` do `compose.yml` — nenhum segredo entra no repositório. ⚠️ Variável de segredo **nunca** usa `| default('...')`: os playbooks abortam via `tasks/validate_vault.yml` se um segredo faltar, em vez de provisionar com valor público. Setup em [`IaC/ansible/README.md`](./IaC/ansible/README.md) → **Passo 0**.
+- **Split produção/desenvolvimento**: dois ambientes independentes de inventário, variáveis e vault. O Portainer de produção acompanha a branch `main` (`refs/heads/main`); o de dev acompanha `development` (`refs/heads/development`).
+- **Assimetria push vs. Ansible**: ⚠️ mudar um `compose.yml` é invisível para a stack em execução até o commit ser **enviado ao GitHub** — é de lá que o Portainer clona via GitOps. Já um arquivo de config *sidecar* (ex.: `docker/monitoring/swarm/loki-config.yml`, listado em `monitoring_sidecar_files`) chega ao host pelo **working tree local**, via Ansible, e não depende de push. Confundir os dois é o erro mais comum ao editar uma stack já rodando.
+- ⚠️ **O sidecar `prometheus.yml.j2` referenciado em `monitoring_sidecar_files` ainda não existe**: o `prometheus.yml` do repositório é sintaxe Alloy River, não YAML do Prometheus, então o arquivo que o Prometheus lê hoje no host não está no git. Ver [`prod-snapshot/`](./prod-snapshot/README.md).
+- **Roteamento e persistência**: nenhum serviço é exposto em HTTP puro — o Traefik redireciona para HTTPS com TLS 1.2/1.3 — e todo dado persistente fica sob `/srv/containers/<servico>`.
 
 ---
 
-## ✅ Qualidade & Convenções de Contribuição
+## ✅ Qualidade & Convenções
 
-As regras completas, com o motivo de cada uma, estão no
-[**contrato de contribuição**](./CLAUDE.md#-contrato-de-contribuição-obrigatório)
-do `CLAUDE.md` — que é a fonte única lida também pelos assistentes de IA
-(`AGENTS.md` é um symlink para lá). O resumo:
+O gate roda em três alcances: o `pre-commit` varre as linhas *adicionadas*, `make check` varre a árvore inteira,
+e a CI repete sem poder ser pulada. Ele cobre vazamento de segredo, links e `stack_compose_path` que resolvem,
+sintaxe de compose, `ansible-lint`, `yamllint`, `shellcheck`, `terraform fmt` e o formato da mensagem de commit
+([Conventional Commits](https://www.conventionalcommits.org/pt-br/)). As regras completas, com o motivo de cada
+uma, estão no [contrato de contribuição](./CLAUDE.md#-contrato-de-contribuição-obrigatório) do `CLAUDE.md`, que
+é a fonte única lida também pelos assistentes de IA (`AGENTS.md` é symlink para lá).
 
-**Antes de qualquer coisa, num clone novo:**
+⚠️ Sem `make hooks` o gate existe no repositório e simplesmente não roda — é o modo de falha silencioso mais provável aqui.
 
-```bash
-make hooks     # ativa core.hooksPath e cria o arquivo de padrões local
-make check     # o mesmo conjunto que a CI roda
-```
+⚠️ Nenhum dado real entra em arquivo versionado: exemplos usam as faixas da RFC 5737 e domínios `.example`, e a
+tabela do que usar no lugar de cada dado está em [`CONTRIBUTING.md`](./CONTRIBUTING.md). Hostname e domínio da
+sua topologia vão em `secret-patterns.local.txt`, que é gitignorado — publicar a lista de termos proibidos
+entregaria o esquema de nomes. O backlog por fase e o checklist de pré-publicação também ficam fora do
+versionamento: os dois enumeram o que ainda não está protegido, e num repositório aberto essa lista serve mais
+a um atacante do que a um contribuidor.
 
-O Git não versiona `.git/hooks/`. Sem `make hooks` o gate existe no repositório
-e simplesmente não roda — é o modo de falha silencioso mais provável aqui.
-
-| o que | como é garantido |
-|---|---|
-| **Nenhum dado sensível versionado** | Três alcances: o `pre-commit` varre as linhas *adicionadas*, `make secrets` varre a **árvore inteira**, e a CI repete sem poder ser pulada. Padrões em [`.githooks/secret-patterns.txt`](./.githooks/secret-patterns.txt) — os **deste** homelab, já que ferramenta de prateleira pega chave da AWS e não pega o hostname do seu hypervisor |
-| **A mensagem de commit também** | O `commit-msg` varre a mensagem contra os mesmos padrões. Mensagem é publicada com o diff e não tem conserto sem reescrever o histórico |
-| **Referências que resolvem** | todo `stack_compose_path` aponta para arquivo existente e todo link relativo de markdown resolve. As duas já quebraram de verdade aqui |
-| **Sintaxe válida** | Compose com duas réguas — `docker stack config` no que está no ar, `docker compose config` no catálogo — mais `yamllint` e `ansible-playbook --syntax-check` |
-| **Linters limpos** | `ansible-lint` em zero com [`profile: production`](./.ansible-lint) fixado, `yamllint`, `shellcheck`, `terraform fmt`. Ausente do sistema, o linter é pulado com aviso em vez de falhar |
-| **Histórico legível** | [Conventional Commits](https://www.conventionalcommits.org/pt-br/) validados no hook e revalidados na CI, commit a commit, em cada PR |
-| **Formatação uniforme** | [`.editorconfig`](./.editorconfig) no editor e [`.gitattributes`](./.gitattributes) no próprio git — o primeiro só vale em editor que o honra |
-| **Dependências em dia** | [`.renovaterc.json`](./.renovaterc.json): agrupa por stack, segura major de banco e o catálogo inteiro atrás de aprovação, e deixa CVE furar a fila |
-
-⚠️ **Dois arquivos de padrões.** O versionado guarda só o genérico; hostname e
-domínio ficam em `secret-patterns.local.txt`, que é gitignorado. Publicar a
-lista de termos proibidos entregaria o esquema de nomes e confirmaria quais
-nomes importam.
-
-Exemplos usam as faixas de documentação da RFC 5737 (`192.0.2.0/24`,
-`198.51.100.0/24`, `203.0.113.0/24`) e domínios `.example`. Ao mudar hostname,
-domínio ou faixa de rede, o arquivo local é atualizado junto — padrão
-desatualizado dá sensação de proteção sem proteger.
-
-`git commit --no-verify` funciona e às vezes é o certo. Quando usar, o motivo vai
-no corpo da mensagem: o gate existe para tornar a exceção visível, não impossível.
-
-Contribuições são bem-vindas — ver [`CONTRIBUTING.md`](./CONTRIBUTING.md).
-Falha de segurança vai por [`SECURITY.md`](./SECURITY.md), **nunca** por issue
-pública. Licença [MIT](./LICENSE).
+Contribuições são bem-vindas — ver [`CONTRIBUTING.md`](./CONTRIBUTING.md). Falha de segurança vai por
+[`SECURITY.md`](./SECURITY.md), **nunca** por issue pública. Licença [MIT](./LICENSE).
 
 ---
 
-## 📌 Próximos Passos
-
-O backlog por fase e o checklist de pré-publicação são mantidos **fora do
-versionamento**: os dois enumeram o que ainda não está protegido, e num
-repositório aberto essa lista serve mais a um atacante do que a um contribuidor.
-Quem opera este lab os encontra no diretório local de trabalho.
-
----
-
-<p align="center">
-  <i>Desenvolvido com foco em autonomia digital, privacidade e aprendizado contínuo. 🚀</i>
-</p>
+<p align="center"><i>Desenvolvido com foco em autonomia digital, privacidade e aprendizado contínuo. 🚀</i></p>
