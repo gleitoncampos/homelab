@@ -2,6 +2,13 @@
 - name: "00 - Proxmox VE Host Setup, Hardening, Performance Enterprise e Exportação de Configurações"
   hosts: proxmox
   become: true
+
+  vars:
+    # Suíte Debian da versão alvo do Proxmox VE: PVE 9 roda sobre Debian 13
+    # (trixie). Parametrizado para que o próximo salto de versão seja uma linha
+    # só, e não uma caçada a literais espalhados pelas tasks de repositório.
+    proxmox_debian_suite: trixie
+
   pre_tasks:
     - name: Validar segredos do Vault exigidos por este play
       ansible.builtin.include_tasks: "../tasks/validate_vault.yml"
@@ -9,6 +16,65 @@
         required_secrets:
           - ssh_public_key
           - proxmox_alert_email
+          - proxmox_backup_share_password
+
+    # ------------------------------------------------------------------
+    # Detecção das dependências externas
+    # ------------------------------------------------------------------
+    # Três coisas que este playbook configura dependem de equipamentos que
+    # podem não existir ainda numa instalação do zero:
+    #
+    #   /etc/pve/storage.cfg      -> precisa do NAS (share CIFS de backup)
+    #   /etc/network/interfaces   -> precisa do firewall (é o gateway)
+    #   systemd-resolved desligado-> precisa do firewall (passa a ser o DNS)
+    #
+    # Em vez de exigir do operador uma ordem de execução decorada, cada bloco
+    # dependente é DETECTADO e ADIADO quando a dependência não responde. O
+    # resumo no fim do play diz exatamente o que ficou para trás. Rodar o mesmo
+    # playbook de novo, com tudo no ar, aplica o que faltou — ele é idempotente
+    # por construção, então não existe "segunda parte" a lembrar.
+    #
+    # ⚠️ O que NÃO se faz aqui: pular em silêncio. Foi assim que 53 falhas
+    # ficaram escondidas atrás de `ignore_errors` nesta base. Um bloco adiado
+    # é ruidoso por obrigação — ver a última task deste play.
+    - name: "Detectar se o NAS responde (decide se o storage de backup entra nesta execução)"
+      ansible.builtin.wait_for:
+        host: "{{ hostvars[groups['omv'][0]].ansible_host }}"
+        port: 445
+        timeout: 5
+      when: groups['omv'] | default([]) | length > 0
+      register: nas_probe
+      failed_when: false
+      changed_when: false
+      # `wait_for` declara `check_mode: support none`, então em `--check` ele é
+      # PULADO — e a sonda pulada não devolve `state`, o que marcaria as duas
+      # dependências como ausentes. O efeito seria pior que inútil: um
+      # `--check --diff`, que é justamente como se revisa a mudança mais
+      # perigosa deste playbook, reportaria a rede e o storage como "skipping"
+      # e mostraria um diff limpo — logo antes de a execução real reescrever
+      # /etc/network/interfaces. A sonda só lê uma porta; rodá-la em check mode
+      # não altera nada.
+      check_mode: false
+
+    - name: "Detectar se o firewall responde (decide se rede e DNS entram nesta execução)"
+      ansible.builtin.wait_for:
+        host: "{{ hostvars[groups['opnsense'][0]].ansible_host }}"
+        port: 443
+        timeout: 5
+      when: groups['opnsense'] | default([]) | length > 0
+      register: firewall_probe
+      failed_when: false
+      changed_when: false
+      check_mode: false   # mesmo motivo da sonda acima
+
+    # `wait_for` só devolve `state: started` quando a porta de fato abriu. Com
+    # `failed_when: false` o campo `failed` deixa de servir como sinal, e a
+    # task pulada (grupo vazio no inventário) não devolve campo nenhum — daí o
+    # `default('')`, que cobre os dois casos sem tratar ausência como sucesso.
+    - name: Consolidar quais blocos dependentes entram nesta execução
+      ansible.builtin.set_fact:
+        nas_disponivel: "{{ (nas_probe.state | default('')) == 'started' }}"
+        firewall_disponivel: "{{ (firewall_probe.state | default('')) == 'started' }}"
 
     # As duas alimentam `templates/proxmox/proxmox_storage.j2`, que este play
     # escreve por cima de /etc/pve/storage.cfg. Sem assert, uma variável
@@ -16,7 +82,11 @@
     # com id vazio ou share vazio, o Proxmox deixa de enxergar o destino de
     # backup, e o vzdump falha toda noite — longe daqui, e sem que este
     # playbook tenha reportado erro nenhum.
-    - name: "Abortar se as variáveis do storage de backup não estiverem no inventário"
+    #
+    # O assert é condicionado à presença do NAS, não removido: NAS ausente é
+    # dependência que ainda não existe, e vira adiamento; NAS presente com
+    # variável faltando é erro de configuração, e continua abortando na hora.
+    - name: "Abortar se o NAS existe mas as variáveis do storage de backup não estão no inventário"
       ansible.builtin.assert:
         that:
           - backup_storage is defined
@@ -31,6 +101,41 @@
           o outro agenda o vzdump contra ele. `proxmox_backup_share` é o nome
           do compartilhamento CIFS no NAS (campo `share`). Defina os dois em
           [all:vars] no hosts.ini do ambiente — ver hosts.ini.example.
+      when: nas_disponivel
+
+    # `proxmox_gateway_ip` NÃO tem default, e não deriva de `vlans`: essa
+    # variável vive em `group_vars/network/`, que só se aplica aos hosts do
+    # grupo `network` (opnsense, openwrt). Um host do grupo `proxmox` nunca a
+    # enxerga — o template de interfaces referenciava `vlans` e teria falhado
+    # com "'vlans' is undefined" na primeira execução real contra um
+    # hipervisor. Ver `hosts.ini.example`, seção [all:vars].
+    - name: "Abortar se o firewall existe mas proxmox_gateway_ip não está no inventário"
+      ansible.builtin.assert:
+        that:
+          - proxmox_gateway_ip is defined
+          - proxmox_gateway_ip | string | length > 0
+        fail_msg: >-
+          proxmox_gateway_ip não está definido. É o IP do firewall na rede de
+          gerência — o gateway que este play escreve em
+          /etc/network/interfaces. Defina em [all:vars] no hosts.ini do
+          ambiente (o `make bootstrap` já o preenche), ou remova o host do
+          grupo [opnsense] se o firewall ainda não existir.
+      when: firewall_disponivel
+
+    # A bridge é montada com as interfaces físicas descobertas nos facts. Zero
+    # interfaces significaria escrever `bridge-ports` vazio: a bridge sobe, o
+    # host perde a rede, e o arquivo continua sintaticamente válido — falha sem
+    # mensagem, do tipo que só aparece depois do reboot.
+    - name: "Abortar se nenhuma interface física foi descoberta para a bridge"
+      ansible.builtin.assert:
+        that:
+          - ansible_interfaces | select('match', '^(en|eth)')
+            | reject('equalto', proxmox_wan_interface | default('')) | list | length > 0
+        fail_msg: >-
+          Nenhuma interface física sobrou para a bridge vmbr0 depois de excluir
+          `proxmox_wan_interface`. Confira `ansible_interfaces` neste host — o
+          template proxmox_interfaces.j2 escreveria uma bridge sem portas.
+      when: firewall_disponivel
   tasks:
     # Coletado uma vez para condicionar as tasks que mexem em serviços que podem
     # não existir neste host. Antes elas carregavam `ignore_errors: true`, o que
@@ -39,30 +144,83 @@
     - name: Levantar os serviços presentes no host
       ansible.builtin.service_facts:
 
-    - name: Corrigir repositórios oficiais do Debian Bookworm no /etc/apt/sources.list
+    # PVE 9 (Debian 13 trixie) adota o formato deb822 (`.sources`) e abandona
+    # o `sources.list` de uma linha. Os dois formatos coexistem no apt, e é
+    # justamente aí que mora a armadilha: deixar o antigo para trás com o mesmo
+    # repositório declarado no novo faz o apt avisar de entrada duplicada e,
+    # pior, mantém no ar uma suíte que este playbook acha que já trocou. Por
+    # isso o `sources.list` é esvaziado em vez de reescrito.
+    - name: Esvaziar o /etc/apt/sources.list legado (o formato válido no PVE 9 é deb822)
       ansible.builtin.copy:
         dest: /etc/apt/sources.list
         content: |
-          deb https://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-          deb https://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
-          deb https://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+          # Intencionalmente vazio — gerenciado por Ansible.
+          # Os repositórios vivem em /etc/apt/sources.list.d/*.sources (deb822).
         owner: root
         group: root
         mode: '0644'
 
-    - name: Remover repositório PVE Enterprise não pago e Ceph Enterprise
+    # ORDEM, e ela não é livre: `deb822_repository` é um módulo Python que faz
+    # `from debian.deb822 import Deb822`, e o pacote `python3-debian` NÃO vem
+    # numa instalação limpa do Proxmox VE. Instalá-lo exige `apt update`, que
+    # por sua vez falha com 401 enquanto o repositório Enterprise pago estiver
+    # declarado. Daí a sequência: apagar o pago (é só remover arquivo, não
+    # precisa de Python), atualizar o cache, instalar a biblioteca, e só então
+    # declarar os repositórios em deb822.
+    - name: Remover repositórios Enterprise e Ceph pagos, nos dois formatos
       ansible.builtin.file:
         path: "{{ item }}"
         state: absent
       loop:
+        # Os quatro caminhos, e não dois: um host instalado direto no PVE 9 traz
+        # os `.sources`; um host migrado do PVE 8 carrega os `.list` antigos
+        # junto. Remover só um dos formatos deixa o repositório pago ativo pela
+        # outra metade, e o sintoma é um 401 no `apt update` que ninguém associa
+        # a isto.
         - /etc/apt/sources.list.d/pve-enterprise.list
         - /etc/apt/sources.list.d/ceph.list
+        - /etc/apt/sources.list.d/pve-enterprise.sources
+        - /etc/apt/sources.list.d/ceph.sources
+        - /etc/apt/sources.list.d/proxmox.sources
 
-    - name: Adicionar repositório PVE No-Subscription oficial
-      ansible.builtin.apt_repository:
-        repo: "deb http://download.proxmox.com/debian/pve bookworm pve-no-subscription"
+    - name: Instalar a biblioteca que o módulo deb822_repository exige
+      ansible.builtin.apt:
+        name: python3-debian
         state: present
-        filename: pve-no-subscription
+        update_cache: true
+
+    - name: "Declarar os repositórios oficiais do Debian em deb822, suíte {{ proxmox_debian_suite }}"
+      ansible.builtin.deb822_repository:
+        name: debian
+        types: [deb]
+        uris: https://deb.debian.org/debian
+        suites: "{{ proxmox_debian_suite }} {{ proxmox_debian_suite }}-updates"
+        components: [main, contrib, non-free, non-free-firmware]
+        signed_by: /usr/share/keyrings/debian-archive-keyring.gpg
+        state: present
+
+    - name: "Declarar o repositório de segurança do Debian em deb822, suíte {{ proxmox_debian_suite }}"
+      ansible.builtin.deb822_repository:
+        name: debian-security
+        types: [deb]
+        uris: https://security.debian.org/debian-security
+        suites: "{{ proxmox_debian_suite }}-security"
+        components: [main, contrib, non-free, non-free-firmware]
+        signed_by: /usr/share/keyrings/debian-archive-keyring.gpg
+        state: present
+
+    # No PVE 9 o keyring mudou de nome: era `proxmox-release-bookworm.gpg`,
+    # agora é `proxmox-archive-keyring.gpg`. Apontar para o antigo faz o apt
+    # rejeitar a assinatura do repositório inteiro.
+    - name: Adicionar o repositório PVE No-Subscription oficial (deb822)
+      ansible.builtin.deb822_repository:
+        name: pve-no-subscription
+        types: [deb]
+        uris: http://download.proxmox.com/debian/pve
+        suites: "{{ proxmox_debian_suite }}"
+        components: [pve-no-subscription]
+        signed_by: /usr/share/keyrings/proxmox-archive-keyring.gpg
+        state: present
 
     - name: Atualizar cache do APT no Proxmox
       ansible.builtin.apt:
@@ -81,6 +239,12 @@
           - ksmtuned
           - chrony
           - zram-tools
+          # Explícito porque o Debian 13 NÃO o instala por padrão — é a mesma
+          # razão pela qual o jail do fail2ban acima usa `backend = systemd`.
+          # Sem o pacote não existe /etc/rsyslog.d, e a task que escreve o envio
+          # de log para o Alloy falharia com "Destination directory does not
+          # exist" — bem depois, e sem relação aparente com este bloco.
+          - rsyslog
           - btop
           - ncdu
           - ripgrep
@@ -137,7 +301,12 @@
           enabled = true
           port = 8006
           filter = proxmox
-          logpath = /var/log/daemon.log
+          # `backend = systemd` em vez de `logpath = /var/log/daemon.log`: o
+          # Debian 13 não instala mais o rsyslog por padrão, e sem ele aquele
+          # arquivo simplesmente não existe. O jail subiria assim mesmo,
+          # observando um caminho vazio — proteção que existe e nunca baniria
+          # ninguém. O journal está sempre lá.
+          backend = systemd
           maxretry = 3
           findtime = 600
           bantime = 3600
@@ -228,12 +397,18 @@
         regexp: '^#?DefaultTimeoutStopSec='
         line: 'DefaultTimeoutStopSec=15s'
 
+    # ADIÁVEL: desligar o resolvedor local só faz sentido quando existe outro
+    # servidor de DNS para assumir. Sem o firewall no ar, isto deixaria o
+    # hipervisor sem resolver nome nenhum — inclusive o do próprio espelho do
+    # apt, na execução seguinte.
     - name: Desativar daemon systemd-resolved para usar consulta direta de DNS no OPNsense
       ansible.builtin.systemd:
         name: systemd-resolved
         state: stopped
         enabled: false
-      when: "'systemd-resolved.service' in ansible_facts.services"
+      when:
+        - firewall_disponivel
+        - "'systemd-resolved.service' in ansible_facts.services"
 
     - name: Travar resolução pvelocalhost no /etc/hosts apontando estritamente para IPv4 (127.0.0.1)
       ansible.builtin.lineinfile:
@@ -241,12 +416,17 @@
         regexp: '.*pvelocalhost.*'
         line: '127.0.0.1 pvelocalhost'
 
-    - name: Configurar ZRAM Swap Comprimido em RAM (12GB de capacidade virtual ideal para host 16GB RAM no Intel N100)
+    # O tamanho é DERIVADO da RAM do host, não fixo. O valor anterior era
+    # `SIZE=12288`, com o comentário "ideal para host 16GB RAM no Intel N100" —
+    # verdade num nó só. Aplicado ao outro hipervisor, que tem outro hardware,
+    # ou reservava ZRAM demais para a RAM disponível, ou de menos. Os dois nós
+    # deste parque não são iguais, e nada no playbook dizia isso.
+    - name: Configurar ZRAM Swap Comprimido em RAM (75% da RAM física deste host)
       ansible.builtin.copy:
         dest: /etc/default/zramswap
         content: |
           ALGO=lz4
-          SIZE=12288
+          SIZE={{ zram_size_mb | default((ansible_memtotal_mb * 0.75) | round | int) }}
           PRIORITY=100
         owner: root
         group: root
@@ -343,12 +523,60 @@
         create: false
       when: opnsense_vm_conf.stat.exists
 
-    - name: Configurar pcie_aspm=performance no GRUB contra desconexões de placa de rede
+    # IOMMU entra AQUI, e não num passo manual de runbook. A task já existia
+    # para o `pcie_aspm`, já escreve a mesma linha do GRUB e já notifica o
+    # `update-grub` — deixar o IOMMU fora dela era omissão histórica, não
+    # limitação: os dois passthroughs de produção (a NIC de WAN do firewall e a
+    # controladora do NAS) funcionavam só porque alguém tinha digitado a flag à
+    # mão, e uma reinstalação a partir deste repositório não os reproduzia.
+    #
+    # O parâmetro é diferente por fabricante, então é derivado do fact em vez de
+    # fixado: `intel_iommu=on` num host AMD é ignorado em silêncio pelo kernel —
+    # o host sobe, o passthrough não funciona, e nada aponta para a causa.
+    - name: Determinar o parâmetro de IOMMU conforme o fabricante da CPU
+      ansible.builtin.set_fact:
+        iommu_param: >-
+          {{ 'amd_iommu=on' if 'AuthenticAMD' in (ansible_processor | join(' '))
+             else 'intel_iommu=on' }}
+
+    - name: Configurar IOMMU e pcie_aspm=performance no GRUB
       ansible.builtin.lineinfile:
         path: /etc/default/grub
         regexp: '^GRUB_CMDLINE_LINUX_DEFAULT='
-        line: 'GRUB_CMDLINE_LINUX_DEFAULT="quiet pcie_aspm=performance"'
+        line: 'GRUB_CMDLINE_LINUX_DEFAULT="quiet pcie_aspm=performance {{ iommu_param }} iommu=pt"'
       notify: Atualizar GRUB
+
+    # A verificação é contra a cmdline EM USO, não contra o que o handler
+    # acabou de escrever. Antes o aviso era um handler notificado pela task
+    # acima, e por isso só aparecia na execução que mudou o arquivo: quem não
+    # reiniciasse naquele dia nunca mais era avisado, e descobria no
+    # `terraform apply` do bloco seguinte, por um "device is in use" que não
+    # menciona GRUB.
+    - name: Ler a cmdline do kernel em uso
+      ansible.builtin.slurp:
+        src: /proc/cmdline
+      register: cmdline_atual
+      check_mode: false
+
+    - name: "AVISO: o IOMMU exige um reboot que ainda não aconteceu"
+      ansible.builtin.debug:
+        msg: >-
+          ⚠️ {{ iommu_param }} está no /etc/default/grub mas NÃO na cmdline em
+          uso. Até este host reiniciar, o passthrough da NIC de WAN e o do NAS
+          continuam indisponíveis. Reinicie numa janela própria e confira com:
+          dmesg | grep -e DMAR -e IOMMU
+      when: iommu_param not in (cmdline_atual.content | b64decode)
+
+    # ⚠️ NÃO existe aqui um bloco carregando os módulos do VFIO, e a ausência é
+    # deliberada. Já existiu: escrevia /etc/modules-load.d/vfio.conf e
+    # notificava `update-initramfs`. Não funcionava e era pior que nada, por
+    # dois motivos. Primeiro, `update-initramfs` lê /etc/initramfs-tools/modules
+    # — nunca /etc/modules-load.d/, que é o carregador do systemd, pós-boot; o
+    # initramfs regenerado não ganhava módulo nenhum. Segundo, carregar
+    # `vfio_pci` não vincula dispositivo: o Proxmox faz o bind dinâmico no start
+    # da VM, a partir do `hostpci`, e é isso que já funciona. O que o
+    # passthrough realmente exige é o IOMMU na cmdline (acima) e a NIC fora da
+    # bridge (`proxmox_wan_interface`).
 
     - name: Agendar fstrim semanal nos domingos às 02:00 AM para manutenção do SSD LVM-Thin
       ansible.builtin.raw: '(crontab -l 2>/dev/null; echo "0 2 * * 0 /sbin/fstrim -av") | sort -u | crontab -'
@@ -362,6 +590,10 @@
     # e estes playbooks são deliberadamente flat — converter em roles é uma
     # refatoração maior, registrada no roadmap. O caminho é relativo ao playbook,
     # não ao diretório de execução, então é estável.
+    # ADIÁVEL, e o mais destrutivo do play: reescreve a rede do hipervisor por
+    # inteiro. O gateway que ele grava é o firewall — aplicar isto antes de o
+    # firewall existir tira o host da rede, e a recuperação é por console
+    # física ou IPMI.
     - name: Aplicar padronização de interfaces de rede (/etc/network/interfaces)  # noqa: no-relative-paths
       ansible.builtin.template:
         src: "{{ playbook_dir }}/../templates/proxmox/proxmox_interfaces.j2"
@@ -369,6 +601,29 @@
         owner: root
         group: root
         mode: '0644'
+      when: firewall_disponivel
+
+    # ADIÁVEL: o template declara o share CIFS servido pelo NAS. Escrevê-lo com
+    # o NAS ausente produziria um storage que o Proxmox mostra na UI e nunca
+    # monta — e, como o arquivo é reescrito inteiro, apagaria de quebra os
+    # storages locais que já funcionam.
+    # O storage.cfg declara `username smb` e nada mais: o Proxmox guarda a
+    # senha do CIFS num arquivo à parte, /etc/pve/priv/storage/<id>.pw. Sem ele
+    # o storage aparece na UI, nunca monta, e o `pvesm status` o reporta
+    # inativo — que é exatamente onde 06-backup.yml aborta, dois blocos depois
+    # e com a causa fora de vista. Escrito ANTES do template, para que o
+    # storage já nasça montável.
+    - name: Gravar a senha do share CIFS de backup
+      ansible.builtin.copy:
+        # O arquivo é lido cru pelo PVE: só a senha, sem quebra de linha extra
+        # nem aspas.
+        content: "{{ proxmox_backup_share_password }}"
+        dest: "/etc/pve/priv/storage/{{ backup_storage }}.pw"
+        owner: root
+        group: www-data
+        mode: '0600'
+      no_log: true
+      when: nas_disponivel
 
     - name: Aplicar padronização de armazenamento LVM-Thin (/etc/pve/storage.cfg)  # noqa: no-relative-paths
       ansible.builtin.template:
@@ -377,6 +632,7 @@
         owner: root
         group: root
         mode: '0644'
+      when: nas_disponivel
 
     - name: Aplicar padronização de Datacenter (Teclado ABNT2 pt-br e E-mail de Alertas)  # noqa: no-relative-paths
       ansible.builtin.template:
@@ -418,11 +674,31 @@
         executable: /bin/bash
       changed_when: true
 
-    - name: Exibir confirmação do Proxmox Host
+    # O resumo é obrigatório, não decorativo. Um bloco adiado que ninguém vê é
+    # indistinguível de um bloco aplicado — e "o playbook rodou sem erro" passa
+    # a significar coisas diferentes em execuções diferentes. Aqui o operador
+    # lê, em uma tela, o que entrou, o que ficou para trás e por quê.
+    - name: Exibir o resultado do play e o que ficou pendente
       ansible.builtin.debug:
         msg: >-
-          🖥️ Proxmox VE padronizado: Chrony sincronizado com o gateway, KSM ativo,
-          Fail2ban na porta 8006, sysctl e envio de syslog para o Alloy prontos.
+          🖥️ Proxmox VE padronizado: repositórios {{ proxmox_debian_suite }},
+          Chrony, KSM, Fail2ban na porta 8006, sysctl e envio de syslog aplicados.
+          Rede (/etc/network/interfaces) e DNS:
+          {{ 'APLICADOS' if firewall_disponivel else 'ADIADOS — firewall não respondeu' }}.
+          Storage de backup (/etc/pve/storage.cfg):
+          {{ 'APLICADO' if nas_disponivel else 'ADIADO — NAS não respondeu' }}.
+
+    - name: "AVISO: blocos adiados nesta execução"
+      ansible.builtin.debug:
+        msg: >-
+          ⚠️ Nem tudo foi aplicado. Faltou:
+          {{ (([] if firewall_disponivel else ['rede e DNS (dependem do firewall)'])
+              + ([] if nas_disponivel else ['storage de backup (depende do NAS)'])) | join('; ') }}.
+          Isto é esperado numa instalação do zero — o firewall e o NAS ainda não
+          existem nesta altura. Suba os dois e rode este MESMO playbook de novo:
+          ele é idempotente, e a segunda passada aplica só o que faltou.
+          Comando: ansible-playbook playbooks/00-proxmox-setup.yml --check --diff
+      when: not (firewall_disponivel and nas_disponivel)
 
   handlers:
     - name: Atualizar GRUB

@@ -31,7 +31,7 @@
     backup_job_params:
       - "--schedule={{ backup_schedule }}"
       - "--storage={{ backup_storage }}"
-      - "--vmid={{ backup_vmids | join(',') }}"
+      - "--vmid={{ backup_vmids_deste_no | join(',') }}"
       - "--mode=snapshot"
       - "--compress=zstd"
       - "--enabled=1"
@@ -39,18 +39,15 @@
       - "--prune-backups={{ backup_prune_spec }}"
 
   pre_tasks:
-    - name: "Abortar se backup_vmids não estiver no inventário"
-      ansible.builtin.assert:
-        that:
-          - backup_vmids is defined
-          - backup_vmids | length > 0
-        fail_msg: >-
-          backup_vmids não está definido, ou está vazio. É uma LISTA de
-          VMIDs — sem ela não há como saber quais convidados proteger, e uma
-          lista chutada faria o job apontar para o convidado errado e
-          reportar sucesso. Defina em [all:vars] no hosts.ini do ambiente
-          — ver hosts.ini.example.
-
+    # `backup_vmids` deixou de ser obrigatória. Antes o playbook abortava sem
+    # ela, e o operador digitava cinco inteiros no inventário — copiados a olho
+    # da UI do Proxmox, que é exatamente onde nasce o erro que o assert dizia
+    # evitar. Ausente, o padrão passa a ser TODO convidado do nó, que num
+    # homelab é o que se quer de qualquer forma; declarada, ela manda e
+    # continua sendo validada contra o que existe.
+    #
+    # O que NÃO mudou: lista declarada com um VMID inexistente continua
+    # abortando. O perigo nunca foi não ter lista, foi ter uma lista errada.
     - name: "Abortar se backup_storage não estiver no inventário"
       ansible.builtin.assert:
         that:
@@ -94,24 +91,57 @@
       # contra o alvo, o playbook reportaria sucesso, e nenhum job de backup
       # existiria. `/cluster/resources --type vm` devolve QEMU e LXC juntos
       # (o nome do filtro é enganoso, mas é o comportamento documentado do
-      # endpoint) e é cluster-wide: o resultado é o mesmo não importa de
-      # qual nó a consulta roda, por isso só precisa rodar uma vez.
-      run_once: true
+      # endpoint).
+      #
+      # ⚠️ SEM `run_once`. Os dois hipervisores são independentes — não há
+      # cluster — e num nó standalone `/cluster/resources` devolve apenas os
+      # convidados DAQUELE nó, apesar do nome do endpoint. Consultar um só e
+      # replicar o resultado, que é o que `run_once` faz, produzia duas falhas
+      # ao mesmo tempo: o assert abaixo reprovava todo VMID que morasse no
+      # outro nó, e o job era criado só no primeiro — os convidados do
+      # secundário nunca eram salvos, com o playbook reportando sucesso.
 
-    - name: "Guardar os VMIDs existentes no cluster"
+    - name: "Guardar os VMIDs existentes NESTE nó"
       ansible.builtin.set_fact:
-        cluster_existing_vmids: >-
+        node_existing_vmids: >-
           {{ (cluster_guests.stdout | from_json) | map(attribute='vmid') | list }}
-      run_once: true
 
-    - name: "Abortar se algum VMID de backup_vmids não existir no cluster"
+    # A união dos convidados de todos os nós do inventário. Cada host já
+    # executou a task acima quando esta roda — o Ansible avança task a task
+    # sobre o grupo inteiro —, então `hostvars` está completo aqui.
+    - name: "Somar os convidados de todos os nós do grupo"
+      ansible.builtin.set_fact:
+        todos_vmids_conhecidos: >-
+          {{ groups['proxmox']
+             | map('extract', hostvars, 'node_existing_vmids')
+             | select('defined') | list | flatten | unique }}
+
+    - name: "Abortar se algum VMID de backup_vmids não existir em nó nenhum"
       ansible.builtin.assert:
-        that: (backup_vmids | difference(cluster_existing_vmids)) | length == 0
+        that: (backup_vmids | difference(todos_vmids_conhecidos)) | length == 0
         fail_msg: >-
-          {{ backup_vmids | difference(cluster_existing_vmids) }} de
-          backup_vmids não existe em nenhum nó do cluster. Agendar backup
-          para um convidado inexistente falha silenciosamente todo dia.
-      run_once: true
+          {{ backup_vmids | difference(todos_vmids_conhecidos) }} de
+          backup_vmids não existe em nenhum dos nós do grupo `proxmox`.
+          Agendar backup para um convidado inexistente falha silenciosamente
+          todo dia.
+      when: backup_vmids is defined and backup_vmids | length > 0
+
+    # Cada nó agenda só o que ele hospeda. Um job que cite VMID de outro nó
+    # falha no vzdump toda madrugada, longe de qualquer execução de playbook.
+    - name: "Separar os VMIDs que este nó hospeda"
+      ansible.builtin.set_fact:
+        backup_vmids_deste_no: >-
+          {{ (backup_vmids | intersect(node_existing_vmids))
+             if backup_vmids is defined and backup_vmids | length > 0
+             else node_existing_vmids }}
+
+    - name: "Dizer quais convidados deste nó entram no backup"
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }}: {{ backup_vmids_deste_no | join(', ') or 'nenhum' }}
+          {{ '(lista declarada em backup_vmids)'
+             if backup_vmids is defined and backup_vmids | length > 0
+             else '(backup_vmids não declarada — todos os convidados deste nó)' }}
 
     # Create-or-update de verdade, em vez de `create` + engolir o erro
     # "already exists". Engolir o erro fazia a PRIMEIRA execução criar o job e
@@ -134,9 +164,9 @@
       # abaixo decidiriam sobre um resultado indefinido. Mesmo motivo do
       # `pvesm status` no topo do play.
       check_mode: false
-      # /cluster/backup é configuração replicada entre nós pelo pmxcfs: a
-      # resposta é a mesma de qualquer nó, e criar/atualizar de um só basta.
-      run_once: true
+      # ⚠️ SEM `run_once`, e o comentário anterior dizia o contrário: sem
+      # cluster não há pmxcfs replicando `/cluster/backup` entre os nós. Cada
+      # hipervisor guarda o próprio job, e precisa ser consultado e escrito.
 
     - name: "Separar o job deste playbook, se ele já existir"
       ansible.builtin.set_fact:
@@ -145,7 +175,6 @@
              | selectattr('id', 'defined')
              | selectattr('id', 'equalto', backup_job_id)
              | list | first | default({}) }}
-      run_once: true
 
     # Só decide o `changed`, não decide se aplica: o `set` abaixo roda sempre
     # que o job existe. É de propósito — uma comparação incompleta aqui erra
@@ -162,8 +191,7 @@
              or (existing_backup_job.get('enabled', 0) | int) != 1
              or existing_backup_job.get('prune-backups', '') != backup_prune_spec
              or ((existing_backup_job.get('vmid', '') | string).split(',') | map('trim') | sort)
-                != (backup_vmids | map('string') | sort) }}
-      run_once: true
+                != (backup_vmids_deste_no | map('string') | sort) }}
 
     # --vmid aceita lista separada por vírgula (formato `pve-vmid-list` da API
     # do Proxmox, o mesmo usado por vzdump.conf) — um job só cobrindo N
@@ -173,15 +201,17 @@
     - name: "Criar o job de backup (ainda não existe no cluster)"
       ansible.builtin.command:
         argv: "{{ ['pvesh', 'create', '/cluster/backup', '--id=' ~ backup_job_id] + backup_job_params }}"
-      when: existing_backup_job | length == 0
-      run_once: true
+      when:
+        - backup_vmids_deste_no | length > 0
+        - existing_backup_job | length == 0
       register: backup_job_created
       changed_when: backup_job_created.rc == 0
 
     - name: "Reescrever o job de backup existente com o estado declarado"
       ansible.builtin.command:
         argv: "{{ ['pvesh', 'set', '/cluster/backup/' ~ backup_job_id] + backup_job_params }}"
-      when: existing_backup_job | length > 0
-      run_once: true
+      when:
+        - backup_vmids_deste_no | length > 0
+        - existing_backup_job | length > 0
       register: backup_job_updated
       changed_when: backup_job_drift | bool

@@ -41,13 +41,28 @@ openwrt
 # string; sem os colchetes vira uma string só, não uma lista.
 # backup_vmids=[<VMID-1>,<VMID-2>,<VMID-3>]
 
-# Nome do storage do Proxmox com `content backup` (verificar com
-# `pvesm status`). OBRIGATÓRIO para playbooks/06-backup.yml E para
-# playbooks/00-proxmox-setup.yml, que escreve o storage.cfg — é o mesmo id
-# nas duas pontas, de propósito: o playbook agenda o vzdump contra o id que
-# o template acabou de declarar. Sem default porque os dois nós Proxmox hoje
-# referenciam o mesmo share por nomes diferentes.
-# backup_storage=<NOME-DO-STORAGE-DE-BACKUP>
+# Id do storage de backup NESTE nó (o que `pvesm status` mostra ali).
+# OBRIGATÓRIO para playbooks/06-backup.yml E para playbooks/00-proxmox-setup.yml,
+# que escreve o storage.cfg — é o mesmo id nas duas pontas do mesmo host, de
+# propósito: o playbook agenda o vzdump contra o id que o template acabou de
+# declarar.
+#
+# ⚠️ Vai na LINHA DO HOST, não em [all:vars]: os dois nós Proxmox registram o
+# mesmo share do NAS com nomes diferentes. Global, o storage.cfg do secundário
+# sairia declarando o id do primário. Ex.:
+#   hypervisor1 ansible_host=<IP> ansible_user=root backup_storage=<ID-DO-NO-1>
+
+# Gateway do hipervisor na rede de HOJE. OBRIGATÓRIO para
+# playbooks/00-proxmox-setup.yml quando o firewall já existe: é o gateway que
+# ele escreve em /etc/network/interfaces. Não deriva de `vlans` — essa variável
+# vive em group_vars/network/, que só se aplica aos grupos opnsense e openwrt,
+# e um host do grupo [proxmox] nunca a enxerga. O `make bootstrap` preenche.
+# proxmox_gateway_ip=<IP-DO-GATEWAY>
+
+# Interface física de WAN do nó primário, EXCLUÍDA da bridge vmbr0 por ser
+# dedicada à VM do firewall via PCIe pass-through. Opcional: vazio faz todas as
+# interfaces físicas descobertas nos facts entrarem na bridge.
+# proxmox_wan_interface=<NOME-DA-INTERFACE>
 
 # Nome do compartilhamento CIFS no NAS (campo `share` do storage.cfg).
 # OBRIGATÓRIO para playbooks/00-proxmox-setup.yml, que renderiza

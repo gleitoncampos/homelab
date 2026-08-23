@@ -1,0 +1,18 @@
+# Gerado por IaC/ansible/playbooks/00-proxmox-api-token.yml — NÃO editar à mão,
+# NÃO versionar (o .gitignore barra *.auto.tfvars).
+#
+# Separado do terraform.tfvars de propósito: aquele é do `make bootstrap` (IPs,
+# nomes de nó, chave SSH), este é do playbook acima (só os tokens). Um valor,
+# uma fonte. O Terraform carrega os dois sozinho — qualquer arquivo terminado
+# em `.auto.tfvars` entra automaticamente.
+{% set primario = groups['proxmox'][0] %}
+{% set secundario = groups['proxmox'][1] | default(none) %}
+proxmox_api_token_id_primary       = "{{ hostvars[primario].tf_token_id }}"
+proxmox_api_token_secret_primary   = "{{ hostvars[primario].tf_token_secret }}"
+{% if secundario %}
+proxmox_api_token_id_secondary     = "{{ hostvars[secundario].tf_token_id }}"
+proxmox_api_token_secret_secondary = "{{ hostvars[secundario].tf_token_secret }}"
+{% else %}
+# Só um nó no grupo [proxmox]. O Terraform vai cobrar as duas variáveis do
+# secundário; acrescente o segundo hipervisor ao inventário e rode de novo.
+{% endif %}

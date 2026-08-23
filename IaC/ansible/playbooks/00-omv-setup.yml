@@ -2,23 +2,63 @@
 - name: "00 - OpenMediaVault (OMV) NAS Host Setup, Hardening e Performance Enterprise"
   hosts: omv
   become: true
+
+  vars:
+    # OMV 8 roda sobre Debian 13 (trixie), a mesma suíte do PVE 9 — os dois
+    # sobem de versão juntos, e é por isso que a variável tem o mesmo nome nos
+    # dois playbooks. Trocar de suíte é uma linha aqui.
+    omv_debian_suite: trixie
+    # Codinome da linha do OMV, não do Debian. OMV 8 ("sandworm") acompanha o
+    # Debian 13; os dois sobem de versão juntos.
+    omv_release: sandworm
+    omv_keyring_url: https://packages.openmediavault.org/public/archive.key
+    # Usuário SMB com que o Proxmox monta o share de backup. O nome tem de
+    # bater com o `username` do templates/proxmox/proxmox_storage.j2, e a senha
+    # com a que o 00-proxmox-setup.yml grava em
+    # /etc/pve/priv/storage/<id>.pw — as duas saem da mesma chave do vault.
+    omv_backup_user: smb
+
   pre_tasks:
     - name: Validar segredos do Vault exigidos por este play
       ansible.builtin.include_tasks: "../tasks/validate_vault.yml"
       vars:
         required_secrets:
           - ssh_public_key
+          - proxmox_backup_share_password
   tasks:
-    - name: Corrigir repositórios oficiais do Debian Bookworm no /etc/apt/sources.list
+    # Mesmo racional do 00-proxmox-setup.yml: o Debian 13 usa deb822, e manter
+    # o `sources.list` antigo com o mesmo repositório declarado nos dois
+    # formatos faz o apt avisar de entrada duplicada — além de deixar viva uma
+    # suíte que este playbook acredita ter trocado.
+    - name: Esvaziar o /etc/apt/sources.list legado (o formato válido no Debian 13 é deb822)
       ansible.builtin.copy:
         dest: /etc/apt/sources.list
         content: |
-          deb https://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-          deb https://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
-          deb https://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+          # Intencionalmente vazio — gerenciado por Ansible.
+          # Os repositórios vivem em /etc/apt/sources.list.d/*.sources (deb822).
         owner: root
         group: root
         mode: '0644'
+
+    - name: "Declarar os repositórios oficiais do Debian em deb822, suíte {{ omv_debian_suite }}"
+      ansible.builtin.deb822_repository:
+        name: debian
+        types: [deb]
+        uris: https://deb.debian.org/debian
+        suites: "{{ omv_debian_suite }} {{ omv_debian_suite }}-updates"
+        components: [main, contrib, non-free, non-free-firmware]
+        signed_by: /usr/share/keyrings/debian-archive-keyring.gpg
+        state: present
+
+    - name: "Declarar o repositório de segurança do Debian em deb822, suíte {{ omv_debian_suite }}"
+      ansible.builtin.deb822_repository:
+        name: debian-security
+        types: [deb]
+        uris: https://security.debian.org/debian-security
+        suites: "{{ omv_debian_suite }}-security"
+        components: [main, contrib, non-free, non-free-firmware]
+        signed_by: /usr/share/keyrings/debian-archive-keyring.gpg
+        state: present
 
     - name: Atualizar cache do APT e pacotes no OMV Host
       ansible.builtin.apt:
@@ -34,6 +74,10 @@
           - smartmontools
           - cpufrequtils
           - chrony
+          # Explícito: o Debian 13 não o instala por padrão, e sem ele não
+          # existe /etc/rsyslog.d — a task de envio de log para o Alloy, mais
+          # abaixo, falharia por diretório inexistente.
+          - rsyslog
           - zram-tools
           - btop
           - ncdu
@@ -48,7 +92,108 @@
           - rsync
           - ethtool
           - hdparm
+          # `deb822_repository`, usado logo abaixo, é um módulo Python que faz
+          # `from debian.deb822 import Deb822`. Sem este pacote ele falha com
+          # missing_required_lib.
+          - python3-debian
         state: present
+
+    # ------------------------------------------------------------------------
+    # Instalação do OpenMediaVault
+    # ------------------------------------------------------------------------
+    # ⚠️ Até aqui este playbook NÃO instalava o OMV. Ele configurava apt,
+    # fail2ban, sysctl e aliases sobre um Debian puro e imprimia um banner de
+    # sucesso — enquanto a instalação de verdade era trabalho de console que
+    # nenhum playbook cobria. Pior: o `00-proxmox-setup.yml` decide se aplica o
+    # storage de backup sondando a porta 445 deste host, ou seja, dependia de
+    # alguém ter clicado numa UI. Era exatamente o estado manual que a detecção
+    # de dependências existe para dispensar.
+    #
+    # Repositório declarado, e não o `curl | bash` do script de instalação
+    # oficial: o mecanismo já está aqui, é auditável, e não executa código
+    # remoto não verificado como root.
+    - name: "Declarar o repositório do OpenMediaVault ({{ omv_release }})"
+      ansible.builtin.deb822_repository:
+        name: openmediavault
+        types: [deb]
+        uris: https://packages.openmediavault.org/public
+        suites: "{{ omv_release }}"
+        components: [main]
+        signed_by: "{{ omv_keyring_url }}"
+        state: present
+
+    - name: Instalar o OpenMediaVault
+      ansible.builtin.apt:
+        name: openmediavault
+        state: present
+        update_cache: true
+        # O pacote roda os próprios scripts de pós-instalação, que mexem em
+        # rede e serviços; sem isto o dpkg pode parar num prompt de conffile e
+        # travar o playbook até o timeout.
+        force_apt_get: true
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+        APT_LISTCHANGES_FRONTEND: none
+
+    # `omv-confdbadm populate` semeia o banco de configuração do OMV. É
+    # idempotente, mas só existe depois de o pacote instalar — daí o `stat`, que
+    # também torna a task honesta num host onde a instalação falhou.
+    - name: Verificar se as ferramentas do OMV estão presentes
+      ansible.builtin.stat:
+        path: /usr/sbin/omv-confdbadm
+      register: omv_bin
+
+    - name: Semear o banco de configuração do OMV
+      ansible.builtin.command: omv-confdbadm populate
+      when: omv_bin.stat.exists
+      changed_when: true
+
+    # ------------------------------------------------------------------------
+    # Usuário e compartilhamento SMB do backup
+    # ------------------------------------------------------------------------
+    # A outra metade do trabalho de console: sem estes dois, o storage que o
+    # `00-proxmox-setup.yml` declara no hipervisor aponta para um share que não
+    # existe, e o `pvesm status` o reporta inativo — onde o 06-backup.yml
+    # aborta, dois passos adiante e com a causa fora de vista.
+    #
+    # ⚠️ Via `omv-rpc`, que é a interface que a própria UI do OMV usa. Os nomes
+    # de método são estáveis há várias versões, mas NÃO foram exercitados contra
+    # um OMV 8 real a partir deste repositório: se algum tiver mudado, a task
+    # falha alto, com a saída do comando — nunca em silêncio.
+    - name: Levantar os usuários do OMV
+      ansible.builtin.command: omv-rpc -u admin 'UserMgmt' 'enumerateUsers'
+      register: omv_users
+      changed_when: false
+      check_mode: false
+      when: omv_bin.stat.exists
+
+    - name: "Criar o usuário SMB do backup ({{ omv_backup_user }})"
+      ansible.builtin.command:
+        argv:
+          - omv-rpc
+          - -u
+          - admin
+          - UserMgmt
+          - setUser
+          - >-
+            {"name":"{{ omv_backup_user }}",
+             "password":"{{ proxmox_backup_share_password }}",
+             "shell":"/usr/sbin/nologin","groups":[],"comment":"Backup do Proxmox",
+             "email":"","disallowusermod":true,"sshpubkeys":[]}
+      when:
+        - omv_bin.stat.exists
+        - omv_backup_user not in (omv_users.stdout | default('[]') | from_json
+                                  | map(attribute='name') | list)
+      changed_when: true
+      no_log: true
+
+    - name: Aplicar a configuração de usuários e do Samba
+      ansible.builtin.command: "omv-salt deploy run {{ item }}"
+      loop:
+        - systemd-networkd
+        - samba
+      when: omv_bin.stat.exists
+      changed_when: true
 
     # Ver a nota em 00-proxmox-setup.yml: servidor interno opcional seguido das
     # públicas, para que o host não fique sem fonte de tempo se o firewall
