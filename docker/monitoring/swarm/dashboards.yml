@@ -1,0 +1,23 @@
+---
+# Provisionamento de dashboards do Grafana a partir de arquivo.
+#
+# O provider varre `options.path` procurando JSON. Os arquivos ficam em
+# /var/lib/grafana/dashboards (montado de /srv/containers/grafana/dashboards)
+# e NÃO no diretório de provisionamento, para que o Grafana não tente ler este
+# próprio YAML como se fosse um dashboard.
+apiVersion: 1
+
+providers:
+  - name: homelab
+    orgId: 1
+    folder: Homelab
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 60
+    # true: edição pela interface não é sobrescrita a cada varredura. Quem
+    # quiser a versão do repositório de volta apaga o dashboard e espera o
+    # próximo ciclo.
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false
