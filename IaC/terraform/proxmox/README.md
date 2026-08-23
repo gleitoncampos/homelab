@@ -59,7 +59,7 @@ terraform/
    - **Hardware**: 1 CPU Core (Affinity `0` dedicado no Intel N100), 4GB RAM, 32GB SSD (`scsi0`, controlador `virtio-scsi-single`).
    - **Rede LAN**: `vmbr0` em modo **trunk** (sem `vlan_id` na interface) - a própria OPNsense cria as subinterfaces taggeadas (`vtnet0.10`, `.20`, `.30`, ...) internamente. Ver aviso abaixo.
    - **Rede WAN**: PCIe Pass-through (VT-d/IOMMU) da interface física WAN (`enp5s0` no nó primário), via bloco `hostpci` apontando para `var.opnsense_wan_pci_id`.
-   - **Boot**: ISO `OPNsense-24.1-dvd-amd64.iso` em storage **local** (`local:iso/...`), com `boot_order = ["scsi0", "ide3"]`.
+   - **Boot**: ISO do OPNsense em storage **local** (`local:iso/...`), com `boot_order = ["scsi0", "ide3"]`. A imagem NÃO precisa mais ser enviada à mão: `proxmox_download_file.opnsense_iso` a baixa de `var.opnsense_iso_url`, confere o SHA256 publicado pelo projeto e descomprime o `.bz2`.
 
    > ⚠️ **NÃO adicione `vlan_id` na `network_device` da OPNsense.** Isso já foi feito antes e é o bug mais perigoso deste arquivo: com `vlan_id` setado, o Proxmox transforma a porta virtual em modo *access* e remove a tag 802.1Q do frame antes de entregá-lo ao guest. Como a OPNsense depende de receber os frames **taggeados** para distribuí-los entre `vtnet0.10`/`.20`/`.30`/etc., a rede das VLANs para de funcionar - mas **não há erro nenhum no `plan` ou no `apply`**: a VM sobe, faz boot, parece saudável. O problema só aparece depois, como perda de conectividade das VLANs internas, o que historicamente já levou alguém a "corrigir" isso reintroduzindo o `vlan_id` - não faça isso.
 
@@ -68,7 +68,7 @@ terraform/
    > 2. Depois da instalação, edite `agent.enabled = true` em `main.tf` e rode `apply` de novo (só essa mudança).
 
 2. **CT 200 (`docker-swarm-node01`)**:
-   - **SO**: Debian 12 Bookworm (Container LXC Desprivilegiado).
+   - **SO**: Debian 13 Trixie (Container LXC Desprivilegiado).
    - **Hardware**: 4 CPU Cores, 8GB RAM, 2GB Swap ZRAM, 64GB SSD LVM-Thin.
    - **Rede**: IP Estático (`var.docker_swarm_node01_ip`) na VLAN homelab.
    - **Segurança**: `nesting = true` e `keyctl = true` ativados para suporte completo ao Docker Swarm.
@@ -79,7 +79,7 @@ terraform/
 ### 🔹 Nó 2: `<no-secundario>` (Host Secundário - Storage & Compute Worker)
 
 3. **VM 300 (`openmediavault-nas`)**:
-   - **SO**: OpenMediaVault (OMV 7) sobre **Debian 12 "genericcloud"**, provisionado via `proxmox_virtual_environment_download_file` + `disk.file_id` + cloud-init (não mais via ISO).
+   - **SO**: OpenMediaVault (OMV 8) sobre **Debian 13 "genericcloud"**, provisionado via `proxmox_virtual_environment_download_file` + `disk.file_id` + cloud-init (não mais via ISO).
    - **Hardware**: 2 CPU Cores, 4GB RAM, disco importado e redimensionado para `var.omv_disk_size` (64GB por padrão).
    - **Rede**: IP Estático (`var.omv_nas_ip`) na VLAN homelab, definido via cloud-init - é a **única rota determinística** pela qual `IaC/ansible/playbooks/00-omv-setup.yml` consegue alcançar a máquina depois do boot.
    - **Guest agent**: habilitado desde o primeiro `apply` (a imagem `genericcloud` já traz `qemu-guest-agent` de fábrica, sem o problema de "esperar um agente que ninguém instalou" que existe na OPNsense).
@@ -87,7 +87,7 @@ terraform/
    > A ISO/imagem de boot desta VM **nunca** pode vir do storage `NAS_STORAGE` (CIFS/NFS servido pela própria VM 300): seria uma dependência circular - o compartilhamento de rede não existe enquanto a VM que o serve ainda não bootou. A imagem cloud vem de `var.omv_cloud_image_url` (Debian oficial) para um datastore de arquivo local (`var.file_datastore_id`) e o download é validado por `checksum`/`checksum_algorithm`.
 
 4. **CT 201 (`docker-swarm-node02`)**:
-   - **SO**: Debian 12 Bookworm (Container LXC Desprivilegiado).
+   - **SO**: Debian 13 Trixie (Container LXC Desprivilegiado).
    - **Hardware**: 4 CPU Cores, 8GB RAM, 2GB Swap ZRAM, 64GB SSD LVM-Thin.
    - **Rede**: IP Estático (`var.docker_swarm_node02_ip`) na VLAN homelab.
    - **Segurança**: `nesting = true` e `keyctl = true` ativados para ingressar no cluster Docker Swarm.
@@ -99,7 +99,7 @@ terraform/
 
 Fica no nó `<no-secundario>` (mesmo nó do CT 201), para não competir com a OPNsense por CPU no `<no-primario>`.
 
-- **SO**: Debian 12 Bookworm - **mesmo template** dos CTs de produção (`var.container_template_file_id`) e **mesmo tipo de guest** (LXC unprivileged, `nesting`/`keyctl` habilitados). Paridade de guest é o ponto central do split prod/dev: testar em outro tipo de guest (VM, ou LXC privileged) invalidaria qualquer teste feito aqui antes de promover para produção.
+- **SO**: Debian 13 Trixie - **mesmo template** dos CTs de produção (`proxmox_download_file.lxc_template`, baixado e verificado por SHA512 pelo próprio Terraform) e **mesmo tipo de guest** (LXC unprivileged, `nesting`/`keyctl` habilitados). Paridade de guest é o ponto central do split prod/dev: testar em outro tipo de guest (VM, ou LXC privileged) invalidaria qualquer teste feito aqui antes de promover para produção.
 - **Hardware**: 2 CPU Cores, 2048MB RAM, 32GB disco - deliberadamente menor que produção (4 cores / 8192MB / 64GB), reforçando que este nó é para teste, não para carga real.
 - **Rede**: IP estático `var.dev_node_ip` (convenção: `.10`-`.19` reservado para infra de produção na VLAN homelab, `.20` em diante para dev/testes), mesma VLAN homelab dos CTs de produção, **sem** VLAN dedicada.
 - **Novo** - não há risco de colisão de VMID (211/210 não existe em lugar nenhum hoje), então este recurso pode ser criado normalmente por um `apply`, desde que o VMID 210 esteja de fato livre no cluster.

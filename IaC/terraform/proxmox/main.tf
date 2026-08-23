@@ -20,6 +20,7 @@
 # 1. VM 100 - OPNsense Firewall & Router Primary Gateway (no nó primário)
 resource "proxmox_virtual_environment_vm" "opnsense" {
   node_name   = var.proxmox_node_primary
+  provider    = proxmox.primary
   vm_id       = 100
   name        = "opnsense-firewall"
   description = "OPNsense Core Firewall & Gateway - Segmentação Multi-VLAN"
@@ -34,13 +35,23 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
     dedicated = 4096 # 4GB RAM
   }
 
-  # FASE 1 (instalação via ISO): guest agent DESLIGADO. Ninguém instalou o
-  # pacote os-qemu-guest-agent dentro do FreeBSD/OPNsense ainda - se
-  # `agent.enabled = true` e `started = true` juntos, o `apply` fica preso
-  # esperando um agente que não existe até bater o timeout. Ver README,
-  # seção "OPNsense em duas fases", para o procedimento de habilitar depois.
+  # As duas fases da OPNsense, agora por VARIÁVEL e não por edição do arquivo.
+  #
+  # Fase 1 (instalação via ISO): agente DESLIGADO, que é o default. Ninguém
+  # instalou o `os-qemu-guest-agent` dentro do FreeBSD ainda, e com
+  # `agent.enabled = true` junto de `started = true` o apply fica preso
+  # esperando um agente inexistente até o timeout.
+  #
+  # Fase 2, depois que o playbook de rede instalou o pacote:
+  #   terraform apply -var opnsense_agent_enabled=true
+  #
+  # ⚠️ Antes disto o README mandava editar `agent.enabled` NESTE arquivo como
+  # passo operacional. Editar fonte versionada para operar é o que o CLAUDE.md
+  # existe para impedir: ou a edição era commitada, e a próxima instalação do
+  # zero quebrava na fase 1, ou não era, e a divergência morria no apply
+  # seguinte.
   agent {
-    enabled = false
+    enabled = var.opnsense_agent_enabled
   }
 
   # Trunk para a bridge VLAN-aware do host (ver
@@ -86,7 +97,7 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
   # ISO local, NUNCA no storage do NAS (ver comentário na VM 300 do OMV
   # abaixo sobre a dependência circular).
   cdrom {
-    file_id   = var.opnsense_iso_file_id
+    file_id   = proxmox_download_file.opnsense_iso.id
     interface = "ide3"
   }
 
@@ -118,9 +129,71 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
   # primeiro (mesmo procedimento usado para os CTs 200/201).
 }
 
+# ------------------------------------------------------------------------------
+# Imagens de instalação — baixadas e verificadas pelo Terraform
+# ------------------------------------------------------------------------------
+# Antes destes dois recursos, o primeiro apply só funcionava se alguém tivesse
+# rodado `pveam download` e enviado a ISO do OPNsense pela UI, em cada nó. Era
+# pré-requisito manual não escrito em lugar nenhum: quem esquecia recebia um
+# erro do provider sobre file_id inexistente, que não diz o que fazer.
+#
+# O storage `local` é POR NÓ no Proxmox: um template baixado só no primário não
+# existe para o CT que nasce no secundário. São DOIS recursos, e não um
+# `for_each` sobre os dois nós, porque `provider` não aceita valor derivado de
+# `each` — e sem cluster cada nó fala por um provider diferente.
+resource "proxmox_download_file" "lxc_template_primary" {
+  provider = proxmox.primary
+
+  node_name          = var.proxmox_node_primary
+  content_type       = "vztmpl"
+  datastore_id       = var.file_datastore_id
+  url                = var.container_template_url
+  checksum           = var.container_template_checksum
+  checksum_algorithm = "sha512"
+
+  # ⚠️ `overwrite_unmanaged = true` NÃO adota o arquivo que já existe: ele
+  # APAGA e baixa de novo. É o que destrava o caso comum de já haver um
+  # template no storage por um `pveam download` anterior (com `false`, o apply
+  # falha por conflito de nome), mas o preço é real — um arquivo de mesmo nome
+  # em uso por outro convidado é removido debaixo dele no primeiro apply.
+  # Confira o conteúdo do datastore antes do primeiro apply em host povoado.
+  overwrite           = false
+  overwrite_unmanaged = true
+}
+
+resource "proxmox_download_file" "lxc_template_secondary" {
+  provider = proxmox.secondary
+
+  node_name           = var.proxmox_node_secondary
+  content_type        = "vztmpl"
+  datastore_id        = var.file_datastore_id
+  url                 = var.container_template_url
+  checksum            = var.container_template_checksum
+  checksum_algorithm  = "sha512"
+  overwrite           = false
+  overwrite_unmanaged = true
+}
+
+# A ISO é publicada comprimida (.iso.bz2). O checksum declarado é o do arquivo
+# COMPRIMIDO, que é o que o provider baixa e verifica antes de descomprimir.
+resource "proxmox_download_file" "opnsense_iso" {
+  node_name               = var.proxmox_node_primary
+  provider                = proxmox.primary
+  content_type            = "iso"
+  datastore_id            = var.file_datastore_id
+  url                     = var.opnsense_iso_url
+  file_name               = var.opnsense_iso_file_name
+  checksum                = var.opnsense_iso_checksum
+  checksum_algorithm      = "sha256"
+  decompression_algorithm = "bz2"
+  overwrite               = false
+  overwrite_unmanaged     = true
+}
+
 # 2. CT 200 - Docker Swarm Manager Node 01 (no nó primário)
 resource "proxmox_virtual_environment_container" "docker_swarm_node01" {
   node_name    = var.proxmox_node_primary
+  provider     = proxmox.primary
   vm_id        = 200
   unprivileged = true
 
@@ -165,7 +238,7 @@ resource "proxmox_virtual_environment_container" "docker_swarm_node01" {
   }
 
   operating_system {
-    template_file_id = var.container_template_file_id
+    template_file_id = proxmox_download_file.lxc_template_primary.id
     type             = "debian"
   }
 
@@ -197,12 +270,13 @@ resource "proxmox_virtual_environment_container" "docker_swarm_node01" {
 # file_name termina em ".img" (e não ".qcow2") de propósito: é o truque
 # necessário para o Proxmox tratar o arquivo baixado como imagem de disco
 # importável via disk.file_id, e não como uma ISO comum.
-resource "proxmox_download_file" "debian_12_genericcloud" {
+resource "proxmox_download_file" "debian_13_genericcloud" {
   node_name           = var.proxmox_node_secondary
+  provider            = proxmox.secondary
   content_type        = "iso"
   datastore_id        = var.file_datastore_id
   url                 = var.omv_cloud_image_url
-  file_name           = "debian-12-genericcloud-amd64.img"
+  file_name           = "debian-13-genericcloud-amd64.img"
   checksum            = var.omv_cloud_image_checksum
   checksum_algorithm  = var.omv_cloud_image_checksum_algorithm
   overwrite           = false
@@ -212,6 +286,7 @@ resource "proxmox_download_file" "debian_12_genericcloud" {
 # 3. VM 300 - OpenMediaVault (OMV 7) NAS Storage Server (no nó secundário)
 resource "proxmox_virtual_environment_vm" "omv_nas" {
   node_name   = var.proxmox_node_secondary
+  provider    = proxmox.secondary
   vm_id       = 300
   name        = "openmediavault-nas"
   description = "OpenMediaVault NAS Storage Server (Samba, NFS, ZRAM, hdparm)"
@@ -248,7 +323,7 @@ resource "proxmox_virtual_environment_vm" "omv_nas" {
     # Importa a imagem cloud baixada acima como disco de boot e redimensiona
     # para omv_disk_size. Substitui o antigo boot via ISO (que não tinha
     # boot_order nem IP determinístico).
-    file_id     = proxmox_download_file.debian_12_genericcloud.id
+    file_id     = proxmox_download_file.debian_13_genericcloud.id
     interface   = "scsi0"
     size        = var.omv_disk_size
     file_format = "raw"
@@ -294,6 +369,7 @@ resource "proxmox_virtual_environment_vm" "omv_nas" {
 # 4. CT 201 - Docker Swarm Worker Node 02 (no nó secundário)
 resource "proxmox_virtual_environment_container" "docker_swarm_node02" {
   node_name    = var.proxmox_node_secondary
+  provider     = proxmox.secondary
   vm_id        = 201
   unprivileged = true
 
@@ -338,7 +414,7 @@ resource "proxmox_virtual_environment_container" "docker_swarm_node02" {
   }
 
   operating_system {
-    template_file_id = var.container_template_file_id
+    template_file_id = proxmox_download_file.lxc_template_secondary.id
     type             = "debian"
   }
 
@@ -363,6 +439,7 @@ resource "proxmox_virtual_environment_container" "docker_swarm_node02" {
 # `pvesh get /cluster/resources` antes do primeiro apply, mesma cautela).
 resource "proxmox_virtual_environment_container" "docker_dev_node" {
   node_name = var.proxmox_node_secondary
+  provider  = proxmox.secondary
   vm_id     = 210
 
   # Unprivileged, EXATAMENTE como os CTs de produção (200/201). Paridade de
@@ -443,7 +520,7 @@ resource "proxmox_virtual_environment_container" "docker_dev_node" {
 
   operating_system {
     # Mesmo template dos CTs de produção - paridade de guest, de novo.
-    template_file_id = var.container_template_file_id
+    template_file_id = proxmox_download_file.lxc_template_secondary.id
     type             = "debian"
   }
 

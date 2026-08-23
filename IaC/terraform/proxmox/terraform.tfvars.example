@@ -9,11 +9,20 @@
 # infraestrutura de produção.
 # ==============================================================================
 
-proxmox_api_url          = "https://192.0.2.10:8006/"
+# Dois endpoints e dois pares de token, porque os dois hipervisores são
+# INDEPENDENTES - não há cluster (dois nós não formam quórum). O usuário
+# `terraform@pve` criado num deles não existe no outro: são dois
+# `pveum user token add`, um em cada shell. Ver providers.tf.
+proxmox_api_url_primary   = "https://192.0.2.10:8006/"
+proxmox_api_url_secondary = "https://192.0.2.11:8006/"
+
 # Usuário DEDICADO com role de menor privilégio (ver README) - nunca root@pam.
-proxmox_api_token_id     = "terraform@pve!terraform"
-proxmox_api_token_secret = "SEU_TOKEN_SECRET_AQUI"
-proxmox_ssh_username     = "root"
+proxmox_api_token_id_primary       = "terraform@pve!terraform"
+proxmox_api_token_secret_primary   = "SEU_TOKEN_SECRET_AQUI"
+proxmox_api_token_id_secondary     = "terraform@pve!terraform"
+proxmox_api_token_secret_secondary = "SEU_TOKEN_SECRET_AQUI"
+
+proxmox_ssh_username = "root"
 
 # Nomes dos dois nós físicos do cluster (não há variável única
 # "proxmox_node_name": são dois nós distintos, um por VM/CT - ver main.tf).

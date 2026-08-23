@@ -14,25 +14,49 @@
 # Autenticação / Endpoint da API do Proxmox VE
 # ------------------------------------------------------------------------------
 
-variable "proxmox_api_url" {
+# ------------------------------------------------------------------------------
+# Credenciais de API - UM CONJUNTO POR NÓ
+# ------------------------------------------------------------------------------
+# Os dois hipervisores são independentes (não há cluster - ver providers.tf), e
+# a consequência é direta: cada um tem a própria API e o próprio token. Um
+# `terraform@pve` criado no nó primário simplesmente não existe no secundário,
+# porque não há banco de usuários compartilhado entre eles. São dois
+# `pveum user token add`, um em cada shell.
+variable "proxmox_api_url_primary" {
   type        = string
-  description = "URL da API do Proxmox VE (endpoint HTTPS do nó, porta 8006). Sem default: preencha em terraform.tfvars."
+  description = "URL da API do nó PRIMÁRIO (endpoint HTTPS, porta 8006). Sem default: preencha em terraform.tfvars."
 }
 
-variable "proxmox_api_token_id" {
+variable "proxmox_api_url_secondary" {
+  type        = string
+  description = "URL da API do nó SECUNDÁRIO. É outro endpoint, não o mesmo com outro nome: sem cluster, cada nó só responde por si."
+}
+
+variable "proxmox_api_token_id_primary" {
   type        = string
   description = <<-EOT
-    Token ID da API do Proxmox VE, no formato usuario@realm!nome-do-token.
+    Token ID da API do nó PRIMÁRIO, no formato usuario@realm!nome-do-token.
     Deve apontar para um usuário DEDICADO com role customizada de menor
     privilégio (ver README) - NUNCA use root@pam!... aqui: root@pam ignora
     toda e qualquer ACL/role no Proxmox, então "role customizada" seria só
-    decoração, o token continuaria com acesso total ao cluster.
+    decoração, o token continuaria com acesso total ao nó.
   EOT
 }
 
-variable "proxmox_api_token_secret" {
+variable "proxmox_api_token_secret_primary" {
   type        = string
-  description = "Secret do Token de API do Proxmox VE."
+  description = "Secret do Token de API do nó PRIMÁRIO."
+  sensitive   = true
+}
+
+variable "proxmox_api_token_id_secondary" {
+  type        = string
+  description = "Token ID da API do nó SECUNDÁRIO. Criado separadamente, no shell daquele nó - ver README."
+}
+
+variable "proxmox_api_token_secret_secondary" {
+  type        = string
+  description = "Secret do Token de API do nó SECUNDÁRIO."
   sensitive   = true
 }
 
@@ -93,10 +117,20 @@ variable "file_datastore_id" {
   default     = "local"
 }
 
-variable "container_template_file_id" {
+# O template LXC não é mais um arquivo que alguém baixa à mão com `pveam
+# download` antes do primeiro apply: o Terraform o baixa, valida o sha512 e o
+# deixa no storage de cada nó (ver proxmox_download_file.lxc_template em
+# main.tf). Um passo manual a menos, e a integridade passa a ser verificada.
+variable "container_template_url" {
   type        = string
-  description = "file_id do template LXC usado pelos CTs Docker Swarm (produção e dev) - mesma imagem para garantir paridade de guest entre prod e dev."
-  default     = "local:vztmpl/debian-12-standard_12.2-1_amd64.tar.zst"
+  description = "URL do template LXC usado pelos CTs Docker Swarm (produção e dev) - mesma imagem para garantir paridade de guest entre prod e dev."
+  default     = "http://download.proxmox.com/images/system/debian-13-standard_13.6-1_amd64.tar.zst"
+}
+
+variable "container_template_checksum" {
+  type        = string
+  description = "Checksum (SHA512) do template em container_template_url, publicado pelo Proxmox em download.proxmox.com/images/aplinfo-pve-9.dat. Atualize junto com a URL."
+  default     = "4c0c27ca6ceab5ef0b84db57825a00f26157ef1854bafe97297813e1cbe8ecb8cc9c453cab6b3b0efe1ba193a50c47ece1e41d950e411b8730b835b71e9e754b"
 }
 
 variable "vlan_homelab" {
@@ -109,10 +143,32 @@ variable "vlan_homelab" {
 # VM 100 - OPNsense (WAN via PCI passthrough + ISO de instalação)
 # ------------------------------------------------------------------------------
 
-variable "opnsense_iso_file_id" {
+# Mesma troca do template LXC: o Terraform baixa a ISO, confere o sha256 e a
+# descomprime (o projeto publica .iso.bz2). Continua indo para um storage
+# LOCAL, nunca para o do NAS - a VM que serviria esse storage é justamente uma
+# das que ainda não bootaram nesta altura.
+variable "opnsense_agent_enabled" {
+  type        = bool
+  description = "Liga o QEMU Guest Agent na VM do firewall. Falso na fase 1 (a ISO ainda vai ser instalada e o pacote os-qemu-guest-agent não existe no guest); passe `-var opnsense_agent_enabled=true` na fase 2, depois que playbooks/network/01-opnsense-setup.yml instalou o pacote."
+  default     = false
+}
+
+variable "opnsense_iso_url" {
   type        = string
-  description = "file_id (datastore:iso/arquivo) da ISO de instalação do OPNsense. Precisa estar em storage local (local:iso/...), NUNCA no NAS_STORAGE servido pela própria VM OMV (dependência circular: a ISO não existiria enquanto a VM que a serve não tiver bootado)."
-  default     = "local:iso/OPNsense-24.1-dvd-amd64.iso"
+  description = "URL da imagem de instalação do OPNsense (.iso.bz2 publicado pelo projeto)."
+  default     = "https://mirrors.dotsrc.org/opnsense/releases/26.7/OPNsense-26.7-dvd-amd64.iso.bz2"
+}
+
+variable "opnsense_iso_checksum" {
+  type        = string
+  description = "Checksum (SHA256) do ARQUIVO COMPRIMIDO em opnsense_iso_url, conforme OPNsense-<versão>-checksums-amd64.sha256. É o .bz2 que é verificado, não a ISO já descomprimida."
+  default     = "95cafedda6d5b22ce832e249dc2309110fbee19f813ad78cf28bb3d387186bfb"
+}
+
+variable "opnsense_iso_file_name" {
+  type        = string
+  description = "Nome do arquivo já descomprimido no datastore - é o que forma o file_id usado no boot da VM 100."
+  default     = "OPNsense-26.7-dvd-amd64.iso"
 }
 
 variable "opnsense_wan_pci_id" {
@@ -156,14 +212,14 @@ variable "omv_nas_ip" {
 
 variable "omv_cloud_image_url" {
   type        = string
-  description = "URL da imagem cloud (qcow2) do Debian 12 'genericcloud' usada para provisionar a VM do OMV via disk.file_id + cloud-init."
-  default     = "https://cloud.debian.org/images/cloud/bookworm/20260806-2562/debian-12-genericcloud-amd64-20260806-2562.qcow2"
+  description = "URL da imagem cloud (qcow2) do Debian 13 'genericcloud' usada para provisionar a VM do OMV via disk.file_id + cloud-init. Build datada de propósito: 'latest' muda sozinha e invalidaria o checksum abaixo sem nenhuma alteração no repositório."
+  default     = "https://cloud.debian.org/images/cloud/trixie/20260819-2575/debian-13-genericcloud-amd64-20260819-2575.qcow2"
 }
 
 variable "omv_cloud_image_checksum" {
   type        = string
   description = "Checksum (SHA512) da imagem em omv_cloud_image_url, validado pelo proxmox_virtual_environment_download_file no momento do download. Atualize junto com a URL a cada bump de versão da imagem (SHA512SUMS publicado pelo projeto Debian)."
-  default     = "3622c990108a044ed411652f8741e77c5822c365114d7b940206b243f8fb617b8586792df4cdb7afba1b71d1a09289d8ed632124688f2c8352cb08190a1e9868"
+  default     = "77429b411b39b43f914dc9d14bf34aa315489a1a12b5429f72e5b483bdda23c65698d33443c85d3f3ad7c3a0828ae60845406d6b99646342554d17abae29c2a3"
 }
 
 variable "omv_cloud_image_checksum_algorithm" {
