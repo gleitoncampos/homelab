@@ -36,7 +36,6 @@
         required_secrets:
           - nut_monitor_password
           - nut_secondary_password
-          - nut_exporter_password
 
     - name: Detectar se este nó tem o cabo USB do nobreak
       ansible.builtin.include_tasks: "../tasks/detect_nut_primary.yml"
@@ -377,7 +376,7 @@
           {{ 'PRIMARY (driver + upsd + upsmon)' if nut_is_primary
              else 'SECONDARY (upsmon apontando para ' ~ nut_primary_address ~ ')' }}.
           {{ 'Modelo lido: ' ~ (nut_upsc.stdout_lines | default([])
-             | select('match', '^ups\\.model:') | first | default('n/d'))
+             | select('match', '^ups\.model:') | first | default('n/d'))
              if nut_is_primary else '' }}
 
   handlers:
