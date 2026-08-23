@@ -1,0 +1,8 @@
+{# /etc/nut/upsd.conf — gerado pelo Ansible (07-nut-ups.yml). Não editar à mão. #}
+# Loopback para o upsmon local; endereço da LAN para o exportador e para os
+# nós secundários. Sem 0.0.0.0: o upsd não tem TLS habilitado nesta build.
+LISTEN 127.0.0.1 3493
+LISTEN {{ nut_listen_address }} 3493
+
+MAXAGE 15
+MAXCONN 64

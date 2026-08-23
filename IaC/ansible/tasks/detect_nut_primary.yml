@@ -1,0 +1,39 @@
+---
+# Task reutilizável: descobre se ESTE host tem o cabo USB do nobreak.
+#
+# Existe como arquivo separado porque dois playbooks precisam da mesma resposta:
+# `07-nut-ups.yml`, que configura o NUT, e `03-stack-monitoring.yml`, que
+# precisa dizer ao exportador do Prometheus com qual `upsd` falar. Duplicar a
+# sonda criaria duas verdades sobre o mesmo fato, e a que ficasse para trás
+# apareceria como `connection refused` na porta 3493 — sintoma que não diz nada
+# sobre a causa.
+#
+# Espera: `nut_usb_vendor_id`, `nut_usb_product_id` (inventories/_common/all.yml).
+# Define: `nut_is_primary` (booleano) neste host.
+
+# Correlaciona VID e PID no MESMO dispositivo. Casar os dois separadamente na
+# árvore inteira daria falso positivo com dois periféricos distintos que por
+# acaso tivessem um o VID e outro o PID.
+- name: "Detectar o nobreak neste nó pelo par VID:PID {{ nut_usb_vendor_id ~ ':' ~ nut_usb_product_id }}"
+  ansible.builtin.shell:
+    cmd: |
+      set -eu
+      for dev in /sys/bus/usb/devices/*/; do
+        [ -r "$dev/idVendor" ] && [ -r "$dev/idProduct" ] || continue
+        if [ "$(cat "$dev/idVendor")" = "{{ nut_usb_vendor_id }}" ] \
+           && [ "$(cat "$dev/idProduct")" = "{{ nut_usb_product_id }}" ]; then
+          exit 0
+        fi
+      done
+      exit 1
+    executable: /bin/sh
+  register: nut_usb_probe
+  failed_when: false
+  changed_when: false
+  # Sem isto a sonda é pulada em --check, `rc` fica indefinido e TODO nó se
+  # declararia secundário num diff que não corresponde à execução real.
+  check_mode: false
+
+- name: Registrar o papel deste nó
+  ansible.builtin.set_fact:
+    nut_is_primary: "{{ nut_usb_probe.rc == 0 }}"

@@ -1,0 +1,30 @@
+---
+# Task reutilizável: consolida, a partir dos fatos que `detect_nut_primary.yml`
+# deixou nos hosts do grupo [proxmox], QUAL nó é o primário do NUT.
+#
+# Roda depois que a detecção terminou em todos os hosts — pode ser incluída de
+# um play que nem toca no grupo [proxmox], porque só lê `hostvars`.
+#
+# Define:
+#   `nut_primary_hosts`   — lista (0 ou 1 elemento em operação normal)
+#   `nut_primary_address` — endereço do `upsd`, ou string vazia se não há nobreak
+
+- name: Determinar qual nó enumerou o nobreak
+  ansible.builtin.set_fact:
+    nut_primary_hosts: >-
+      {{ groups['proxmox'] | default([])
+         | map('extract', hostvars)
+         | selectattr('nut_is_primary', 'defined')
+         | selectattr('nut_is_primary')
+         | map(attribute='inventory_hostname')
+         | list }}
+
+- name: Fixar o endereço do upsd
+  ansible.builtin.set_fact:
+    # `ansible_host` direto, sem cair para fato de rede: todo host deste
+    # inventário o declara na própria linha (ver hosts.ini.example), e este
+    # arquivo é incluído também de plays sem `gather_facts`, onde
+    # `ansible_default_ipv4` não existiria.
+    nut_primary_address: >-
+      {{ hostvars[nut_primary_hosts[0]].ansible_host
+         if nut_primary_hosts | length > 0 else '' }}

@@ -1,0 +1,16 @@
+{# /etc/nut/ups.conf — gerado pelo Ansible (07-nut-ups.yml). Não editar à mão. #}
+# Quantas vezes o upsdrvctl tenta subir o driver antes de desistir.
+maxretry = 3
+
+[{{ nut_ups_name }}]
+  driver = ragtech
+  # Symlink estável do udev, não /dev/ttyACM0: a numeração muda se outro
+  # dispositivo CDC-ACM enumerar antes no boot.
+  port = {{ nut_device_symlink }}
+  desc = "Nobreak do rack"
+  pollinterval = 5
+{% if nut_allow_shutdown | bool %}
+  # ⚠️ Habilitado por decisão explícita (nut_allow_shutdown). O firmware desta
+  # família NÃO religa sozinho depois de um desligamento coordenado.
+  allow_shutdown
+{% endif %}

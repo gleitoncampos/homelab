@@ -78,6 +78,16 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: "${GF_SECURITY_ADMIN_PASSWORD}"
     volumes:
       - /srv/containers/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
+      - /srv/containers/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml
+      # Dois mounts, e a separação é de propósito: `dashboards.yml` é
+      # CONFIGURAÇÃO (declara o provider e onde procurar), os JSON são
+      # CONTEÚDO. Funcionaria com tudo no mesmo diretório — o provider só lê
+      # `.json` de `options.path` e ignoraria o `.yml` ao lado. O motivo de
+      # separar é outro: o conteúdo pertence ao IaC e não pode morar em
+      # /var/lib/grafana/data, que é ESTADO do Grafana (grafana.db, plugins,
+      # render). Limpar estado apagaria dashboard versionado, e backup de
+      # estado passaria a carregar arquivo do repositório.
+      - /srv/containers/grafana/dashboards:/var/lib/grafana/dashboards
       - /srv/containers/grafana/data:/var/lib/grafana
     deploy:
       placement:
@@ -133,6 +143,39 @@ services:
       restart_policy:
         condition: on-failure
     # Só a overlay `monitoring`: nada aqui é roteado pelo Traefik.
+    networks:
+      - monitoring
+
+  # Exportador do nobreak: fala o protocolo NUT (TCP 3493) com o `upsd` do nó
+  # que tem o cabo USB e traduz as variáveis para métricas do Prometheus.
+  # Não roteado pelo Traefik e sem porta publicada: o Prometheus o alcança pela
+  # overlay `monitoring`.
+  nut_exporter:
+    image: ghcr.io/druggeri/nut_exporter:3.3.0
+    environment:
+      NUT_EXPORTER_SERVER: "${NUT_SERVER}"
+      # Sem usuário e sem senha: o `upsd` não exige autenticação para ler
+      # variável — `upsd.users` governa ação e papel do upsmon, não leitura.
+      # Verificado contra o nobreak real: as 14 variáveis vieram sem credencial.
+      # A lista padrão do exporter cobre só 7 variáveis e deixa de fora tudo o
+      # que o driver deste nobreak publica de saída e temperatura. Enumerada
+      # aqui de propósito: lista vazia exportaria toda variável numérica, o que
+      # muda a série temporal sem aviso quando o driver ganhar campos novos.
+      #
+      # ⚠️ UMA LINHA SÓ, sem escalar dobrado. Com `>-` o YAML dobra a quebra de
+      # linha em ESPAÇO, e o exporter compara o nome da variável com
+      # `sliceContains` literal, sem `TrimSpace`: " ups.load" não casa com
+      # "ups.load" e a métrica some sem erro nenhum, do exporter ao Grafana.
+      NUT_EXPORTER_VARIABLES: "battery.charge,battery.voltage,battery.voltage.nominal,input.voltage,input.voltage.nominal,output.voltage,output.voltage.nominal,output.current,output.frequency,ups.load,ups.power.nominal,ups.realpower.nominal,ups.temperature,ups.status"
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 64M
+      restart_policy:
+        condition: on-failure
     networks:
       - monitoring
 

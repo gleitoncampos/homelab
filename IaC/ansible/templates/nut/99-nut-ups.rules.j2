@@ -1,0 +1,4 @@
+{# /etc/udev/rules.d/99-nut-ups.rules — gerado pelo Ansible (07-nut-ups.yml). #}
+# Symlink estável para o nobreak e permissão para o usuário do NUT. Sem isto o
+# driver depende da ordem de enumeração do CDC-ACM e roda como root.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="{{ nut_usb_vendor_id }}", ATTRS{idProduct}=="{{ nut_usb_product_id }}", SYMLINK+="{{ nut_device_symlink | basename }}", GROUP="nut", MODE="0660"

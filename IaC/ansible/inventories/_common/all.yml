@@ -245,3 +245,56 @@ monitoring_sidecar_files:
     owner: "root"
     group: "root"
     mode: "0644"
+  - src: "dashboards.yml"
+    dest: "/srv/containers/grafana/dashboards.yml"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+
+# Endereço para onde o Alloy do CT central de rsyslog empurra log. Esse CT está
+# FORA da rede overlay do Swarm, então não resolve `tasks.monitoring_loki`:
+# precisa do endereço do nó manager na LAN. Consumido por
+# `config-rsyslog.alloy.j2`.
+loki_push_url: "http://{{ hostvars[groups['homelab_managers'][0]].ansible_host }}:3100/loki/api/v1/push"
+
+# ----------------------------------------------------------------------
+# Nobreak (NUT — Network UPS Tools)
+# ----------------------------------------------------------------------
+# O nó que tem o cabo USB do nobreak vira o `primary`: roda o driver, o `upsd`
+# e o `upsmon`. Os demais nós rodam só `upsmon` como `secondary`, apontando
+# para ele. Quem é quem NÃO se declara aqui — `07-nut-ups.yml` detecta pelo
+# par VID:PID no barramento USB, do mesmo jeito que 00-proxmox-setup detecta o
+# NAS e o firewall.
+
+# Nome do UPS no `ups.conf`. É o que aparece como `<nome>@<host>` no upsc, no
+# upsmon e na query string do exporter.
+nut_ups_name: "nobreak"
+
+# Par VID:PID do nobreak. O driver `ragtech` mira o PIC da Microchip com
+# firmware CDC-ACM usado pela família Easy Pro.
+nut_usb_vendor_id: "04d8"
+nut_usb_product_id: "000a"
+
+# Symlink estável criado por regra do udev. `/dev/ttyACM0` reordena se outro
+# dispositivo CDC-ACM entrar antes dele no boot, e o driver então abre o
+# dispositivo errado.
+nut_device_symlink: "/dev/ups0"
+
+# O driver `ragtech` só existe no master do NUT: entrou depois da v2.8.5 e o
+# Debian trixie empacota a 2.8.1. Por isso o nó primário compila a partir de um
+# commit FIXADO — bump aqui é mudança deliberada, com motivo no commit.
+nut_git_repo: "https://github.com/networkupstools/nut.git"
+nut_git_ref: "86aaf8150f1590a226b35ee4cfdba5d4dabc1842"
+nut_prefix: "/usr/local"
+nut_sysconfdir: "/etc/nut"
+
+# Usuários do `upsd.users`. As senhas vêm do vault. Não há usuário para o
+# exportador do Prometheus: o `upsd` não exige autenticação para LER variável.
+nut_monitor_user: "upsmon"
+nut_secondary_user: "upsmon-secondary"
+
+# ⚠️ Comandos de desligamento e de teste de bateria ficam DESABILITADOS. O
+# firmware desta família não religa sozinho depois de um desligamento
+# coordenado: volta só com o botão físico. Ligar isto é decisão consciente,
+# depois de leitura estável, nunca padrão.
+nut_allow_shutdown: false

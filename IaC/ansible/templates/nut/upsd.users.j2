@@ -1,0 +1,17 @@
+{# /etc/nut/upsd.users — gerado pelo Ansible (07-nut-ups.yml). Não editar à mão. #}
+# upsmon local deste nó: papel primary, o único que pode declarar FSD.
+[{{ nut_monitor_user }}]
+  password = {{ nut_monitor_password }}
+  upsmon primary
+
+# upsmon dos demais nós: papel secondary — obedece ao FSD, não o emite.
+[{{ nut_secondary_user }}]
+  password = {{ nut_secondary_password }}
+  upsmon secondary
+
+# ⚠️ NÃO existe usuário para o exportador do Prometheus, e é de propósito: o
+# `upsd` permite LEITURA de variáveis sem autenticação — `upsd.users` governa
+# ações (SET, INSTCMD) e o papel do `upsmon`, não a leitura. Verificado contra
+# este nobreak: o exportador coletou as 14 variáveis sem credencial nenhuma.
+# Um usuário que não restringe nada não é menor privilégio, é uma senha a mais
+# viajando para dentro da stack e um jeito novo de a coleta falhar.

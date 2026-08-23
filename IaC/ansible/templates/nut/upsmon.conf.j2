@@ -1,0 +1,34 @@
+{# /etc/nut/upsmon.conf — gerado pelo Ansible (07-nut-ups.yml). Não editar à mão. #}
+{% if nut_is_primary %}
+MONITOR {{ nut_ups_name }}@localhost 1 {{ nut_monitor_user }} {{ nut_monitor_password }} primary
+{% else %}
+MONITOR {{ nut_ups_name }}@{{ nut_primary_address }} 1 {{ nut_secondary_user }} {{ nut_secondary_password }} secondary
+{% endif %}
+
+# Quantas fontes precisam estar vivas para o host seguir ligado.
+MINSUPPLIES 1
+
+SHUTDOWNCMD "/sbin/shutdown -h +0"
+POWERDOWNFLAG /etc/killpower
+
+POLLFREQ 5
+POLLFREQALERT 5
+HOSTSYNC 15
+DEADTIME 15
+RBWARNTIME 43200
+NOCOMMWARNTIME 300
+FINALDELAY 5
+
+# ⚠️ Todo evento vai para o syslog. É assim que a queda de energia aparece no
+# Loki e no Grafana: sem SYSLOG, o evento morre no terminal de quem estiver
+# logado. WALL cobre o caso de haver alguém em sessão.
+NOTIFYFLAG ONLINE     SYSLOG+WALL
+NOTIFYFLAG ONBATT     SYSLOG+WALL
+NOTIFYFLAG LOWBATT    SYSLOG+WALL
+NOTIFYFLAG FSD        SYSLOG+WALL
+NOTIFYFLAG COMMOK     SYSLOG
+NOTIFYFLAG COMMBAD    SYSLOG+WALL
+NOTIFYFLAG SHUTDOWN   SYSLOG+WALL
+NOTIFYFLAG REPLBATT   SYSLOG+WALL
+NOTIFYFLAG NOCOMM     SYSLOG+WALL
+NOTIFYFLAG NOPARENT   SYSLOG+WALL

@@ -1,0 +1,4 @@
+{# /etc/nut/nut.conf — gerado pelo Ansible (07-nut-ups.yml). Não editar à mão. #}
+# netserver: este nó tem o cabo USB, roda o driver, o upsd e o upsmon.
+# netclient: este nó só roda o upsmon, apontando para o netserver.
+MODE={{ 'netserver' if nut_is_primary else 'netclient' }}

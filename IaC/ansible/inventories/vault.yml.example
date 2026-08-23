@@ -175,6 +175,13 @@ unbound_host_overrides_extra: []
 proxmox_alert_email: "TROCAR-voce@exemplo.com"
 # E-mail de alerta do Proxmox. Sai do repo por ser dado pessoal (LGPD).
 
+proxmox_backup_share_password: "TROCAR-senha-do-usuario-smb"
+# Senha do usuário SMB com que o Proxmox monta o share de backup do NAS. O
+# `00-proxmox-setup.yml` a grava em /etc/pve/priv/storage/<id>.pw, que é onde o
+# PVE a procura — o storage.cfg guarda só o `username`. Sem ela o storage
+# aparece na UI e nunca monta, e quem acusa é o `06-backup.yml`, dois passos
+# adiante. Cadastre a MESMA senha no usuário SMB do OMV.
+
 pve_exporter_token_name: "prometheus@pve!exporter"
 pve_exporter_token_value: "TROCAR-uuid-do-token"
 # TOKEN de API do Proxmox para o prometheus-pve-exporter, não senha. Gerar com:
@@ -184,6 +191,15 @@ pve_exporter_token_value: "TROCAR-uuid-do-token"
 # --- Monitoramento (Grafana) ------------------------------------------------
 grafana_admin_password: "TROCAR-openssl-rand-base64-32"
 # Sem isto o Grafana sobe em admin/admin, exposto pelo Traefik. Mínimo 16 chars.
+
+# --- Nobreak / NUT (playbooks/07-nut-ups.yml e o exporter da stack) ---------
+# Senha do usuário `upsmon` do upsd — papel `primary`, o único que pode
+# declarar FSD (desligamento forçado do parque). Trate como root-equivalente.
+nut_monitor_password: "TROCAR-openssl-rand-base64-24"
+# Senha do usuário `upsmon-secondary` — os demais nós, que obedecem ao FSD mas
+# não o emitem. Separada de propósito: um nó secundário comprometido não pode
+# mandar o parque inteiro desligar.
+nut_secondary_password: "TROCAR-openssl-rand-base64-24"
 
 # --- Dozzle ------------------------------------------------------------------
 # Hash bcrypt para o basicauth do Dozzle, SEM dobrar os `$`.

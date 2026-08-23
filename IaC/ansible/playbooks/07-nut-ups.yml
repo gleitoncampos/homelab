@@ -1,0 +1,413 @@
+---
+# Monitoramento do nobreak (NUT — Network UPS Tools) nos nós Proxmox.
+#
+# O nó que tem o cabo USB vira `primary`: roda o driver, o `upsd` e o `upsmon`.
+# Os demais nós rodam só o `upsmon` como `secondary`, apontando para ele.
+# Quem é quem NÃO se declara no inventário: detecta-se pelo par VID:PID no
+# barramento USB, mesmo padrão de sondagem que 00-proxmox-setup usa para o NAS
+# e para o firewall. Mudou o cabo de nó, a próxima execução acompanha.
+#
+# ⚠️ Por que compilar em vez de `apt install nut-server`: o driver `ragtech`
+# entrou no master do NUT depois da v2.8.5 e o Debian trixie empacota a 2.8.1.
+# Sem ele o nobreak desta família não é lido por driver nenhum. O commit é
+# FIXADO em `nut_git_ref`; só o nó primário compila — os secundários usam o
+# `nut-client` do Debian, que fala o mesmo protocolo de rede.
+#
+#   ansible-playbook playbooks/07-nut-ups.yml
+- name: Configurar o monitoramento do nobreak nos nós Proxmox
+  hosts: proxmox
+  become: true
+
+  vars:
+    nut_build_dir: /usr/local/src/nut
+    nut_build_stamp: /usr/local/share/nut-build-ref
+    nut_build_packages:
+      - build-essential
+      - git
+      - autoconf
+      - automake
+      - libtool
+      - pkg-config
+
+  pre_tasks:
+    - name: Validar segredos do Vault exigidos por este play
+      ansible.builtin.include_tasks: "../tasks/validate_vault.yml"
+      vars:
+        required_secrets:
+          - nut_monitor_password
+          - nut_secondary_password
+          - nut_exporter_password
+
+    - name: Detectar se este nó tem o cabo USB do nobreak
+      ansible.builtin.include_tasks: "../tasks/detect_nut_primary.yml"
+
+    - name: Definir o endereço de escuta do upsd neste nó
+      ansible.builtin.set_fact:
+        nut_listen_address: >-
+          {{ hostvars[inventory_hostname].ansible_host
+             | default(ansible_default_ipv4.address, true) }}
+
+    # Roda depois que a detecção terminou em TODOS os hosts do play, então já
+    # pode ler o fato dos vizinhos.
+    - name: Consolidar qual nó é o primário
+      ansible.builtin.include_tasks: "../tasks/elect_nut_primary.yml"
+
+    # ⚠️ A eleição precisa de TODOS os nós Proxmox. Com `--limit` num nó
+    # secundário, `groups['proxmox']` continua listando os dois mas só o nó
+    # limitado carrega o fato — a lista sai vazia e o diagnóstico "confira o
+    # cabo USB" estaria errado. Esta task separa os dois casos.
+    - name: "Abortar se --limit deixou nós Proxmox de fora da eleição"
+      ansible.builtin.assert:
+        that:
+          - (groups['proxmox'] | default([]) | difference(ansible_play_hosts_all)) | length == 0
+        fail_msg: >-
+          Estes nós Proxmox ficaram fora desta execução:
+          {{ (groups['proxmox'] | difference(ansible_play_hosts_all)) | join(', ') }}.
+          A eleição do primário lê o fato de todos eles — rode sem `--limit`,
+          ou inclua os nós que faltam.
+        quiet: true
+      run_once: true
+
+    - name: "Encerrar sem alterar nada se o nobreak não foi encontrado em nó nenhum"
+      ansible.builtin.debug:
+        msg: >-
+          ⚠️ Nenhum nó Proxmox enumerou o nobreak
+          {{ nut_usb_vendor_id ~ ':' ~ nut_usb_product_id }}. Nada aplicado.
+          Confira o cabo USB e rode de novo — este playbook é idempotente.
+      when: nut_primary_hosts | length == 0
+
+    - name: Terminar o play quando não há nobreak
+      ansible.builtin.meta: end_play
+      when: nut_primary_hosts | length == 0
+
+    - name: "Abortar se mais de um nó enumerou um nobreak"
+      ansible.builtin.assert:
+        that:
+          - nut_primary_hosts | length == 1
+        fail_msg: >-
+          {{ nut_primary_hosts | length }} nós enumeraram um nobreak
+          ({{ nut_primary_hosts | join(', ') }}). Este playbook modela UM
+          nobreak com um nó primário. Dois nobreaks pedem dois blocos
+          [nome] no ups.conf e uma decisão de topologia que não está tomada.
+        quiet: true
+
+  tasks:
+    # ------------------------------------------------------------------
+    # Nó primário: build fixado, driver, upsd e upsmon
+    # ------------------------------------------------------------------
+    - name: Bloco do nó primário (o que tem o cabo USB)
+      when: nut_is_primary
+      block:
+        - name: Criar o grupo do NUT
+          ansible.builtin.group:
+            name: nut
+            system: true
+            state: present
+
+        - name: Criar o usuário do NUT
+          ansible.builtin.user:
+            name: nut
+            group: nut
+            system: true
+            shell: /usr/sbin/nologin
+            home: /run/nut
+            create_home: false
+            state: present
+
+        - name: Verificar qual commit do NUT já está compilado neste nó
+          ansible.builtin.slurp:
+            src: "{{ nut_build_stamp }}"
+          register: nut_stamp_raw
+          failed_when: false
+          changed_when: false
+
+        - name: Decidir se o build precisa rodar
+          ansible.builtin.set_fact:
+            nut_build_needed: >-
+              {{ (nut_stamp_raw.content is not defined)
+                 or ((nut_stamp_raw.content | b64decode | trim) != nut_git_ref) }}
+
+        # ⚠️ `--check` não pode entrar aqui. O módulo `git` não clona em check
+        # mode, os `command` de autogen/configure são pulados, e o
+        # `community.general.make` — que TEM suporte a check mode — roda
+        # `make -q` num `chdir` que não existe e falha. CLAUDE.md trata
+        # `--check --diff` como a forma de descobrir divergência: um playbook
+        # que não sobrevive a um dry-run em nó novo quebra esse contrato.
+        - name: "Avisar que o build do NUT seria executado (dry-run)"
+          ansible.builtin.debug:
+            msg: >-
+              --check: o NUT seria compilado a partir de {{ nut_git_ref }}
+              em {{ nut_build_dir }}. Nada foi feito.
+          when:
+            - nut_build_needed
+            - ansible_check_mode
+
+        - name: Compilar o NUT a partir do commit fixado
+          when:
+            - nut_build_needed
+            - not ansible_check_mode
+          block:
+            - name: Instalar as dependências de build
+              ansible.builtin.apt:
+                name: "{{ nut_build_packages }}"
+                state: present
+                update_cache: true
+                cache_valid_time: 3600
+
+            - name: Clonar o NUT no commit fixado
+              ansible.builtin.git:
+                repo: "{{ nut_git_repo }}"
+                dest: "{{ nut_build_dir }}"
+                version: "{{ nut_git_ref }}"
+                depth: 1
+                force: true
+              # O clone em si não é o estado que interessa: o estado é o
+              # binário instalado, marcado pelo stamp ao fim do bloco.
+              changed_when: false
+
+            - name: Gerar o configure
+              ansible.builtin.command:
+                cmd: ./autogen.sh
+                chdir: "{{ nut_build_dir }}"
+              changed_when: true
+
+            # Só o driver `ragtech`, e sem USB/SNMP/CGI: o alvo é um binário
+            # pequeno num hipervisor, não a distribuição completa do NUT.
+            #
+            # O `configure` avisa que `--sysconfdir` está obsoleto em favor de
+            # `--with-confdir`. Mantido: é o que foi executado e verificado
+            # contra o hardware, e trocar a flag move o diretório de
+            # configuração. Migrar é mudança deliberada, com novo teste.
+            - name: Configurar o build
+              ansible.builtin.command:
+                cmd: >-
+                  ./configure
+                  --prefix={{ nut_prefix }}
+                  --sysconfdir={{ nut_sysconfdir }}
+                  --with-statepath=/run/nut
+                  --with-altpidpath=/run/nut
+                  --with-drivers=ragtech
+                  --with-serial
+                  --without-usb
+                  --without-snmp
+                  --without-neon
+                  --without-nss
+                  --without-openssl
+                  --without-cgi
+                  --without-dev
+                  --with-user=nut
+                  --with-group=nut
+                  --with-systemdsystemunitdir=/etc/systemd/system
+                chdir: "{{ nut_build_dir }}"
+              changed_when: true
+
+            - name: Compilar
+              community.general.make:
+                chdir: "{{ nut_build_dir }}"
+                jobs: "{{ ansible_processor_vcpus | default(2) }}"
+
+            - name: Instalar
+              community.general.make:
+                chdir: "{{ nut_build_dir }}"
+                target: install
+
+            # ⚠️ `make install` põe libupsclient.so.7 em /usr/local/lib, que está
+            # no ld.so.conf do Debian mas cujo cache não é atualizado sozinho.
+            # Sem isto, `upsc` e `upsmon` morrem com "error while loading shared
+            # libraries: libupsclient.so.7". Confirmado em execução real: o
+            # upsd sobe (não usa a lib do cliente) e só o cliente quebra, o que
+            # faz o defeito parecer problema de configuração.
+            - name: Atualizar o cache do linker dinâmico
+              ansible.builtin.command:
+                cmd: ldconfig
+              changed_when: true
+
+            - name: Registrar o commit compilado
+              ansible.builtin.copy:
+                content: "{{ nut_git_ref }}\n"
+                dest: "{{ nut_build_stamp }}"
+                owner: root
+                group: root
+                mode: '0644'
+
+        # Os `noqa: no-relative-paths` deste play seguem a convenção de
+        # 00-proxmox-setup.yml: a regra pede estrutura de role, e estes
+        # playbooks são de host, não de role.
+        - name: Garantir o diretório de estado a cada boot  # noqa: no-relative-paths
+          ansible.builtin.template:
+            src: "{{ playbook_dir }}/../templates/nut/tmpfiles-nut.conf.j2"
+            dest: /etc/tmpfiles.d/nut.conf
+            owner: root
+            group: root
+            mode: '0644'
+          notify: Recriar o diretório de estado do NUT
+
+        - name: Instalar a regra de udev do nobreak  # noqa: no-relative-paths
+          ansible.builtin.template:
+            src: "{{ playbook_dir }}/../templates/nut/99-nut-ups.rules.j2"
+            dest: /etc/udev/rules.d/99-nut-ups.rules
+            owner: root
+            group: root
+            mode: '0644'
+          notify: Recarregar regras do udev
+
+        - name: Aplicar as regras do udev agora
+          ansible.builtin.meta: flush_handlers
+
+        - name: Configurar ups.conf, upsd.conf e upsd.users  # noqa: no-relative-paths
+          ansible.builtin.template:
+            src: "{{ playbook_dir }}/../templates/nut/{{ item }}.j2"
+            dest: "{{ nut_sysconfdir }}/{{ item }}"
+            owner: root
+            group: nut
+            # 0640: upsd.users carrega senha em texto puro e o upsd a lê como
+            # o usuário `nut`. 0644 aqui publicaria as três senhas para
+            # qualquer conta local do hipervisor.
+            mode: '0640'
+          loop:
+            - ups.conf
+            - upsd.conf
+            - upsd.users
+          no_log: true
+          notify:
+            - Reiniciar o driver do NUT
+            - Reiniciar o upsd
+
+        # ⚠️ `nut.target` é o que precisa estar habilitado, e é o passo que não
+        # é óbvio: `nut-server`, `nut-monitor` e o enumerador declaram
+        # `WantedBy=nut.target`, não `multi-user.target`. Habilitar as três
+        # unidades sozinhas cria symlink dentro de um target que ninguém puxa —
+        # tudo funciona até o primeiro reboot, e aí nada sobe. Verificado em
+        # execução real: só `nut.target` tem `WantedBy=multi-user.target`.
+        #
+        # O enumerador é `Type=oneshot` sem `RemainAfterExit`: fica `inactive`
+        # depois de rodar, então `state: started` reportaria `changed` toda
+        # execução. Quem o dispara é o `.path`, e quem sobe a árvore é o target.
+        - name: Habilitar as unidades do NUT para o boot
+          ansible.builtin.systemd:
+            name: "{{ item }}"
+            enabled: true
+            daemon_reload: true
+          loop:
+            - nut.target
+            - nut-driver.target
+            - nut-driver-enumerator.path
+            - nut-driver-enumerator.service
+            - nut-server.service
+
+        - name: Subir a árvore de serviços do NUT
+          ansible.builtin.systemd:
+            name: nut.target
+            state: started
+
+    # ------------------------------------------------------------------
+    # Nós secundários: só o cliente, do pacote do Debian
+    # ------------------------------------------------------------------
+    - name: Instalar o cliente NUT nos nós sem o cabo USB
+      ansible.builtin.apt:
+        name: nut-client
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+      when: not nut_is_primary
+
+    # ------------------------------------------------------------------
+    # Comum aos dois papéis
+    # ------------------------------------------------------------------
+    - name: Definir o modo de operação do NUT neste nó  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/nut/nut.conf.j2"
+        dest: "{{ nut_sysconfdir }}/nut.conf"
+        owner: root
+        group: nut
+        mode: '0640'
+      notify: Reiniciar o upsmon
+
+    - name: Configurar o upsmon  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/nut/upsmon.conf.j2"
+        dest: "{{ nut_sysconfdir }}/upsmon.conf"
+        owner: root
+        group: nut
+        mode: '0640'
+      no_log: true
+      notify: Reiniciar o upsmon
+
+    - name: Habilitar e iniciar o upsmon
+      ansible.builtin.systemd:
+        name: nut-monitor.service
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Aplicar reinícios pendentes antes de verificar
+      ansible.builtin.meta: flush_handlers
+
+    # ------------------------------------------------------------------
+    # Verificação: sem isto o playbook reporta sucesso com o driver morto
+    # ------------------------------------------------------------------
+    - name: Ler o estado do nobreak pelo upsd
+      ansible.builtin.command:
+        cmd: "{{ nut_prefix }}/bin/upsc {{ nut_ups_name }}@localhost"
+      register: nut_upsc
+      changed_when: false
+      failed_when: false
+      when: nut_is_primary
+
+    - name: Exigir que o driver esteja realmente respondendo
+      ansible.builtin.assert:
+        that:
+          - nut_upsc.rc == 0
+          - "'ups.model' in nut_upsc.stdout"
+          - "'battery.charge' in nut_upsc.stdout"
+        fail_msg: >-
+          O upsd subiu mas não devolveu as variáveis do nobreak
+          (rc={{ nut_upsc.rc }}). Verifique o driver com
+          `upsdrvctl -DD start {{ nut_ups_name }}` e confira se
+          {{ nut_device_symlink }} existe.
+        quiet: true
+      when:
+        - nut_is_primary
+        - not ansible_check_mode
+
+    - name: Resumo
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }}: papel
+          {{ 'PRIMARY (driver + upsd + upsmon)' if nut_is_primary
+             else 'SECONDARY (upsmon apontando para ' ~ nut_primary_address ~ ')' }}.
+          {{ 'Modelo lido: ' ~ (nut_upsc.stdout_lines | default([])
+             | select('match', '^ups\\.model:') | first | default('n/d'))
+             if nut_is_primary else '' }}
+
+  handlers:
+    - name: Recarregar regras do udev
+      ansible.builtin.command:
+        cmd: udevadm control --reload-rules
+      changed_when: true
+      notify: Reprocessar dispositivos tty
+
+    - name: Reprocessar dispositivos tty
+      ansible.builtin.command:
+        cmd: udevadm trigger --subsystem-match=tty
+      changed_when: true
+
+    - name: Recriar o diretório de estado do NUT
+      ansible.builtin.command:
+        cmd: systemd-tmpfiles --create /etc/tmpfiles.d/nut.conf
+      changed_when: true
+
+    - name: Reiniciar o driver do NUT
+      ansible.builtin.systemd:
+        name: nut-driver-enumerator.service
+        state: restarted
+
+    - name: Reiniciar o upsd
+      ansible.builtin.systemd:
+        name: nut-server.service
+        state: restarted
+
+    - name: Reiniciar o upsmon
+      ansible.builtin.systemd:
+        name: nut-monitor.service
+        state: restarted
