@@ -43,6 +43,8 @@ CONTEXTO = {
     "prometheus_scrape_interval": "15s",
     "nut_ups_name": "nobreak",
     "loki_push_url": "http://192.0.2.10:3100/loki/api/v1/push",
+    "loki_retention_period": "720h",
+    "loki_chunk_encoding": "gzip",
 }
 
 falhas = []
@@ -93,6 +95,20 @@ if prom:
         all(r.startswith('"') for r in rotulos),
         "todo `replacement:` está entre aspas (hostname não vira booleano)",
     )
+
+print("\n== loki-config.yml.j2 ==")
+loki_txt = render("loki-config.yml.j2")
+try:
+    loki = yaml.safe_load(loki_txt)
+    checar(True, "YAML válido")
+    checar(loki["limits_config"]["retention_period"] == "720h",
+           "retenção vem do inventário, não cravada no arquivo")
+    checar(loki["ingester"]["chunk_encoding"] == "gzip",
+           "compressão dos chunks declarada")
+    checar(loki["schema_config"]["configs"][0]["store"] == "tsdb",
+           "schema tsdb preservado")
+except yaml.YAMLError as exc:  # pragma: no cover
+    checar(False, f"YAML válido ({exc})")
 
 print("\n== config-rsyslog.alloy.j2 ==")
 alloy_txt = render("config-rsyslog.alloy.j2")

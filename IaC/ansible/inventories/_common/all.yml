@@ -215,12 +215,26 @@ backup_schedule: "02:30"
 backup_keep_daily: 7
 backup_keep_weekly: 4
 
+# Teto do log local do nó. Não é arquivo: o log já vai para o Loki, e a cópia
+# em disco é buffer. Sem estes limites o `json-file` do Docker e o journal do
+# systemd crescem até encher o disco — medido num nó a 94%, com 3,7 GB de log
+# de container e 2,7 GB de journal.
+docker_log_max_size: "10m"
+docker_log_max_file: "3"
+journald_max_use: "500M"
+journald_max_file_size: "50M"
+
 # Parâmetros de coleta e retenção do stack de observabilidade (Prometheus +
 # Loki), comuns aos dois ambientes.
 prometheus_scrape_interval: "15s"
 prometheus_retention_time: "30d"
 prometheus_retention_size: "8GB"
-loki_retention_period: "336h"
+# ⚠️ 30 dias, e não as 336h (14 dias) que esta variável dizia antes. O valor
+# que a produção aplicava eram os 30d cravados no loki-config.yml, que ninguém
+# lia daqui; alinhado com o real em vez de mudar a retenção de surpresa.
+loki_retention_period: "720h"
+# Compressão dos chunks: gzip (padrão do Loki), snappy, lz4, flate ou zstd.
+loki_chunk_encoding: "gzip"
 
 # Arquivos de configuração dos sidecars de monitoramento que serão
 # templatados depois. `src` é relativo a `docker/monitoring/swarm/`.
@@ -230,7 +244,7 @@ monitoring_sidecar_files:
     owner: "root"
     group: "root"
     mode: "0644"
-  - src: "loki-config.yml"
+  - src: "loki-config.yml.j2"
     dest: "/srv/containers/loki/loki-config.yml"
     owner: "root"
     group: "root"

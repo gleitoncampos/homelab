@@ -117,6 +117,10 @@
           # Endereço do `upsd`: o nó Proxmox que tem o cabo USB, eleito pelo
           # play 03a acima. Vazio quando não há nobreak — a stack sobe do
           # mesmo jeito e só o job `nut` do Prometheus fica fora do ar.
+          - name: "PROMETHEUS_RETENTION_TIME"
+            value: "{{ prometheus_retention_time }}"
+          - name: "PROMETHEUS_RETENTION_SIZE"
+            value: "{{ prometheus_retention_size }}"
           - name: "NUT_SERVER"
             value: "{{ nut_primary_address }}"
         portainer_endpoint_id: "{{ endpoint_id }}"

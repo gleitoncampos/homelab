@@ -4,8 +4,12 @@ services:
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
-      - "--storage.tsdb.retention.time=30d"
-      - "--storage.tsdb.retention.size=8GB"
+      # Vêm do inventário pelo `env` da stack no Portainer. Estavam cravados
+      # aqui enquanto `prometheus_retention_time` e `prometheus_retention_size`
+      # existiam no inventário sem consumidor: duas verdades, e quem editava o
+      # inventário não mudava nada.
+      - "--storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME}"
+      - "--storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE}"
       - "--log.level=info"
     volumes:
       - /srv/containers/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro

@@ -55,11 +55,84 @@
         state: present
         update_cache: true
 
+    # ⚠️ ANTES de o Docker subir pela primeira vez, de propósito. O driver
+    # `json-file` é o padrão e, sem `log-opts`, cresce sem limite nenhum:
+    # medido neste nó, 3,7 GB em /var/lib/docker/containers, num disco de 32 GB
+    # que chegou a 94%. O log já está centralizado no Loki — a cópia local é
+    # buffer, não arquivo, e não tem por que guardar tudo.
+    #
+    # `log-opts` vale por CONTAINER, no momento em que ele é criado: containers
+    # que já existem mantêm a configuração antiga até serem recriados, o que
+    # acontece sozinho no próximo `docker service update` de cada stack.
+    - name: Limitar o tamanho do log de container do Docker
+      ansible.builtin.copy:
+        content: |
+          {
+            "log-driver": "json-file",
+            "log-opts": {
+              "max-size": "{{ docker_log_max_size | default('10m') }}",
+              "max-file": "{{ docker_log_max_file | default('3') }}"
+            }
+          }
+        dest: /etc/docker/daemon.json
+        owner: root
+        group: root
+        mode: '0644'
+      register: docker_daemon_config
+
     - name: Garantir que o serviço do Docker esteja ativo e no boot
       ansible.builtin.systemd:
         name: docker
         state: started
         enabled: true
+
+    # ⚠️ Reiniciar o Docker DERRUBA todos os containers do nó — num Swarm de nó
+    # único, é a produção inteira fora do ar por alguns segundos. Por isso não é
+    # automático: o playbook avisa e você escolhe a janela. Numa instalação do
+    # zero nada disso importa, porque o arquivo é escrito antes do primeiro
+    # start e o daemon já sobe com o limite.
+    - name: "Avisar que o daemon do Docker precisa reiniciar para aplicar o limite de log"
+      ansible.builtin.debug:
+        msg: >-
+          ⚠️ /etc/docker/daemon.json mudou e o daemon NÃO foi reiniciado.
+          O limite de log só passa a valer depois de `systemctl restart docker`,
+          que derruba todos os containers deste nó. Rode na janela que você
+          escolher, ou aplique com `-e docker_allow_restart=true`.
+      when:
+        - docker_daemon_config.changed
+        - not (docker_allow_restart | default(false) | bool)
+
+    - name: Reiniciar o Docker para aplicar o limite de log
+      ansible.builtin.systemd:
+        name: docker
+        state: restarted
+      when:
+        - docker_daemon_config.changed
+        - docker_allow_restart | default(false) | bool
+
+    # O journal do systemd não tem teto por padrão: ele usa até 10% do disco.
+    # Medido neste nó, 2,7 GB — encostado no teto de um disco de 32 GB. Reiniciar
+    # o journald não derruba nada.
+    - name: Garantir o diretório de drop-in do journald
+      ansible.builtin.file:
+        path: /etc/systemd/journald.conf.d
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Limitar o tamanho do journal do systemd
+      ansible.builtin.copy:
+        content: |
+          # Gerado pelo Ansible (01-bootstrap-os.yml). Não editar à mão.
+          [Journal]
+          SystemMaxUse={{ journald_max_use | default('500M') }}
+          SystemMaxFileSize={{ journald_max_file_size | default('50M') }}
+        dest: /etc/systemd/journald.conf.d/99-homelab.conf
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Aplicar o limite do journal
 
     - name: Adicionar usuário ao grupo docker
       ansible.builtin.user:
@@ -329,3 +402,12 @@
       # noqa: no-relative-paths
       # O caminho é relativo porque `tasks/` é irmão de `playbooks/`, e o
       # repositório não usa roles — mesma convenção de tasks/portainer_stack.yml.
+
+  handlers:
+    # Reiniciar o journald não derruba serviço nenhum: ele reabre os arquivos e
+    # aplica o teto novo. Diferente do daemon do Docker, que é por isso que o
+    # reinício dele fica atrás de `docker_allow_restart` lá em cima.
+    - name: Aplicar o limite do journal
+      ansible.builtin.systemd:
+        name: systemd-journald
+        state: restarted

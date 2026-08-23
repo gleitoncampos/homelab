@@ -1,0 +1,67 @@
+{#
+  Configuração do Loki da stack `monitoring`.
+
+  Renderizada por 03-stack-monitoring.yml em /srv/containers/loki/loki-config.yml.
+
+  ⚠️ Virou template por um motivo específico: a retenção estava declarada em
+  DOIS lugares com valores diferentes. `loki_retention_period` existia no
+  inventário valendo 336h (14 dias) e ninguém a consumia; o valor que valia de
+  verdade eram os 30d cravados aqui. Quem editava o inventário não mudava nada,
+  e não havia sintoma — o mesmo defeito de `monitoring_sidecar_files`, que
+  existia sem consumidor.
+#}
+---
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  path_prefix: /tmp/loki
+  instance_addr: 127.0.0.1
+  storage:
+    filesystem:
+      chunks_directory: /tmp/loki/chunks
+      rules_directory: /tmp/loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 100
+
+schema_config:
+  configs:
+    - from: 2020-05-15
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+# Compressão dos chunks. O Loki JÁ comprime por padrão (gzip); declarar aqui
+# é para o valor ser uma decisão visível e não um padrão herdado. `zstd`
+# comprime mais que gzip a um custo de CPU parecido na escrita.
+ingester:
+  chunk_encoding: {{ loki_chunk_encoding }}
+
+ruler:
+  alertmanager_url: http://localhost:9093
+
+analytics:
+  reporting_enabled: false
+
+limits_config:
+  retention_period: {{ loki_retention_period }}
+
+compactor:
+  working_directory: /tmp/loki/retention
+  delete_request_store: filesystem
+  retention_enabled: true
+  retention_delete_delay: 2h
