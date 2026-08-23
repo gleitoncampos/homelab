@@ -22,9 +22,9 @@ HOOK_SCRIPTS := .githooks/pre-commit .githooks/commit-msg .githooks/lib.sh
 PLAYBOOKS   := $(wildcard $(ANSIBLE_DIR)/playbooks/*.yml $(ANSIBLE_DIR)/playbooks/network/*.yml)
 
 # Um alvo por ferramenta, para que a saída diga qual falhou.
-.PHONY: help hooks check lint lint-yaml lint-ansible lint-shell lint-tf \
+.PHONY: help hooks check lint lint-yaml lint-ansible lint-shell lint-tf ssh-keys \
         validate-compose validate-ansible validate-patterns check-common-copies \
-        secrets links snapshot discover clean render-opnsense
+        secrets links snapshot discover clean render-opnsense render-monitoring
 
 help: ## Lista os alvos
 	@echo "Alvos disponíveis:"
@@ -47,10 +47,13 @@ hooks: ## Ativa o gate de pre-commit neste clone (obrigatório, uma vez)
 bootstrap: ## Gera vault, inventário, tfvars e chave SSH a partir de uma fonte única
 	@python3 IaC/bootstrap/bootstrap.py $(ARGS)
 
+ssh-keys: ## Instala a chave gerada pelo bootstrap em todo host do inventário (ENV=prod|dev)
+	@bash IaC/bootstrap/distribuir_chave.sh $(or $(ENV),prod)
+
 test-bootstrap: ## Testa os renderizadores do bootstrap contra os consumidores reais
 	@python3 IaC/bootstrap/test_render.py
 
-check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense ## Tudo que a CI roda
+check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring ## Tudo que a CI roda
 	@echo
 	@echo "✓ check completo"
 
@@ -125,6 +128,9 @@ check-common-copies: ## Falha se as cópias de 00-common.yml divergirem da fonte
 # disso, HEAD~1 nunca mais é a referência: comparar contra o commit anterior
 # transformaria toda regressão estrutural em "esperado". Esta é a exceção
 # documentada, não um convite a repetir a regeneração depois.
+render-monitoring: ## Renderiza os templates da stack de monitoramento com 2 hosts por grupo
+	@python3 $(ANSIBLE_DIR)/tests/render_monitoring.py
+
 render-opnsense: ## Renderiza o template do OPNsense e compara com o baseline congelado
 	@set -euo pipefail; \
 	command -v xmllint >/dev/null || { echo "✗ xmllint ausente (pacote libxml2-utils)"; exit 1; }; \

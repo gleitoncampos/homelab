@@ -1,10 +1,39 @@
 ---
+# ⚠️ Play preliminar. O exportador do nobreak precisa saber com qual `upsd`
+# falar, e essa resposta é a MESMA que `07-nut-ups.yml` usa: quem tem o cabo
+# USB. Perguntá-la aqui de novo, em vez de declarar o endereço no inventário,
+# é o que impede duas verdades sobre o mesmo fato.
+#
+# `ignore_unreachable`: os nós Proxmox estarem fora do ar não pode impedir o
+# deploy das stacks. Inalcançáveis simplesmente não deixam o fato, e a eleição
+# no play seguinte devolve lista vazia.
+- name: 03a - Descobrir qual nó Proxmox tem o nobreak
+  hosts: proxmox
+  become: true
+  gather_facts: false
+  ignore_unreachable: true
+  tasks:
+    - name: Detectar se este nó tem o cabo USB do nobreak
+      ansible.builtin.include_tasks: "../tasks/detect_nut_primary.yml"
+
 - name: "03 - Deploy da Stack de Monitoramento & Observabilidade (Grafana/Loki/Prometheus/Alloy)"
   hosts: homelab_managers
   become: true
   vars:
     portainer_url: "http://localhost:9000"
   pre_tasks:
+    - name: Consolidar qual nó Proxmox é o primário do NUT
+      ansible.builtin.include_tasks: "../tasks/elect_nut_primary.yml"
+
+    - name: "Avisar que o exportador do nobreak sobe sem servidor"
+      ansible.builtin.debug:
+        msg: >-
+          ⚠️ Nenhum nó Proxmox enumerou o nobreak (ou os nós estavam
+          inalcançáveis). O `nut_exporter` sobe sem servidor e o job `nut` do
+          Prometheus fica fora do ar. Rode `07-nut-ups.yml` depois de ligar o
+          cabo e reaplique esta stack.
+      when: nut_primary_address | length == 0
+
     - name: Validar segredos do Vault exigidos por este play
       ansible.builtin.include_tasks: "../tasks/validate_vault.yml"
       vars:
@@ -14,6 +43,58 @@
           - grafana_admin_password
           - pve_exporter_token_value
   tasks:
+    # A stack sobe pelo Portainer a partir do Git, mas os arquivos de
+    # configuração dos sidecars são BIND MOUNT do host: o compose monta
+    # /srv/containers/<servico>/..., e nada os colocava lá. Sem estas tasks o
+    # Prometheus sobe com um arquivo que não existe (ou pior: com um diretório
+    # criado pelo Docker no lugar do arquivo) e o Grafana sobe sem datasource.
+    # `unique` porque vários arquivos dividem o mesmo diretório: sem ele
+    # /srv/containers/grafana seria recriado e re-dono a cada execução, três
+    # vezes por rodada, num diretório que já existe e não é nosso.
+    - name: Criar os diretórios dos arquivos de configuração dos sidecars
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop: "{{ monitoring_sidecar_files | map(attribute='dest') | map('dirname') | unique | list }}"
+
+    # `.j2` no `src` marca o que precisa de renderização. O resto é cópia
+    # literal — templatar um arquivo que não tem Jinja só cria a chance de o
+    # Ansible interpretar `{{` de um regex como variável.
+    - name: Renderizar os arquivos de configuração que são template  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../../docker/monitoring/swarm/{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      loop: "{{ monitoring_sidecar_files | selectattr('src', 'search', '\\.j2$') | list }}"
+      loop_control:
+        label: "{{ item.dest }}"
+
+    - name: Copiar os arquivos de configuração que não são template  # noqa: no-relative-paths
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../../docker/monitoring/swarm/{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      loop: "{{ monitoring_sidecar_files | rejectattr('src', 'search', '\\.j2$') | list }}"
+      loop_control:
+        label: "{{ item.dest }}"
+
+    # O diretório inteiro, não um arquivo por vez: são sete dashboards hoje e
+    # a lista cresce. Enumerá-los em `monitoring_sidecar_files` faria cada
+    # dashboard novo depender de alguém lembrar de acrescentar a entrada — e o
+    # sintoma de esquecer é um painel que some sem erro nenhum.
+    - name: Entregar os dashboards do Grafana  # noqa: no-relative-paths
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../../docker/monitoring/swarm/dashboards/"
+        dest: /srv/containers/grafana/dashboards/
+        owner: root
+        group: root
+        mode: '0644'
+
     - name: Fazer Login na API do Portainer
       ansible.builtin.include_tasks: "../tasks/portainer_login.yml"
 
@@ -33,6 +114,11 @@
             value: "{{ pve_exporter_token_name }}"
           - name: "PVE_TOKEN_VALUE"
             value: "{{ pve_exporter_token_value }}"
+          # Endereço do `upsd`: o nó Proxmox que tem o cabo USB, eleito pelo
+          # play 03a acima. Vazio quando não há nobreak — a stack sobe do
+          # mesmo jeito e só o job `nut` do Prometheus fica fora do ar.
+          - name: "NUT_SERVER"
+            value: "{{ nut_primary_address }}"
         portainer_endpoint_id: "{{ endpoint_id }}"
       no_log: true
 

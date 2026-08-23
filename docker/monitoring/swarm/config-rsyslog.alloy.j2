@@ -1,8 +1,22 @@
+{#
+  Configuração do Alloy que roda no CT central de rsyslog — FORA do Swarm.
+
+  Não confundir com `config.alloy`, que é o Alloy da stack `monitoring`: aquele
+  recebe syslog pela rede e lê os containers locais; este lê os ARQUIVOS que o
+  rsyslog do CT já gravou, um por equipamento.
+
+  ⚠️ Todo nome de job e todo caminho de arquivo derivam do `inventory_hostname`
+  do inventário. Nada de hostname literal: este arquivo é versionado e público.
+
+  ⚠️ Nenhum playbook entrega este template hoje — o CT de rsyslog ainda não está
+  no inventário. Ele existe aqui para que a configuração real deixe de viver só
+  dentro do CT. Ver `docker/monitoring/README.md`.
+#}
 // ----------------------------------------------------------------------
 // 1. MATCH DE ARQUIVOS (DISCOVERY)
 // ----------------------------------------------------------------------
 
-// Logs do Sistema Local
+// Log do próprio CT.
 local.file_match "system" {
   path_targets = [{
     __address__ = "localhost",
@@ -11,50 +25,59 @@ local.file_match "system" {
   }]
 }
 
-// OpenWrt
+{# ⚠️ O laço vai DENTRO de `path_targets`, nunca em volta do bloco: `local.file_match`
+   é um componente com rótulo, e dois blocos com o mesmo rótulo fazem o Alloy
+   recusar a configuração inteira. #}
 local.file_match "openwrt" {
-  path_targets = [{
-    __address__ = "localhost",
-    __path__    = "/var/log/rsyslog/openwrt/OPENWRT.log",
-    job         = "OPENWRT",
-  }]
+  path_targets = [
+{% for host in groups['openwrt'] | default([]) %}
+    {
+      __address__ = "localhost",
+      __path__    = "/var/log/rsyslog/openwrt/{{ host }}.log",
+      job         = "{{ host | upper }}",
+    },
+{% endfor %}
+  ]
 }
 
-// OPNsense
+{# O caminho do OPNsense é um glob e NÃO varia por host — o rsyslog grava um
+   arquivo por facility, não por equipamento. Repetir o mesmo glob por host
+   faria o Alloy ler cada linha duas vezes. Com um firewall só, o rótulo é o
+   nome dele; com mais de um, um rótulo genérico, porque não há como separar. #}
+{% set firewalls = groups['opnsense'] | default([]) %}
 local.file_match "opnsense" {
   path_targets = [{
     __address__ = "localhost",
     __path__    = "/var/log/rsyslog/opnsense/*.log",
-    job         = "OPNSENSE",
+    job         = "{{ (firewalls | first | upper) if firewalls | length == 1 else 'OPNSENSE' }}",
   }]
 }
 
-// OpenMediaVault
 local.file_match "omv" {
-  path_targets = [{
-    __address__ = "localhost",
-    __path__    = "/var/log/rsyslog/omv/openmediavault.log",
-    job         = "OMV",
-  }]
-}
-
-// Proxmox
-local.file_match "proxmox" {
   path_targets = [
+{% for host in groups['omv'] | default([]) %}
     {
       __address__ = "localhost",
-      __path__    = "/var/log/rsyslog/pve/PVE01.log",
-      job         = "PVE01",
+      __path__    = "/var/log/rsyslog/omv/{{ host }}.log",
+      job         = "{{ host | upper }}",
     },
-    {
-      __address__ = "localhost",
-      __path__    = "/var/log/rsyslog/pve/PVE02.log",
-      job         = "PVE02",
-    },
+{% endfor %}
   ]
 }
 
-// Docker Critical
+local.file_match "proxmox" {
+  path_targets = [
+{% for host in groups['proxmox'] | default([]) %}
+    {
+      __address__ = "localhost",
+      __path__    = "/var/log/rsyslog/pve/{{ host }}.log",
+      job         = "{{ host | upper }}",
+    },
+{% endfor %}
+  ]
+}
+
+// VM que hospeda o Swarm, cujo log chega por serial/console.
 local.file_match "docker_critical" {
   path_targets = [{
     __address__ = "localhost",
@@ -67,21 +90,20 @@ local.file_match "docker_critical" {
 // 2. PIPELINES DE PROCESSAMENTO (PARSERS & LABELS)
 // ----------------------------------------------------------------------
 
-// Pipeline para o OPNsense
 loki.process "opnsense_pipeline" {
   forward_to = [loki.write.default.receiver]
 
-  // Extrai o serviço principal (unbound, filterlog, etc)
+  // Serviço principal (unbound, filterlog, etc).
   stage.regex {
     expression = "(?P<service>unbound|filterlog|dhcpd|kernel|system)"
   }
 
-  // Extração do tipo de consulta DNS tratando query e reply
+  // Tipo de consulta DNS, tratando query e reply.
   stage.regex {
     expression = "(reply|query):\\s+\\S+\\s+\\S+\\s+(?P<dns_type>A|AAAA|TXT|MX|CNAME|PTR)"
   }
 
-  // Força level="info" para evitar falso positivo do NOERROR como ERRO no Grafana
+  // Força level="info": sem isso o NOERROR do unbound vira ERRO no Grafana.
   stage.static_labels {
     values = {
       level = "info",
@@ -97,7 +119,6 @@ loki.process "opnsense_pipeline" {
   }
 }
 
-// Pipeline para Proxmox VE
 loki.process "proxmox_pipeline" {
   forward_to = [loki.write.default.receiver]
 
@@ -113,7 +134,6 @@ loki.process "proxmox_pipeline" {
   }
 }
 
-// Pipeline para OpenWrt
 loki.process "openwrt_pipeline" {
   forward_to = [loki.write.default.receiver]
 
@@ -129,7 +149,6 @@ loki.process "openwrt_pipeline" {
   }
 }
 
-// Pipeline para Logs do Docker (JSON Format)
 loki.process "docker_pipeline" {
   forward_to = [loki.write.default.receiver]
 
@@ -179,7 +198,7 @@ loki.source.file "docker_critical" {
   legacy_positions_file = "/tmp/positions.yaml"
 }
 
-// Demais hosts sem pipeline customizado
+// Sem pipeline dedicado.
 loki.source.file "system_and_omv" {
   targets = array.concat(
     local.file_match.system.targets,
@@ -193,9 +212,12 @@ loki.source.file "system_and_omv" {
 // 4. EXPORTADOR LOKI (WRITE)
 // ----------------------------------------------------------------------
 
+// Endereço do Loki na LAN. Este CT está fora da rede overlay do Swarm, então
+// não resolve `tasks.monitoring_loki` — precisa do endereço do nó, vindo do
+// inventário.
 loki.write "default" {
   endpoint {
-    url = "http://loki_server/loki/api/v1/push"
+    url = "{{ loki_push_url }}"
 
     batch_size = "1MB"
     batch_wait = "1s"

@@ -1,0 +1,138 @@
+{#
+  Configuração do Prometheus da stack `monitoring`.
+
+  Renderizada pelo playbook 03-stack-monitoring.yml em
+  /srv/containers/prometheus/prometheus.yml, caminho que o compose monta.
+
+  ⚠️ Todo endereço vem do inventário — `hostvars[...].ansible_host` — e todo
+  rótulo `instance` vem do `inventory_hostname`. Nada de IP nem de hostname
+  literal aqui: este arquivo é versionado e público.
+
+  O conteúdo espelha o que roda hoje em produção (conferido em 23/08/2026
+  contra /srv/containers/prometheus/prometheus.yml do nó do Swarm), acrescido
+  do job do nobreak.
+#}
+---
+global:
+  scrape_interval: {{ prometheus_scrape_interval | default('15s') }}
+
+scrape_configs:
+  # O próprio Prometheus.
+  - job_name: prometheus
+    scrape_interval: 60s
+    static_configs:
+      - targets:
+          - tasks.monitoring_prometheus:9090
+
+  # node_exporter: o do Swarm (serviço global, um por nó) e o do NAS, que roda
+  # fora do cluster.
+  - job_name: node_exporter
+    scrape_interval: 60s
+    static_configs:
+      - targets:
+          - tasks.monitoring_node_exporter:9100
+{% for host in groups['omv'] | default([]) %}
+          - "{{ hostvars[host].ansible_host }}:9100"
+{% endfor %}
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: tasks\.monitoring_node_exporter:9100
+        target_label: instance
+        replacement: "{{ (groups['homelab_managers'] | default(['swarm']))[0] | upper }}"
+{% for host in groups['omv'] | default([]) %}
+      - source_labels: [__address__]
+        regex: {{ hostvars[host].ansible_host | regex_escape }}:9100
+        target_label: instance
+        replacement: "{{ host | upper }}"
+{% endfor %}
+
+  # OpenWrt: pacote prometheus-node-exporter-lua, mesma porta 9100.
+{% if groups['openwrt'] | default([]) | length > 0 %}
+  - job_name: openwrt
+    scrape_interval: 60s
+    static_configs:
+      - targets:
+{% for host in groups['openwrt'] %}
+          - "{{ hostvars[host].ansible_host }}:9100"
+{% endfor %}
+    relabel_configs:
+{% for host in groups['openwrt'] %}
+      - source_labels: [__address__]
+        regex: {{ hostvars[host].ansible_host | regex_escape }}:9100
+        target_label: instance
+        replacement: "{{ host | upper }}"
+{% endfor %}
+{% endif %}
+
+  # cAdvisor. O `fallback_scrape_protocol` é necessário porque a imagem não
+  # negocia o formato por `Content-Type`; o Prometheus 3.x exige que o
+  # fallback seja declarado em vez de assumido.
+  - job_name: cadvisor
+    scrape_interval: 60s
+    scrape_timeout: 10s
+    fallback_scrape_protocol: PrometheusText1.0.0
+    static_configs:
+      - targets:
+          - tasks.monitoring_cadvisor:8080
+
+  # OPNsense: node_exporter do plugin os-node_exporter.
+{% if groups['opnsense'] | default([]) | length > 0 %}
+  - job_name: opnsense
+    static_configs:
+      - targets:
+{% for host in groups['opnsense'] %}
+          - "{{ hostvars[host].ansible_host }}:9100"
+{% endfor %}
+    relabel_configs:
+{% for host in groups['opnsense'] %}
+      - source_labels: [__address__]
+        regex: {{ hostvars[host].ansible_host | regex_escape }}:9100
+        target_label: instance
+        replacement: "{{ host | upper }}"
+{% endfor %}
+{% endif %}
+
+  # Proxmox VE. O alvo é o hipervisor, mas quem responde é o
+  # prometheus-pve-exporter: o endereço do host vira `__param_target` e o
+  # `__address__` é reescrito para o exporter.
+{% if groups['proxmox'] | default([]) | length > 0 %}
+  - job_name: pve
+    metrics_path: /pve
+    params:
+      module: [default]
+      cluster: ['1']
+      node: ['1']
+    static_configs:
+      - targets:
+{% for host in groups['proxmox'] %}
+          - "{{ hostvars[host].ansible_host }}"
+{% endfor %}
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+{% for host in groups['proxmox'] %}
+      - source_labels: [__param_target]
+        regex: {{ hostvars[host].ansible_host | regex_escape }}
+        target_label: instance
+        replacement: "{{ host | upper }}"
+{% endfor %}
+      - target_label: __address__
+        replacement: "tasks.monitoring_prometheus-pve-exporter:9221"
+{% endif %}
+
+  # Nobreak, via nut_exporter falando o protocolo NUT (TCP 3493) com o upsd do
+  # nó que tem o cabo USB. O nome do UPS vai na query string: o exporter falha
+  # a coleta inteira se enxergar mais de um e nenhum for indicado.
+{% if nut_ups_name is defined %}
+  - job_name: nut
+    scrape_interval: 30s
+    metrics_path: /ups_metrics
+    params:
+      ups: ["{{ nut_ups_name }}"]
+    static_configs:
+      - targets:
+          - tasks.monitoring_nut_exporter:9199
+    relabel_configs:
+      - target_label: instance
+        replacement: "{{ nut_ups_name | upper }}"
+{% endif %}
