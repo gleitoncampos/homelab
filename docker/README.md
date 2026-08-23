@@ -14,7 +14,7 @@ Esta pasta centraliza todas as definições de serviços e infraestrutura contai
 A rede overlay `traefik_public` e o `docker swarm init` são feitos por `02-bootstrap-cluster.yml`, não à mão — ver o aviso no [`README.md`](../README.md) da raiz.
 
 ### 2. Monitoramento & Observabilidade
-- **Monitoring Stack** ([`docker/monitoring/`](./monitoring/README.md)): Grafana + Prometheus + Loki + Grafana Alloy para centralização de métricas e logs de containers e do host.
+- **Monitoring Stack** ([`docker/monitoring/`](./monitoring/README.md)): Grafana + Prometheus + Loki + Grafana Alloy + cAdvisor + node_exporter + InfluxDB, mais os exporters do Proxmox (`prometheus-pve-exporter`) e do nobreak (`nut_exporter`), para centralização de métricas e logs de containers, do host e da energia.
   - **Só o Grafana é publicado pelo Traefik** (rota `${FQDN_GRAFANA}`). **Prometheus, Loki e InfluxDB não têm mais label de roteamento** e ficam acessíveis apenas dentro da rede overlay interna `monitoring` — nenhum dos três tem autenticação própria, e o middleware `forwardAuth` de um futuro SSO não serve para eles: o portal de login redireciona para uma página HTML, o que quebra qualquer cliente de máquina (Grafana consultando o Prometheus como datasource, Alloy fazendo `remote_write` para o Loki). Expor os três exigiria autenticação nativa própria de cada um — nenhum tem hoje — então a decisão de arquitetura foi não publicá-los.
 - **Statping** (`docker/_catalog/statping/`): Dashboard de status de serviços e alertas de uptime.
 

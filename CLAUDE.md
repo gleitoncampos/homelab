@@ -171,7 +171,7 @@ objeto.
 ├── CLAUDE.md               # Este arquivo (diretrizes e premissas do repositório)
 ├── CONTRIBUTING.md         # Para quem vem de fora; aponta para cá, não duplica
 ├── LICENSE                 # MIT
-├── Makefile                # Entrada única: make hooks, make check, make secrets
+├── Makefile                # Entrada única: make hooks, make check, make secrets, make ssh-keys
 ├── README.md               # Porta de entrada: o que é o projeto e como subir
 ├── SECURITY.md             # Como reportar, e o que NÃO é vulnerabilidade aqui
 ├── .ansible-lint           # Perfil production fixado (bump de versão não muda o gate)
@@ -203,11 +203,13 @@ objeto.
 ├── .superpowers/           # IGNORADO. Workspace do subagent-driven-development (brief, report, diff)
 ├── .renovaterc.json        # Atualização automática de versão de imagem
 ├── docs/
+│   ├── instalacao.md       # Ordem de execução das ferramentas e uso do Ansible por alvo
 │   └── runbooks/           # Procedimento operacional genérico, sem dado real
 │       └── restauracao.md  # Verificação e recuperação do backup dos convidados
 ├── IaC/                    # TODA ferramenta de infraestrutura como código
 │   ├── bootstrap/          # Gera as ENTRADAS que as duas ferramentas consomem
 │   │   ├── bootstrap.py    # Fonte única -> vault, hosts.ini, tfvars, padrões
+│   │   ├── distribuir_chave.sh  # make ssh-keys: instala a chave pública nos hosts
 │   │   ├── test_render.py  # Testa contra ansible-inventory e terraform fmt
 │   │   └── templates/      # Modelo do arquivo de respostas (.tmpl: não é YAML ainda)
 │   ├── ansible/            # Sistema operacional, cluster Swarm e stacks
@@ -219,13 +221,15 @@ objeto.
 │   │   │   └── dev/            # idem, ambiente de desenvolvimento
 │   │   ├── tasks/              # Tasks reutilizáveis (Portainer, regras do usuário docker, validação do vault)
 │   │   ├── templates/network/  # openwrt_{system,dhcp,firewall,wireless}.j2 + opnsense/: config.xml.j2 (esqueleto de includes) e 10 partials orientados a dado — ver IaC/ansible/README.md
+│   │   ├── templates/nut/      # ups.conf, upsd.{conf,users}, upsmon.conf, nut.conf, udev, tmpfiles (07-nut-ups)
 │   │   ├── templates/proxmox/  # proxmox_{datacenter,interfaces,storage}.j2
+│   │   ├── templates/terraform/  # tokens.auto.tfvars.j2 (escrito por 00-proxmox-api-token)
 │   │   ├── tests/               # Render do template do OPNsense fora da caixa (make render-opnsense)
 │   │   │   ├── render_opnsense.py  # Jinja com trim_blocks=True, igual ao Ansible
 │   │   │   ├── fixtures/       # Variáveis de exemplo (RFC 5737, MAC de documentação IANA); isenção por ARQUIVO no gate, nunca por diretório
 │   │   │   ├── baseline/       # Render congelado da fase 0 — nunca regenerar
 │   │   │   └── expected/       # Diff aprovado por fase, comparado byte a byte
-│   │   └── playbooks/          # 00-node-bootstrap/-omv-setup/-proxmox-setup, 01-05 (SO, cluster, stacks), 06-backup, network/ (OPNsense, OpenWrt)
+│   │   └── playbooks/          # 00-node-bootstrap/-omv-setup/-proxmox-setup/-proxmox-api-token, 01-05 (SO, cluster, stacks), 06-backup, 07-nut-ups, network/ (OPNsense, OpenWrt)
 │   └── terraform/          # Hardware virtual (Proxmox VE — VMs e CTs LXC)
 │       └── proxmox/        # Provider bpg/proxmox; runbook de import no README de lá
 ├── prod-snapshot/          # Ferramentas de coleta do estado real (só os scripts)
