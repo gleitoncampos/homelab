@@ -108,6 +108,17 @@ GENERATED = [
     ("wifi_iot_password", "wifi", True, "Wi-Fi IoT"),
     ("wifi_media_password", "wifi", True, "Wi-Fi mídia"),
     ("wifi_guest_password", "wifi", True, "Wi-Fi visitantes"),
+    # Senha do usuário SMB que o Proxmox usa para montar o share de backup do
+    # NAS. Humana porque quem a cadastra do outro lado é você, na interface do
+    # OMV: sem ela, o storage aparece na UI do Proxmox e nunca monta — e o
+    # vzdump falha toda noite contra um destino inativo.
+    ("proxmox_backup_share_password", "senha", True, "NAS — usuário SMB do backup"),
+    # Dois usuários do NUT, duas senhas. Separar não é zelo: o usuário
+    # `upsmon` primary pode declarar FSD e derrubar o parque inteiro, e o
+    # secondary só obedece. Não há terceira para o exportador do Prometheus —
+    # o upsd não pede credencial para ler variável.
+    ("nut_monitor_password", "senha", False, ""),
+    ("nut_secondary_password", "senha", False, ""),
 ]
 
 # Impossíveis de gerar: vêm do console de um terceiro. O valor está em imprimir
@@ -134,18 +145,6 @@ EXTERNAL = [
     (
         "pve_exporter_token_value",
         "Valor do token do Proxmox",
-        "",
-        "Exibido uma única vez, na saída do comando acima",
-    ),
-    (
-        "proxmox_api_token_id",
-        "Token de API do Proxmox para o Terraform",
-        "",
-        "pveum user token add terraform@pve terraform --privsep 0",
-    ),
-    (
-        "proxmox_api_token_secret",
-        "Segredo do token do Terraform",
         "",
         "Exibido uma única vez, na saída do comando acima",
     ),
@@ -376,6 +375,30 @@ def perguntar_respostas() -> str:
         "HV2_NOME": ask("Nome do nó secundário", obrigatorio=False),
     }
 
+    # Estas quatro eram, até aqui, edição manual do hosts.ini depois do
+    # bootstrap — e o playbook do Proxmox aborta sem as duas primeiras. Toda
+    # pergunta feita aqui é um passo a menos no runbook de instalação, que é o
+    # motivo de o bootstrap existir.
+    print(
+        _c("1", "\n  Proxmox — storage de backup e NIC de WAN.")
+        + "\n  Enter aceita o padrão; o hosts.ini gerado leva os valores para"
+        "\n  [all:vars], onde 00-proxmox-setup.yml e 06-backup.yml os leem."
+    )
+    respostas |= {
+        # UM id por nó: o share no NAS é o mesmo, mas cada hipervisor o
+        # registra com o próprio id de storage — é o que o inventário de
+        # exemplo já dizia ("os dois nós referenciam o mesmo share por nomes
+        # diferentes") sem que nada no gerador tratasse. Em [all:vars], o
+        # segundo nó reescrevia o próprio storage.cfg com o id do primeiro.
+        "BACKUP_STORAGE_1": ask("Id do storage de backup no nó primário", "nas-backup"),
+        "BACKUP_STORAGE_2": ask("Id do storage de backup no nó secundário", "nas-backup"),
+        "BACKUP_SHARE": ask("Nome do share CIFS no NAS (o mesmo nos dois)", "backup"),
+        "WAN_IFACE": ask(
+            "Interface física de WAN (fora da bridge; vazio se não houver)",
+            obrigatorio=False,
+        ),
+    }
+
     print(
         _c("1", "\n  Rede-ALVO — o plano de VLANs.")
         + "\n  O prefixo abaixo vira 192.168.<vlan>.x no arquivo gerado;"
@@ -567,8 +590,8 @@ def render_hosts(env: str, resp: dict) -> str:
 {linha("openwrt", a.get("openwrt", ""), "root", " ansible_shell_type=sh")}
 
 [proxmox]
-{linha(n["primario"]["nome"], a.get("hypervisor1", ""), "root")}
-{linha(n.get("secundario", {}).get("nome", "hv2"), a.get("hypervisor2", ""), "root")}
+{linha(n["primario"]["nome"], a.get("hypervisor1", ""), "root", _wan(resp) + _storage(resp, 1))}
+{linha(n.get("secundario", {}).get("nome", "hv2"), a.get("hypervisor2", ""), "root", _storage(resp, 2))}
 
 [omv]
 {linha("omv", a.get("omv", ""), "root")}
@@ -582,7 +605,8 @@ opnsense
 openwrt
 
 [all:vars]
-{_ntp(a)}"""
+{_ntp(a)}
+{_proxmox_vars(resp)}"""
 
 
 def _ntp(atual: dict) -> str:
@@ -598,6 +622,77 @@ def _ntp(atual: dict) -> str:
     if not ntp:
         return cabecalho + "# ntp_server_internal=<IP-DO-FIREWALL>   (nenhum informado)\n"
     return cabecalho + f"ntp_server_internal={ntp}\n"
+
+
+def _url_secundaria(resp: dict) -> str:
+    """Sem o IP do segundo hipervisor, a variável sai COMENTADA em vez de
+    receber `https://:8006/`. Uma URL sem host é uma string não-vazia: passaria
+    por qualquer checagem de "preenchido" e só falharia no apply, com erro de
+    conexão que não aponta para o tfvars. Ausente, o Terraform cobra a variável
+    obrigatória pelo nome — que é o desfecho desejado."""
+    ip = resp["rede_atual"].get("hypervisor2", "")
+    if not ip:
+        return ('# Segundo hipervisor não informado no bootstrap. O Terraform vai\n'
+                '# cobrar esta variável obrigatória; preencha antes do plan.\n'
+                '# proxmox_api_url_secondary = "https://<IP-DO-NO-2>:8006/"')
+    return f'proxmox_api_url_secondary = "https://{ip}:8006/"'
+
+
+def _wan(resp: dict) -> str:
+    """A NIC de WAN é atributo DO NÓ PRIMÁRIO, não do parque: é ele que faz o
+    passthrough para o firewall. Como variável de host ela exclui a interface
+    da bridge só onde isso é verdade — em `[all:vars]` excluiria também uma NIC
+    homônima e em uso no secundário, que ficaria fora da bridge sem erro."""
+    wan = (resp.get("proxmox", {}) or {}).get("wan_interface") or ""
+    return f" proxmox_wan_interface={wan}" if wan else ""
+
+
+def _storage(resp: dict, no: int) -> str:
+    """Id do storage de backup DESTE nó. Per-host porque os dois hipervisores
+    registram o mesmo share do NAS com nomes diferentes — em `[all:vars]`, o
+    `storage.cfg` do secundário sairia declarando o id do primário, e o vzdump
+    apontaria para um storage que não existe ali."""
+    px = resp.get("proxmox", {}) or {}
+    valor = px.get(f"backup_storage_{'primario' if no == 1 else 'secundario'}") or ""
+    return f" backup_storage={valor}" if valor else ""
+
+
+def _proxmox_vars(resp: dict) -> str:
+    """Variáveis que `playbooks/00-proxmox-setup.yml` e `playbooks/06-backup.yml`
+    exigem do inventário. Nenhuma delas tem default no playbook: as duas
+    primeiras abortam o play, e o gateway errado tira o hipervisor da rede.
+
+    `proxmox_gateway_ip` é o gateway de HOJE, e não o da rede-alvo, porque
+    acompanha o `ansible_host` de hoje no mesmo arquivo — misturar as duas
+    redes num mesmo /etc/network/interfaces é o erro que o README do bootstrap
+    descreve em "As duas redes"."""
+    px = resp.get("proxmox", {}) or {}
+    atual = resp["rede_atual"]
+    vmids = px.get("backup_vmids") or []
+    linhas = [
+        "",
+        "# Gateway que este hipervisor usa hoje. Escrito em /etc/network/interfaces",
+        "# por 00-proxmox-setup.yml — ver a nota sobre `vlans` naquele playbook.",
+        f"proxmox_gateway_ip={atual.get('gateway', '')}",
+        "",
+        "# O share é o mesmo nos dois nós; o ID DO STORAGE não — ele vai na",
+        "# linha de cada host, porque cada hipervisor registra o share com o",
+        "# próprio id. Ver `backup_storage` em hosts.ini.example.",
+        f"proxmox_backup_share={px.get('backup_share', '')}",
+    ]
+    if vmids:
+        linhas.append(f"backup_vmids=[{','.join(str(v) for v in vmids)}]")
+    else:
+        linhas += [
+            "# Sem VMIDs declarados: 06-backup.yml aborta até esta lista existir,",
+            "# o que é melhor do que agendar vzdump contra o convidado errado.",
+            "# backup_vmids=[<VMID-1>,<VMID-2>]",
+        ]
+    # `proxmox_wan_interface` NÃO entra aqui: ela é per-host, e vai na linha do
+    # nó primário em render_hosts. Em [all:vars] ela valeria também para o
+    # secundário — que pode ter uma NIC de mesmo nome, em uso, e a veria
+    # excluída da bridge sem erro nenhum.
+    return "\n".join(linhas) + "\n"
 
 
 def render_tfvars(resp: dict, seg: dict, ssh_pub: str) -> str:
@@ -617,10 +712,18 @@ def render_tfvars(resp: dict, seg: dict, ssh_pub: str) -> str:
 # precisa alcançar o que já existe. Os dois estarem diferentes é esperado até a
 # migração de rede acontecer.
 
-proxmox_api_url          = "https://{resp["rede_atual"].get("hypervisor1", "")}:8006/"
-proxmox_api_token_id     = "{seg.get("proxmox_api_token_id", "")}"
-proxmox_api_token_secret = "{seg.get("proxmox_api_token_secret", "")}"
-proxmox_ssh_username     = "root"
+# Dois endpoints e dois pares de token: os hipervisores são independentes, não
+# um cluster. Ver IaC/terraform/proxmox/providers.tf.
+proxmox_api_url_primary   = "https://{resp["rede_atual"].get("hypervisor1", "")}:8006/"
+{_url_secundaria(resp)}
+
+# Os QUATRO tokens de API NÃO ficam aqui. Quem os cria e escreve é
+# `IaC/ansible/playbooks/00-proxmox-api-token.yml`, em `tokens.auto.tfvars` —
+# arquivo que o Terraform carrega sozinho pelo sufixo `.auto.tfvars`. Dois
+# lugares gerando o mesmo segredo seria a falha de "duas verdades": a cópia que
+# ficasse para trás só apareceria como 401 no `terraform plan`.
+
+proxmox_ssh_username = "root"
 
 proxmox_node_primary   = "{n["primario"]["nome"]}"
 proxmox_node_secondary = "{n.get("secundario", {}).get("nome", "")}"

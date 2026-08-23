@@ -69,6 +69,30 @@ nos:
 opnsense_wan_pci_id: "0000:05:00.0"
 
 # =============================================================================
+# Proxmox — o que o 00-proxmox-setup.yml precisa saber
+# =============================================================================
+# As quatro entram no [all:vars] do hosts.ini gerado. Nenhuma tem default no
+# playbook, de propósito: cada uma delas, errada e silenciosa, produz um dano
+# que só aparece longe daqui — backup salvo no storage errado, hipervisor fora
+# da rede, NIC de WAN entrando na bridge da LAN.
+proxmox:
+  # Id do storage de backup em CADA nó (o nome que `pvesm status` mostra ali).
+  # Um por hipervisor: o share do NAS é o mesmo, mas cada nó o registra com o
+  # próprio id. O valor é usado por 00-proxmox-setup.yml, que declara o storage,
+  # e por 06-backup.yml, que agenda o vzdump contra ele — no mesmo host.
+  backup_storage_primario: "@@BACKUP_STORAGE_1@@"
+  backup_storage_secundario: "@@BACKUP_STORAGE_2@@"
+  # Nome do compartilhamento CIFS no NAS (campo `share` do storage.cfg).
+  backup_share: "@@BACKUP_SHARE@@"
+  # VMIDs que entram no backup agendado. Lista vazia = 06-backup.yml aborta,
+  # que é melhor do que salvar o convidado errado e reportar sucesso.
+  backup_vmids: []
+  # Interface física de WAN, EXCLUÍDA da bridge vmbr0 porque é dedicada à VM do
+  # firewall via passthrough. Vazio = todas as interfaces físicas entram na
+  # bridge.
+  wan_interface: "@@WAN_IFACE@@"
+
+# =============================================================================
 # Rede-ALVO — o plano de VLANs
 # =============================================================================
 # ⚠️ REVISE ANTES DE APLICAR. Este bloco é o destino, não o presente. Ele é

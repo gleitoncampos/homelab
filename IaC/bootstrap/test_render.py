@@ -21,13 +21,17 @@ resp = {
   "ssh_user": "nuvidio", "outros_hostnames": ["nas-um", "fw-um"],
   "wifi": {"main": "lab", "iot": "lab-iot", "media": "lab-tv", "guest": "lab-vis"},
   "rede_atual": {"gateway": "192.0.2.1", "manager": "192.0.2.10", "worker": "",
-                 "hypervisor1": "192.0.2.5", "hypervisor2": "", "omv": "192.0.2.15",
+                 "hypervisor1": "192.0.2.5", "hypervisor2": "192.0.2.6", "omv": "192.0.2.15",
                  "opnsense": "192.0.2.2", "openwrt": "", "dev": "",
                  "ntp_interno": "192.0.2.1"},
   "nos": {"primario": {"nome": "no-um"}, "secundario": {"nome": "no-dois"}},
   "rede_alvo": {"cidr": 24, "gateway": "198.51.100.1", "manager": "198.51.100.10",
                 "worker": "198.51.100.11", "omv": "198.51.100.15", "dev": "198.51.100.20"},
   "opnsense_wan_pci_id": "0000:05:00.0",
+  "proxmox": {"backup_storage_primario": "nas-bkp-1",
+              "backup_storage_secundario": "nas-bkp-2",
+              "backup_share": "backup",
+              "backup_vmids": [100, 200], "wan_interface": "enp5s0"},
 }
 seg, humanas = {}, []
 for k, t, h, d in bs.GENERATED:
@@ -60,16 +64,46 @@ assert cp["all:vars"]["ntp_server_internal"] == "192.0.2.1"
 assert "\n# node2 ansible_host" in ini, "worker vazio deveria sair comentado"
 print(f"  OK hosts.ini: INI valido, secoes={len(cp.sections())}, worker ausente comentado")
 
-# 3) tfvars -> as 9 obrigatorias presentes e CIDR nos IPs
+# 3) tfvars -> TODA variavel sem default do variables.tf, e CIDR nos IPs.
+#    A lista nao e escrita a mao: ela e LIDA do proprio variables.tf. Uma lista
+#    fixa aqui envelhece em silencio — foi o que aconteceu quando o token unico
+#    do Proxmox virou um par por no e o teste continuou aprovando o render
+#    antigo, que ja nao emitia as chaves novas.
 tf = bs.render_tfvars(resp, seg, pub)
-obrig = ["proxmox_api_token_id","proxmox_api_token_secret","proxmox_node_primary",
-         "proxmox_node_secondary","docker_swarm_node01_ip","docker_swarm_node02_ip",
-         "swarm_gateway","omv_nas_ip","dev_node_ip"]
-faltando = [k for k in obrig if not re.search(rf'^{k}\s*=', tf, re.M)]
-assert not faltando, f"tfvars sem: {faltando}"
+_vars_tf = (pathlib.Path(__file__).parent.parent / "terraform/proxmox/variables.tf").read_text()
+# `"default" not in bloco` era a versao ingenua e reproduzia o defeito que a
+# lista fixa tinha: casava a palavra na DESCRICAO. Duas obrigatorias diziam
+# "Sem default:" e "Nao tem default:" no proprio texto, e sumiam da lista sem
+# que nada acusasse. Casa a ATRIBUICAO, ancorada em inicio de linha.
+obrig = [m.group(1) for m in re.finditer(r'variable\s+"([^"]+)"\s*\{(.*?)\n\}', _vars_tf, re.S)
+         if not re.search(r'^\s*default\s*=', m.group(2), re.M)]
+assert len(obrig) >= 9, f"parser do variables.tf achou so {len(obrig)} obrigatorias"
+# Os quatro tokens sao escritos por
+# IaC/ansible/playbooks/00-proxmox-api-token.yml em tokens.auto.tfvars, que o
+# Terraform carrega junto pelo sufixo .auto.tfvars. Nao estao no render do
+# bootstrap de proposito — um valor, uma fonte. O teste segue cobrindo TODAS as
+# obrigatorias: as que nao saem daqui tem que sair do template de la, senao o
+# plan trava pedindo variavel.
+_tpl_tokens = (pathlib.Path(__file__).parent.parent
+               / "ansible/templates/terraform/tokens.auto.tfvars.j2").read_text()
+faltando = [k for k in obrig
+            if not re.search(rf'^{k}\s*=', tf, re.M)
+            and not re.search(rf'^{k}\s*=', _tpl_tokens, re.M)]
+assert not faltando, f"nenhum dos dois arquivos de tfvars define: {faltando}"
+_no_playbook = [k for k in obrig if re.search(rf'^{k}\s*=', _tpl_tokens, re.M)]
+assert len(_no_playbook) == 4, f"esperava 4 tokens vindos do playbook, veio {_no_playbook}"
+for k in _no_playbook:
+    assert not re.search(rf'^{k}\s*=', tf, re.M), (
+        f"{k} sai dos DOIS arquivos — duas fontes para o mesmo segredo")
 assert '"198.51.100.10/24"' in tf, "IP do manager sem CIDR"
 assert '"198.51.100.1"' in tf, "gateway nao deveria ter CIDR"
-print("  OK tfvars: 9 obrigatorias presentes, CIDR so onde deve")
+# Sem IP do segundo hipervisor, a URL sai COMENTADA — nunca como "https://:8006/",
+# que e string nao-vazia e passaria por qualquer checagem de "preenchido".
+resp_sem_hv2 = {**resp, "rede_atual": {**resp["rede_atual"], "hypervisor2": ""}}
+tf_sem = bs.render_tfvars(resp_sem_hv2, seg, pub)
+assert '"https://:8006/"' not in tf_sem, "URL do no secundario sem host"
+assert "# proxmox_api_url_secondary" in tf_sem, "deveria sair comentada quando nao ha no 2"
+print(f"  OK tfvars: {len(obrig)} obrigatorias cobertas ({len(_no_playbook)} vem do playbook de token), sem sobreposicao")
 
 # 4) secret-patterns -> formato de 3 campos e casa com os nomes
 pat = bs.render_patterns(resp)
@@ -115,5 +149,42 @@ if shutil.which("ansible-inventory"):
         assert r2.returncode == 0, f"inventario sem NTP rejeitado: {r2.stderr[:300]}"
         assert "ntp_server_internal" not in json.loads(r2.stdout)["_meta"]["hostvars"]["node1"]
         print("  OK sem NTP interno: variavel ausente, inventario valido")
+
+# 8) as variaveis que 00-proxmox-setup.yml exige tem que CHEGAR ao host, nao
+#    so aparecer no texto do arquivo. O playbook aborta sem as duas primeiras,
+#    e um gateway ausente sai como string vazia no /etc/network/interfaces.
+        for chave, esperado in (("proxmox_gateway_ip", "192.0.2.1"),
+                                ("proxmox_backup_share", "backup")):
+            assert gv.get(chave) == esperado, f"{chave} nao chegou ao host: {gv.get(chave)!r}"
+
+        # A NIC de WAN e PER-HOST: so o no primario faz passthrough. Em
+        # [all:vars] ela excluiria da bridge uma NIC homonima e EM USO no
+        # secundario, sem erro nenhum — por isso o teste cobre os dois lados.
+        hv = inv["_meta"]["hostvars"]
+        assert hv["no-um"].get("proxmox_wan_interface") == "enp5s0", (
+            f"WAN nao chegou ao no primario: {hv['no-um'].get('proxmox_wan_interface')!r}")
+        assert "proxmox_wan_interface" not in gv, "WAN vazou para [all:vars]"
+
+        # O id do storage de backup e PER-HOST: os dois nos registram o mesmo
+        # share do NAS com nomes diferentes. Em [all:vars], o storage.cfg do
+        # secundario sairia com o id do primario e o vzdump apontaria para um
+        # storage inexistente ali.
+        assert hv["no-um"].get("backup_storage") == "nas-bkp-1", hv["no-um"].get("backup_storage")
+        assert hv["no-dois"].get("backup_storage") == "nas-bkp-2", hv["no-dois"].get("backup_storage")
+        assert "backup_storage" not in gv, "id do storage vazou para [all:vars]"
+        # Uma ocorrencia so, e na linha do primario. Duas significaria que ela
+        # tambem foi parar no secundario, que nao faz passthrough.
+        assert ini.count("proxmox_wan_interface=") == 1, "WAN deveria estar em UM host so"
+        assert gv.get("backup_vmids") == [100, 200], (
+            f"backup_vmids precisa chegar como LISTA, veio {gv.get('backup_vmids')!r}")
+        print("  OK vars do Proxmox: gateway/storage/share globais, WAN e storage per-host, vmids como lista")
+
+# 9) sem VMIDs declarados a linha sai COMENTADA — 06-backup.yml aborta, que e
+#    melhor do que agendar vzdump contra o convidado errado.
+        resp_sv = {**resp, "proxmox": {**resp["proxmox"], "backup_vmids": []}}
+        ini3 = bs.render_hosts("prod", resp_sv)
+        assert "\n# backup_vmids=" in ini3, "sem VMIDs deveria sair comentado"
+        assert "\nbackup_vmids=" not in ini3, "nao deveria definir a variavel"
+        print("  OK sem backup_vmids: linha comentada, nada definido")
 else:
     print("  – ansible-inventory ausente, pulado")

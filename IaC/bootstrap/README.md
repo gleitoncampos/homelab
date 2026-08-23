@@ -46,25 +46,32 @@ Confundir os dois produz timeout de SSH, cujo sintoma não diz nada sobre a caus
 
 ## Como os segredos são tratados
 
-As 23 chaves de segredo tratadas pelo `bootstrap.py` não são todas do mesmo
-tipo, e é isso que decide o comportamento. As 23 vão para o
-`group_vars/all/vault.yml` gerado; **2 delas — os tokens de API do Proxmox — vão
-também para o `terraform.tfvars`**, porque o Terraform não lê o vault. Elas ficam
-nos dois arquivos.
+As 22 chaves de segredo tratadas pelo `bootstrap.py` não são todas do mesmo
+tipo, e é isso que decide o comportamento. Todas as 22 vão para o
+`group_vars/all/vault.yml` gerado, e **nenhuma delas vai para o
+`terraform.tfvars`** — o Terraform não lê o vault, e o que ele precisa de
+credencial chega por outro caminho.
 
-⚠️ **O `vault.yml.example` tem 41 chaves de topo e não é o mesmo conjunto.** Ele
-inclui SSID, nome de usuário e outras chaves que o bootstrap não trata; e, na
-outra direção, **não lista os dois tokens do Proxmox**, embora o gerador os
-escreva no vault. Ou seja, o exemplo não é um retrato fiel do que o
-`make bootstrap` produz — conferir um contra o outro vai acusar diferença, e a
-diferença é conhecida.
+⚠️ Os quatro tokens de API do Proxmox — dois por hipervisor, porque os dois são
+independentes e não há cluster entre eles — **não passam mais por aqui**. Quem
+os cria e os escreve é `playbooks/00-proxmox-api-token.yml`, em
+`tokens.auto.tfvars`, que o Terraform carrega sozinho pelo sufixo
+`.auto.tfvars`. Um valor, uma fonte: perguntá-los no bootstrap criaria a
+segunda, e a cópia que ficasse para trás só apareceria como 401 no
+`terraform plan`.
 
-- **12 geráveis** — senhas de banco, chaves de assinatura, JWT, senhas de
-  Wi-Fi. Nenhuma pergunta: 32 bytes aleatórios são melhores que qualquer senha
-  escolhida à mão, e quem as lê é o Ansible.
-- **9 externas** — Cloudflare, tokens do Proxmox (destino: `terraform.tfvars`),
-  GeoIP, ETPro. Impossíveis de gerar. O script imprime a URL do console e o
-  comando que as produz, e aceita vazio: o `validate_vault.yml` cobra depois.
+⚠️ **O `vault.yml.example` tem 45 chaves de topo e não é o mesmo conjunto.** Ele
+inclui SSID, nome de usuário e outras chaves que o bootstrap não trata. Ou seja,
+o exemplo não é um retrato fiel do que o `make bootstrap` produz — conferir um
+contra o outro vai acusar diferença, e a diferença é conhecida.
+
+- **15 geráveis** — senhas de banco, chaves de assinatura, JWT, senhas de
+  Wi-Fi, senha do SMB de backup e as duas do NUT. Nenhuma pergunta: 32 bytes
+  aleatórios são melhores que qualquer senha escolhida à mão, e quem as lê é o
+  Ansible.
+- **7 externas** — Cloudflare, GeoIP, ETPro e afins. Impossíveis de gerar. O
+  script imprime a URL do console e o comando que as produz, e aceita vazio: o
+  `validate_vault.yml` cobra depois.
 - **2 pendentes** — os hashes bcrypt do OPNsense. bcrypt não sai de `openssl`
   nem da stdlib do Python; gerar um hash de algoritmo errado produziria firewall
   sem acesso à GUI depois do apply, então o script deixa marcador e instrução.
