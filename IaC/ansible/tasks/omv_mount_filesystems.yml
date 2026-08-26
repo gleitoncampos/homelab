@@ -1,0 +1,104 @@
+---
+# ==============================================================================
+# Registrar no OMV os filesystems de dados que já existem nos discos
+# ==============================================================================
+# Incluído por playbooks/00-omv-setup.yml, ANTES do include dos pools do
+# mergerfs — e a ordem é requisito, não arrumação.
+#
+# ⚠️ Por que este passo existe. A VM do NAS é para ser RECRIADA, não importada.
+# A recriação preserva os discos de dados, que são físicos e entram pelo
+# passthrough da controladora, e destrói o disco de sistema — junto com o
+# `/etc/openmediavault/config.xml`, que é onde vivia a associação entre cada
+# filesystem e seu ponto de montagem. Numa OMV recém-instalada os discos
+# aparecem no `lsblk` com ext4 íntegro e NENHUM deles montado sob
+# `/srv/dev-disk-by-uuid-*` — que é exatamente o recorte de que
+# `mergerfs_pools.yml` depende para eleger as branches dos pools.
+#
+# ⚠️ A lista vem do inventário (`omv_data_filesystems`), e é DECLARADA de
+# propósito. Montar todo ext4 não montado que aparecer seria mais cômodo e é a
+# opção errada: adotaria qualquer disco que alguém plugue na máquina, inclusive
+# um que estivesse ali só de passagem para copiar dados — e adotar significa
+# montá-lo sob o prefixo que o torna candidato a branch de pool, a partir do que
+# ele passa a receber escrita.
+#
+# Ninguém digita a lista: `make omv-fs` a gera a partir do host real e escreve
+# uma proposta em `.local/` para ser lida antes de instalada no
+# `group_vars/omv/99-local.yml`, que é gitignorado.
+
+- name: Levantar todos os filesystems que o OMV enxerga
+  ansible.builtin.command: omv-rpc -u admin "FileSystemMgmt" "enumerateFilesystems"
+  register: omv_fs_all
+  changed_when: false
+  check_mode: false
+
+# `getMountCandidates` devolve só o que ainda NÃO tem ponto de montagem
+# configurado. É ele que dá a idempotência deste arquivo: numa segunda execução
+# a lista vem vazia e nada é montado de novo.
+- name: Levantar os filesystems que ainda não têm ponto de montagem
+  ansible.builtin.command: omv-rpc -u admin "FileSystemMgmt" "getMountCandidates"
+  register: omv_fs_candidates
+  changed_when: false
+  check_mode: false
+
+- name: Separar o que existe do que falta montar
+  ansible.builtin.set_fact:
+    omv_fs_present: >-
+      {{ omv_fs_all.stdout | from_json | map(attribute='uuid') | list }}
+    omv_fs_mountable: >-
+      {{ omv_fs_candidates.stdout | from_json | map(attribute='uuid') | list }}
+    omv_fs_declared: >-
+      {{ omv_data_filesystems | map(attribute='uuid') | list }}
+
+# ⚠️ Isto é o que faz a camada versionada do `group_vars` cumprir o papel dela.
+# Ela traz UUIDs fictícios de propósito: quem esquecer de instalar o
+# `99-local.yml` bate aqui, com a lista do que foi pedido e do que o host tem,
+# em vez de seguir montando nada e falhar dois passos adiante na eleição das
+# branches — onde a causa já não estaria à vista.
+- name: Conferir que todo filesystem declarado existe neste host
+  ansible.builtin.assert:
+    that:
+      - omv_fs_declared | difference(omv_fs_present) | length == 0
+    fail_msg: >-
+      Declarados em `omv_data_filesystems` e AUSENTES deste host:
+      {{ omv_fs_declared | difference(omv_fs_present) }}.
+      Presentes no host: {{ omv_fs_present }}.
+      Se os UUIDs declarados forem os fictícios da camada versionada, falta
+      instalar o `group_vars/omv/99-local.yml` — gere-o com `make omv-fs`.
+      Se um disco foi reformatado, o UUID mudou: rode `make omv-fs` de novo e
+      compare pelo número de série, que não muda.
+  when: not ansible_check_mode
+
+- name: "Registrar o ponto de montagem de cada filesystem declarado ainda não montado"
+  ansible.builtin.command:
+    argv:
+      - omv-rpc
+      - -u
+      - admin
+      - FileSystemMgmt
+      - setMountPoint
+      - '{"id":"{{ item }}"}'
+  loop: "{{ omv_fs_declared | intersect(omv_fs_mountable) }}"
+  changed_when: true
+  when: not ansible_check_mode
+
+# `setMountPoint` grava a entrada no banco de configuração e para por aí; quem
+# escreve o /etc/fstab e monta de fato é o deploy. Sem isto o playbook segue
+# para os pools com a configuração correta e o disco ainda desmontado.
+- name: Aplicar o fstab e montar
+  ansible.builtin.command: omv-salt deploy run fstab
+  when:
+    - not ansible_check_mode
+    - (omv_fs_declared | intersect(omv_fs_mountable)) | length > 0
+  changed_when: true
+
+# A verificação é contra o sistema de arquivos vivo, e não contra o retorno do
+# RPC. O `mergerfs_pools.yml` elege as branches lendo os pontos de montagem
+# reais; se algum não subiu, é melhor parar aqui do que criar um pool com uma
+# branch a menos e descobrir quando o dado já estiver no lugar errado.
+- name: Conferir que cada filesystem declarado está montado sob o prefixo do OMV
+  ansible.builtin.command: findmnt --noheadings --output TARGET --source "UUID={{ item }}"
+  loop: "{{ omv_fs_declared }}"
+  register: omv_fs_check
+  changed_when: false
+  failed_when: omv_fs_check.rc != 0
+  when: not ansible_check_mode

@@ -113,6 +113,11 @@ GENERATED = [
     # OMV: sem ela, o storage aparece na UI do Proxmox e nunca monta — e o
     # vzdump falha toda noite contra um destino inativo.
     ("proxmox_backup_share_password", "senha", True, "NAS — usuário SMB do backup"),
+    # Segundo administrador do NAS, além do `admin` que o OMV cria. Humana pelo
+    # mesmo motivo da anterior: é com ela que uma pessoa entra na interface do
+    # OMV. A conta vive no config.xml, que a recriação da VM destrói — sem esta
+    # chave, uma reconstrução devolve o NAS com um administrador a menos.
+    ("omv_admin_password", "senha", True, "NAS — segundo administrador"),
     # Dois usuários do NUT, duas senhas. Separar não é zelo: o usuário
     # `upsmon` primary pode declarar FSD e derrubar o parque inteiro, e o
     # secondary só obedece. Não há terceira para o exportador do Prometheus —

@@ -107,6 +107,19 @@
     # /etc/pve/priv/storage/<id>.pw — as duas saem da mesma chave do vault.
     omv_backup_user: smb
 
+    # Segundo administrador do NAS, além do `admin` que o OMV cria. Vive no
+    # grupo `openmediavault-admin`, que é o que dá acesso à interface de
+    # administração — não é o `sudo` do sistema.
+    #
+    # ⚠️ Ele existe no playbook por um motivo específico: a conta mora no
+    # `/etc/openmediavault/config.xml`, que a recriação da VM destrói. Sem esta
+    # task, uma reconstrução deixaria o NAS com um administrador a menos e
+    # ninguém teria decidido isso.
+    omv_admin_user: gleiton
+    # Shell de verdade, ao contrário do usuário de compartilhamento: este é um
+    # administrador humano, e administrar um NAS eventualmente exige console.
+    omv_admin_shell: /usr/bin/bash
+
   pre_tasks:
     - name: Validar segredos do Vault exigidos por este play
       ansible.builtin.include_tasks: "../tasks/validate_vault.yml"
@@ -114,6 +127,7 @@
         required_secrets:
           - ssh_public_key
           - proxmox_backup_share_password
+          - omv_admin_password
   tasks:
     # Mesmo racional do 00-proxmox-setup.yml: o Debian 13 usa deb822, e manter
     # o `sources.list` antigo com o mesmo repositório declarado nos dois
@@ -367,6 +381,13 @@
         APT_LISTCHANGES_FRONTEND: none
       when: omv_bin.stat.exists
 
+    # ⚠️ Antes dos pools, e a ordem é requisito: a eleição das branches lê os
+    # pontos de montagem reais sob /srv/dev-disk-by-uuid-*, que só existem
+    # depois que o OMV registra os filesystems.
+    - name: Registrar os filesystems de dados que já existem nos discos
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/omv_mount_filesystems.yml"
+      when: omv_bin.stat.exists
+
     - name: Configurar os pools do mergerfs e a drenagem do cache
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/mergerfs_pools.yml"
       when: omv_bin.stat.exists
@@ -407,6 +428,32 @@
         - omv_bin.stat.exists
         - omv_backup_user not in (omv_users.stdout | default('[]') | from_json
                                   | map(attribute='name') | list)
+      changed_when: true
+      no_log: true
+
+    # ⚠️ `groups` recebe `openmediavault-admin`, e é só isso que separa este
+    # usuário do de compartilhamento: é o grupo que dá acesso à interface de
+    # administração do OMV. `disallowusermod: false` porque um administrador
+    # precisa poder trocar a própria senha — o oposto da conta de serviço acima.
+    - name: "Criar o segundo administrador do NAS ({{ omv_admin_user }})"
+      ansible.builtin.command:
+        argv:
+          - omv-rpc
+          - -u
+          - admin
+          - UserMgmt
+          - setUser
+          - >-
+            {"name":"{{ omv_admin_user }}",
+             "password":"{{ omv_admin_password }}",
+             "shell":"{{ omv_admin_shell }}",
+             "groups":["openmediavault-admin"],
+             "comment":"Segundo administrador",
+             "email":"","disallowusermod":false,"sshpubkeys":[]}
+      when:
+        - omv_bin.stat.exists
+        - omv_admin_user not in (omv_users.stdout | default('[]') | from_json
+                                 | map(attribute='name') | list)
       changed_when: true
       no_log: true
 
