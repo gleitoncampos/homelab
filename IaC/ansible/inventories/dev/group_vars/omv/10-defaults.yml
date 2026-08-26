@@ -1,0 +1,36 @@
+---
+# Filesystems de dados do NAS — CAMADA VERSIONADA.
+#
+# ⚠️ TODO UUID NESTE ARQUIVO É FICTÍCIO, E ISSO É DELIBERADO.
+#
+# A estrutura é real e é o que um leitor do repositório precisa entender: o
+# playbook do OMV remonta, depois de uma reinstalação, os filesystems desta
+# lista — e só os desta lista. Os UUIDs de verdade vivem no arquivo irmão
+# `99-local.yml`, que o `.gitignore` barra e que, carregado depois deste por
+# ordem alfabética, sobrescreve o que estiver aqui.
+#
+# ⚠️ Por que a lista é DECLARADA e não detectada. Detectar todo filesystem não
+# montado seria mais cômodo e é a opção errada: adotaria qualquer disco que
+# alguém plugue na máquina, inclusive um que estivesse ali só de passagem para
+# copiar dados. Montar um disco alheio sob `/srv/dev-disk-by-uuid-*` o torna
+# candidato a branch de pool do mergerfs, e a partir daí ele recebe escrita.
+#
+# ⚠️ Por que os valores daqui são fictícios em vez de uma lista vazia. Vazia, o
+# playbook não montaria nada e seguiria adiante — o operador que esquecesse a
+# camada local só descobriria o esquecimento quando os pools falhassem, dois
+# passos depois e com a causa fora de vista. Com UUIDs que não existem em host
+# nenhum, a task de verificação falha na hora e diz exatamente o que falta.
+#
+# ⚠️ NÃO digite esta lista à mão. O coletor a gera a partir do host real:
+#
+#     ./prod-snapshot/collect-omv-fs.py
+#
+# Ele escreve uma proposta em `.local/` — nunca no inventário — para ser lida
+# antes de instalada. A saída traz modelo e número de série de cada disco em
+# comentário, que é o que permite conferir se o UUID pertence ao disco que se
+# imagina. UUID muda quando o filesystem é recriado; o serial, não.
+omv_data_filesystems:
+  - uuid: "00000000-0000-4000-8000-000000000001"
+    fstype: ext4
+  - uuid: "00000000-0000-4000-8000-000000000002"
+    fstype: ext4

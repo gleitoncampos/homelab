@@ -24,7 +24,7 @@ PLAYBOOKS   := $(wildcard $(ANSIBLE_DIR)/playbooks/*.yml $(ANSIBLE_DIR)/playbook
 # Um alvo por ferramenta, para que a saída diga qual falhou.
 .PHONY: help hooks check lint lint-yaml lint-ansible lint-shell lint-tf ssh-keys \
         validate-compose validate-ansible validate-patterns check-common-copies \
-        secrets links snapshot discover clean render-opnsense render-monitoring
+        secrets links snapshot omv-fs discover clean render-opnsense render-monitoring
 
 help: ## Lista os alvos
 	@echo "Alvos disponíveis:"
@@ -169,6 +169,9 @@ links: ## Confere links relativos de markdown e stack_compose_path
 
 snapshot: ## Coleta o estado real da produção (precisa de SSH e credencial)
 	@cd prod-snapshot && ./collect.sh
+
+omv-fs: ## Propõe a lista de filesystems de dados do NAS para o group_vars local
+	@cd prod-snapshot && ./collect-omv-fs.py
 
 discover: ## Descobre hosts na rede e sugere o hosts.ini
 	@cd prod-snapshot && ./discover.sh

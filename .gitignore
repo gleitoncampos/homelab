@@ -59,6 +59,7 @@ stacks.txt
 # dentro dele nunca seria avaliada.
 prod-snapshot/*
 !prod-snapshot/collect.sh
+!prod-snapshot/collect-omv-fs.py
 !prod-snapshot/discover.sh
 !prod-snapshot/README.md
 
