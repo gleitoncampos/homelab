@@ -8,6 +8,9 @@
     # (trixie). Parametrizado para que o próximo salto de versão seja uma linha
     # só, e não uma caçada a literais espalhados pelas tasks de repositório.
     proxmox_debian_suite: trixie
+    # Porta do node_exporter. Parametrizada porque o job do Prometheus em
+    # docker/monitoring/swarm/prometheus.yml.j2 precisa concordar com ela.
+    node_exporter_port: 9100
 
   pre_tasks:
     - name: Validar segredos do Vault exigidos por este play
@@ -226,6 +229,14 @@
       ansible.builtin.apt:
         update_cache: true
         upgrade: dist
+
+    # ⚠️ Até 26/08/2026 NENHUM dos dois hipervisores publicava métrica de
+    # sistema operacional. O job `pve` do Prometheus cobre convidados, storage e
+    # estado do nó pela API do PVE — não cobre CPU por núcleo, memória
+    # detalhada, I/O de disco, sistema de arquivos nem interface de rede. O
+    # host que hospeda o NAS era, por isso, um ponto cego.
+    - name: Instalar e verificar o node_exporter
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/node_exporter.yml"
 
     - name: Instalar pacotes Enterprise e ferramentas CLI modernas (ksmtuned, chrony, fail2ban, btop, ncdu, ripgrep, fzf, tmux)
       ansible.builtin.apt:

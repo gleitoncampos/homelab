@@ -90,6 +90,17 @@ if prom:
     )
     for host in GRUPOS["omv"] + GRUPOS["openwrt"] + GRUPOS["proxmox"]:
         checar(ENDERECOS[host] in alvos, f"{host} virou alvo")
+    # ⚠️ A checagem acima ("virou alvo") passava mesmo quando os hipervisores
+    # NÃO tinham node_exporter: eles já apareciam pelo job `pve`, que fala com a
+    # API do PVE e cobre convidado e storage, não o sistema operacional do host.
+    # Esta confere o job certo, na porta certa.
+    node_job = next(j for j in prom["scrape_configs"]
+                    if j["job_name"] == "node_exporter")
+    node_alvos = " ".join(node_job["static_configs"][0]["targets"])
+    for host in GRUPOS["omv"] + GRUPOS["proxmox"]:
+        checar(f"{ENDERECOS[host]}:9100" in node_alvos,
+               f"{host} é alvo do job node_exporter")
+
     rotulos = re.findall(r"replacement:\s*(\S+)", prom_txt)
     checar(
         all(r.startswith('"') for r in rotulos),

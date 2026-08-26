@@ -1,0 +1,50 @@
+---
+# ==============================================================================
+# node_exporter — métricas de sistema operacional do host
+# ==============================================================================
+# Task reutilizável. Hoje incluída por playbooks/00-proxmox-setup.yml.
+#
+# ⚠️ Pelo PACOTE do Debian, e não pelo binário do GitHub. A diferença não é de
+# gosto — o NAS tem a versão manual, e o garimpo de 25/08/2026 mostrou o que ela
+# custa: o binário foi baixado para /usr/local/bin com `wget`, ficou pertencendo
+# ao usuário de compartilhamento Samba (que tem shell), e a unit escrita à mão o
+# executa como root. Qualquer um que entre por aquele usuário troca o binário e
+# ganha root no próximo restart do serviço.
+#
+# O pacote resolve os três de uma vez: binário de root, unit empacotada com as
+# proteções de systemd que o mantenedor mantém, e execução sob o usuário
+# `prometheus` sem privilégio. Some também o trabalho de fixar checksum e
+# acompanhar release, que é o que a regra de versão fixada existe para evitar.
+#
+# ⚠️ Sem versão fixada, de propósito, pelo mesmo motivo dos plugins do OMV: a
+# suíte da distribuição já limita a linha, e cravar o patch quebraria no
+# primeiro `apt upgrade`. A regra de tag fixa do CLAUDE.md é sobre imagem
+# Docker, não sobre pacote apt.
+
+- name: Instalar o node_exporter a partir do repositório da distribuição
+  ansible.builtin.apt:
+    name: prometheus-node-exporter
+    state: present
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: Garantir o node_exporter ativo e habilitado no boot
+  ansible.builtin.systemd_service:
+    name: prometheus-node-exporter
+    enabled: true
+    state: started
+
+# A verificação é contra a porta respondendo, e não contra o `state: started`
+# da task acima. Um serviço pode estar "ativo" e não ter conseguido abrir a
+# porta — e o sintoma disso, do outro lado, é um alvo em `up=0` no Prometheus
+# que ninguém associa a este playbook.
+- name: Conferir que o node_exporter responde em 9100
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ node_exporter_port }}/metrics"
+    return_content: false
+    status_code: 200
+  register: node_exporter_probe
+  retries: 5
+  delay: 3
+  until: node_exporter_probe is succeeded
+  when: not ansible_check_mode
