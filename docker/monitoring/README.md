@@ -71,6 +71,44 @@ e nenhuma é cosmética:
 O gate cobre isto: `make secrets` varre `dashboards/*.json` como varre qualquer
 arquivo rastreado.
 
+### FreeBSD não fala o mesmo dialeto do Linux
+
+⚠️ **O `node_exporter` do OPNsense publica memória com outros nomes**, e o
+"Node Exporter Full" é um dashboard de Linux: ele procura
+`node_memory_MemTotal_bytes`, `node_memory_MemAvailable_bytes`,
+`node_memory_Buffers_bytes` — 45 nomes ao todo, nenhum dos quais existe no
+FreeBSD. O sintoma é *RAM Used* em "No data" e *RAM Total* em "N/A" enquanto
+CPU, carga e disco funcionam, porque esses três usam nomes que coincidem.
+
+Os equivalentes do FreeBSD:
+
+| Linux | FreeBSD |
+|---|---|
+| `node_memory_MemTotal_bytes` | `node_memory_size_bytes` |
+| `node_memory_MemAvailable_bytes` | `node_memory_free_bytes` + `node_memory_inactive_bytes` |
+| `node_memory_MemFree_bytes` | `node_memory_free_bytes` |
+| `node_memory_Cached_bytes` + `Buffers` | `node_memory_cache_bytes` + `node_memory_buffer_bytes` |
+| `node_memory_SwapTotal_bytes` | `node_memory_swap_size_bytes` |
+| `node_memory_SwapTotal` − `SwapFree` | `node_memory_swap_used_bytes` |
+
+Os cinco painéis de memória do topo (`RAM Used`, `RAM Total`, `SWAP Used`,
+`SWAP Total`, `Memory Basic`) ganharam fallback com `or`: a consulta do Linux
+vem primeiro e, quando ela não tem amostra, o PromQL cai na do FreeBSD. Como
+cada sistema só alimenta um dos lados, não há ambiguidade.
+
+A definição de "disponível" no FreeBSD segue a MESMA que o dashboard do
+OPNsense já usava (`free + inactive`) — de propósito, para os dois não
+discordarem sobre o mesmo host.
+
+⚠️ **Os painéis profundos de memória continuam vazios no OPNsense**, e é
+deliberado: o painel `Memory` detalha slab, hugepages e dirty pages, que não
+existem no FreeBSD e não têm equivalente. Para memória do firewall, o
+dashboard certo é o **OPNSense**, que foi escrito para ele.
+
+Nota sem relação com FreeBSD: `SWAP Used` aparece como `N/A` em host **Linux
+sem swap**. A guarda `> bool 0` do dashboard de upstream não impede a divisão
+por zero, e o resultado é `NaN`. Comportamento herdado, não alterado aqui.
+
 ### Editar pela interface
 
 `allowUiUpdates: true`, então editar na tela funciona. Mas a próxima execução

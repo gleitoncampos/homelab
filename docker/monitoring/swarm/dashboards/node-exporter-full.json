@@ -408,7 +408,7 @@
         {
           "editorMode": "code",
           "exemplar": false,
-          "expr": "clamp_min((1 - (node_memory_MemAvailable_bytes{instance=\"$node\", job=\"$job\"} / node_memory_MemTotal_bytes{instance=\"$node\", job=\"$job\"})) * 100, 0)",
+          "expr": "(clamp_min((1 - (node_memory_MemAvailable_bytes{instance=\"$node\", job=\"$job\"} / node_memory_MemTotal_bytes{instance=\"$node\", job=\"$job\"})) * 100, 0)) or (clamp_min((1 - ((node_memory_free_bytes{instance=\"$node\",job=\"$job\"} + node_memory_inactive_bytes{instance=\"$node\",job=\"$job\"}) / node_memory_size_bytes{instance=\"$node\",job=\"$job\"})) * 100, 0))",
           "format": "time_series",
           "instant": true,
           "range": false,
@@ -492,7 +492,7 @@
         {
           "editorMode": "code",
           "exemplar": false,
-          "expr": "(node_memory_SwapTotal_bytes{instance=\"$node\",job=\"$job\"} > bool 0) * ((node_memory_SwapTotal_bytes{instance=\"$node\",job=\"$job\"} - node_memory_SwapFree_bytes{instance=\"$node\",job=\"$job\"}) / (node_memory_SwapTotal_bytes{instance=\"$node\",job=\"$job\"})) * 100",
+          "expr": "((node_memory_SwapTotal_bytes{instance=\"$node\",job=\"$job\"} > bool 0) * ((node_memory_SwapTotal_bytes{instance=\"$node\",job=\"$job\"} - node_memory_SwapFree_bytes{instance=\"$node\",job=\"$job\"}) / (node_memory_SwapTotal_bytes{instance=\"$node\",job=\"$job\"})) * 100) or ((node_memory_swap_size_bytes{instance=\"$node\",job=\"$job\"} > bool 0) * ((node_memory_swap_used_bytes{instance=\"$node\",job=\"$job\"}) / (node_memory_swap_size_bytes{instance=\"$node\",job=\"$job\"})) * 100)",
           "instant": true,
           "range": false,
           "refId": "A",
@@ -731,7 +731,7 @@
         {
           "editorMode": "code",
           "exemplar": false,
-          "expr": "node_memory_MemTotal_bytes{instance=\"$node\",job=\"$job\"}",
+          "expr": "(node_memory_MemTotal_bytes{instance=\"$node\",job=\"$job\"}) or (node_memory_size_bytes{instance=\"$node\",job=\"$job\"})",
           "instant": true,
           "range": false,
           "refId": "A",
@@ -811,7 +811,7 @@
         {
           "editorMode": "code",
           "exemplar": false,
-          "expr": "node_memory_SwapTotal_bytes{instance=\"$node\",job=\"$job\"}",
+          "expr": "(node_memory_SwapTotal_bytes{instance=\"$node\",job=\"$job\"}) or (node_memory_swap_size_bytes{instance=\"$node\",job=\"$job\"})",
           "instant": true,
           "range": false,
           "refId": "A",
@@ -1385,7 +1385,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "node_memory_MemTotal_bytes{instance=\"$node\",job=\"$job\"}",
+          "expr": "(node_memory_MemTotal_bytes{instance=\"$node\",job=\"$job\"}) or (node_memory_size_bytes{instance=\"$node\",job=\"$job\"})",
           "format": "time_series",
           "legendFormat": "Total",
           "range": true,
@@ -1394,7 +1394,7 @@
         },
         {
           "editorMode": "code",
-          "expr": "node_memory_MemTotal_bytes{instance=\"$node\",job=\"$job\"} - node_memory_MemFree_bytes{instance=\"$node\",job=\"$job\"} - (node_memory_Cached_bytes{instance=\"$node\",job=\"$job\"} + node_memory_Buffers_bytes{instance=\"$node\",job=\"$job\"} + node_memory_SReclaimable_bytes{instance=\"$node\",job=\"$job\"})",
+          "expr": "(node_memory_MemTotal_bytes{instance=\"$node\",job=\"$job\"} - node_memory_MemFree_bytes{instance=\"$node\",job=\"$job\"} - (node_memory_Cached_bytes{instance=\"$node\",job=\"$job\"} + node_memory_Buffers_bytes{instance=\"$node\",job=\"$job\"} + node_memory_SReclaimable_bytes{instance=\"$node\",job=\"$job\"})) or ((node_memory_active_bytes{instance=\"$node\",job=\"$job\"} + node_memory_wired_bytes{instance=\"$node\",job=\"$job\"}))",
           "format": "time_series",
           "legendFormat": "Used",
           "range": true,
@@ -1403,7 +1403,7 @@
         },
         {
           "editorMode": "code",
-          "expr": "node_memory_Cached_bytes{instance=\"$node\",job=\"$job\"} + node_memory_Buffers_bytes{instance=\"$node\",job=\"$job\"} + node_memory_SReclaimable_bytes{instance=\"$node\",job=\"$job\"}",
+          "expr": "(node_memory_Cached_bytes{instance=\"$node\",job=\"$job\"} + node_memory_Buffers_bytes{instance=\"$node\",job=\"$job\"} + node_memory_SReclaimable_bytes{instance=\"$node\",job=\"$job\"}) or ((node_memory_cache_bytes{instance=\"$node\",job=\"$job\"} + node_memory_buffer_bytes{instance=\"$node\",job=\"$job\"}))",
           "format": "time_series",
           "legendFormat": "Cache + Buffer",
           "range": true,
@@ -1412,7 +1412,7 @@
         },
         {
           "editorMode": "code",
-          "expr": "node_memory_MemFree_bytes{instance=\"$node\",job=\"$job\"}",
+          "expr": "(node_memory_MemFree_bytes{instance=\"$node\",job=\"$job\"}) or (node_memory_free_bytes{instance=\"$node\",job=\"$job\"})",
           "format": "time_series",
           "legendFormat": "Free",
           "range": true,
@@ -1421,7 +1421,7 @@
         },
         {
           "editorMode": "code",
-          "expr": "(node_memory_SwapTotal_bytes{instance=\"$node\",job=\"$job\"} - node_memory_SwapFree_bytes{instance=\"$node\",job=\"$job\"})",
+          "expr": "((node_memory_SwapTotal_bytes{instance=\"$node\",job=\"$job\"} - node_memory_SwapFree_bytes{instance=\"$node\",job=\"$job\"})) or (node_memory_swap_used_bytes{instance=\"$node\",job=\"$job\"})",
           "format": "time_series",
           "legendFormat": "Swap used",
           "range": true,
@@ -15545,5 +15545,6 @@
   "timepicker": {},
   "timezone": "browser",
   "title": "Node Exporter Full",
-  "uid": "rYdddlPWk"
+  "uid": "rYdddlPWk",
+  "description": "Painéis de memória levam fallback para os nomes do FreeBSD (node_memory_size_bytes etc.) via `or`: o exporter do OPNsense não publica os nomes do Linux. Ver docker/monitoring/README.md."
 }
