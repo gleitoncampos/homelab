@@ -217,11 +217,15 @@ objeto.
 │   │   ├── inventories/        # Um diretório por ambiente — ver IaC/ansible/README.md
 │   │   │   ├── _common/        # Variáveis comuns a prod e dev (camada 1 de 3)
 │   │   │   │   └── opnsense.yml    # Constante de protocolo do OPNsense (HOME_NET, privateaddress) — não a rede deste lab
-│   │   │   ├── prod/           # hosts.ini (gitignorado) + group_vars/, com network/ em duas camadas (10-defaults.yml versionado, 99-local.yml gitignorado com a topologia real)
+│   │   │   ├── prod/           # hosts.ini (gitignorado) + group_vars/; network/ e omv/ em duas camadas (10-defaults.yml versionado e fictício, 99-local.yml gitignorado com o dado real)
 │   │   │   └── dev/            # idem, ambiente de desenvolvimento
-│   │   ├── tasks/              # Tasks reutilizáveis (Portainer, regras do usuário docker, validação do vault)
+│   │   ├── tasks/              # Tasks reutilizáveis, incluídas por playbook:
+│   │   │                       #   validate_vault, Portainer, regras do usuário docker,
+│   │   │                       #   detect/elect_nut_primary (07), node_exporter (00-proxmox),
+│   │   │                       #   omv_mount_filesystems + mergerfs_pools (00-omv)
 │   │   ├── templates/network/  # openwrt_{system,dhcp,firewall,wireless}.j2 + opnsense/: config.xml.j2 (esqueleto de includes) e 10 partials orientados a dado — ver IaC/ansible/README.md
 │   │   ├── templates/nut/      # ups.conf, upsd.{conf,users}, upsmon.conf, nut.conf, udev, tmpfiles (07-nut-ups)
+│   │   ├── templates/omv/      # mergerfs-cache-mover.{sh,service,timer}.j2 (00-omv)
 │   │   ├── templates/proxmox/  # proxmox_{datacenter,interfaces,storage}.j2
 │   │   ├── templates/terraform/  # tokens.auto.tfvars.j2 (escrito por 00-proxmox-api-token)
 │   │   ├── tests/               # Render do template do OPNsense fora da caixa (make render-opnsense)
@@ -231,9 +235,10 @@ objeto.
 │   │   │   └── expected/       # Diff aprovado por fase, comparado byte a byte
 │   │   └── playbooks/          # 00-node-bootstrap/-omv-setup/-proxmox-setup/-proxmox-api-token, 01-05 (SO, cluster, stacks), 06-backup, 07-nut-ups, network/ (OPNsense, OpenWrt)
 │   └── terraform/          # Hardware virtual (Proxmox VE — VMs e CTs LXC)
-│       └── proxmox/        # Provider bpg/proxmox; runbook de import no README de lá
+│       └── proxmox/        # Provider bpg/proxmox; no README de lá, o runbook de import e a exceção da VM do NAS, que é recriada
 ├── prod-snapshot/          # Ferramentas de coleta do estado real (só os scripts)
 │   ├── collect.sh          # Coleta config por host, conforme o grupo do inventário
+│   ├── collect-omv-fs.py   # make omv-fs: propõe os UUIDs de dados do NAS para o group_vars
 │   └── discover.sh         # Descobre hosts na rede e sugere o hosts.ini
 └── docker/                 # Stacks de serviço
     ├── README.md           # Instruções de deploy

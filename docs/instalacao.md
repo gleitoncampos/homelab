@@ -45,11 +45,28 @@ firewall e do NAS, então a primeira passada os adia e avisa; a segunda aplica.
 | 6 | VM do firewall | `terraform apply -target` |
 | 7 | firewall | console + `network/01-opnsense-setup.yml` |
 | 8 | demais convidados | `terraform apply` |
-| 9 | NAS | `00-omv-setup.yml` |
+| 9 | NAS | `make omv-fs` → `00-omv-setup.yml` |
 | 10 | hipervisor, 2ª passada | `00-proxmox-setup.yml` |
 | 11 | access point | `network/02-openwrt-setup.yml` |
 | 12 | nós Swarm | `00-node-bootstrap` → `01` → `02` |
 | 13 | stacks | `03`, `04`, `05` |
+
+### Passo 9, duas armadilhas
+
+⚠️ **`make omv-fs` roda ANTES de recriar a VM do NAS, não depois.** Ele coleta
+do host vivo os UUIDs dos filesystems de dados e escreve uma proposta em
+`.local/`, para você instalar no `group_vars/omv/99-local.yml` (gitignorado).
+Depois que a VM for destruída não há de onde coletar. Sem essa lista o playbook
+para numa asserção: a camada versionada traz UUIDs fictícios de propósito, para
+que o esquecimento falhe alto em vez de montar nada em silêncio.
+
+Isso só se aplica a um NAS que já tem dados. Numa instalação do zero, com discos
+novos, não há UUID a preservar — formate pela interface do OMV e gere a lista
+depois.
+
+⚠️ **O passo exige duas senhas no vault**, e sem elas o play aborta na largada:
+a do usuário de compartilhamento Samba e a do segundo administrador
+(`omv_admin_password`). As duas saem do `make bootstrap`.
 | 14 | backup | `06-backup.yml` |
 | 15 | nobreak | `07-nut-ups.yml` |
 

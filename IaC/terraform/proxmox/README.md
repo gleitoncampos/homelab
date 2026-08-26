@@ -23,14 +23,51 @@ Isso muda a análise de risco de um jeito específico: o risco imediato de um pr
    terraform import proxmox_virtual_environment_container.docker_swarm_node02 <NOME-DO-NO>/<CTID>
    ```
    > ⚠️ Os VMIDs 200/201 escritos em `main.tf` **não** correspondem aos nós do
-   > Swarm no parque atual — um levantamento da produção mostrou que estão em uso
-   > por outros guests. Importar com esse mapeamento traria o recurso errado para
-   > o state. Refaça o mapeamento pelo passo 1 antes de rodar qualquer coisa aqui.
+   > Swarm no parque atual. A leitura direta dos hipervisores em 25/08/2026
+   > fechou quais guests os ocupam, e o caso é pior do que "estão em uso":
+   > **o VMID 200 é a VM do NAS** e o 201 é um CT de sincronismo, ambos no nó
+   > secundário. Importar `docker_swarm_node01` a partir do 200 traria a VM do
+   > NAS para o state como se fosse um contêiner do Swarm. Refaça o mapeamento
+   > pelo passo 1 antes de rodar qualquer coisa aqui.
 3. Só depois do `import` os blocos `lifecycle { prevent_destroy = true; ignore_changes = [operating_system] }` presentes em `main.tf` para esses dois CTs passam a valer de fato. **Antes do import eles não protegem nada** - sem state prévio, o Terraform não tem "recurso existente" para proteger, ele simplesmente tenta criar um novo.
 4. Rode `terraform plan` e revise linha por linha. Um plan limpo (sem `# forces replacement`, sem diffs inesperados em `disk`/`network_interface`/`features`) é o sinal de que o import capturou o estado real corretamente.
-5. A mesma cautela vale, por analogia, para a VM 100 (OPNsense) e a VM 300 (OMV) caso elas também já existam manualmente no cluster - este runbook documenta o procedimento apenas para os CTs 200/201 porque são os casos confirmados de criação manual, mas **nunca rode `apply` contra um VMID de produção sem antes confirmar, via `plan`, que a ação não é "create".**
+5. A mesma cautela vale, por analogia, para a VM 100 (OPNsense) caso ela também já exista manualmente no cluster - este runbook documenta o procedimento apenas para os CTs 200/201 porque são os casos confirmados de criação manual, mas **nunca rode `apply` contra um VMID de produção sem antes confirmar, via `plan`, que a ação não é "create".**
 
-Nenhum destes quatro recursos (VM 100, CT 200, VM 300, CT 201) deve ser tratado como "seguro para recriar do zero" - apenas o **CT 210 (dev node)**, novo, não tem esse risco por não existir ainda em lugar nenhum.
+### A VM 300 (OMV) é exceção: ela é para ser RECRIADA, não importada
+
+⚠️ **Decisão de 25/08/2026, e ela contradiz de propósito o runbook acima.** A VM
+do NAS não entra no fluxo de import. O `vm_id`, o nome e o número de núcleos
+declarados em `main.tf` são o **alvo**, e divergem por decisão da VM que roda
+hoje — que tem outro VMID, outro nome e um núcleo. Não "corrija" esses campos
+para bater com a produção: fazê-lo transformaria uma recriação limpa numa adoção
+pela metade.
+
+O VMID 300 está livre no parque, então a recriação não colide com nada; a VM
+antiga continua existindo até ser removida à mão, depois de conferida.
+
+⚠️ **O que a recriação preserva e o que ela destrói**, porque a diferença decide
+o procedimento:
+
+- **Preserva os discos de dados.** Eles são físicos e entram pelo bloco
+  `hostpci` do recurso, que passa a controladora SATA inteira para o convidado.
+  ⚠️ Sem esse bloco a VM sobe com o disco de sistema e mais nada, **sem erro
+  nenhum**: as montagens são declaradas com `nofail`, então a ausência some em
+  vez de travar o boot.
+- **Destrói o disco de sistema**, e com ele a configuração do OMV: usuários,
+  pastas compartilhadas, exports, e a associação entre cada UUID de filesystem
+  e seu ponto de montagem. Numa instalação nova os discos aparecem no `lsblk`
+  íntegros e nenhum deles montado.
+
+Por isso o `00-omv-setup.yml` tem, antes dos pools do mergerfs, um passo que
+remonta os filesystems declarados em `omv_data_filesystems` — lista gerada por
+`make omv-fs`, nunca digitada à mão. **Gere e instale essa lista ANTES de
+recriar a VM**, enquanto a máquina antiga ainda está no ar: depois de destruída,
+não há de onde coletar os UUIDs.
+
+Os compartilhamentos Samba ainda **não** estão no playbook, por decisão
+registrada — uma recriação hoje os perde.
+
+Dos demais, nenhum (VM 100, CT 200, CT 201) deve ser tratado como "seguro para recriar do zero" - apenas o **CT 210 (dev node)**, novo, não tem esse risco por não existir ainda em lugar nenhum.
 
 ---
 

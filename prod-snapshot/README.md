@@ -25,6 +25,7 @@ nunca copiado direto de `.local/`.
 cd prod-snapshot
 ./collect.sh -n            # dry-run: mostra o que buscaria, sem escrever nada
 ./collect.sh               # coleta de verdade
+./collect-omv-fs.py        # só os filesystems de dados do NAS (ver abaixo)
 ```
 
 Os hosts **não são hardcoded**: saem do inventário do Ansible. Isso mantém IP
@@ -104,3 +105,33 @@ checagem acontece **antes** de escrever o primeiro byte. Ao terminar, ele roda
 `git status` e sai com erro se algo aparecer. Se isso
 acontecer, o `.gitignore` está errado e o próximo `git add -A` vazaria arquivos
 reais num repositório público: pare e conserte antes de commitar.
+
+
+## `collect-omv-fs.py` — os filesystems de dados do NAS
+
+Também é `make omv-fs`. Faz uma coisa só, e não substitui o `collect.sh`: lê os
+discos do host do grupo `omv` e **propõe** o fragmento de inventário que o
+`00-omv-setup.yml` consome para remontar os filesystems depois de uma
+reinstalação.
+
+Existe porque a VM do NAS é para ser recriada, não importada. A recriação
+preserva os discos de dados, que são físicos, e destrói o disco de sistema —
+junto com a associação entre cada UUID de filesystem e seu ponto de montagem.
+Sem essa lista, uma instalação nova enxerga os discos íntegros e não montados,
+e a eleição das branches dos pools do mergerfs não acha nada.
+
+A lista é **declarada**, e não detectada em tempo de execução: montar todo
+filesystem não montado que aparecer adotaria qualquer disco que alguém plugue
+na máquina, inclusive um que estivesse ali só de passagem para copiar dados. O
+script existe para que declarar não signifique digitar UUID à mão.
+
+⚠️ **Ele não escreve no inventário**, e a recusa é o desenho. A saída vai para
+`.local/`, para ser lida e instalada por decisão de quem opera — produção aqui
+é fonte de garimpo, nunca autoridade.
+
+⚠️ **Rode enquanto a máquina antiga ainda está no ar.** Depois de destruída não
+há de onde coletar os UUIDs.
+
+Cada entrada leva modelo e número de série do disco em comentário. O UUID muda
+quando o filesystem é recriado; o serial não — depois de reformatar, rode de
+novo e compare pelo serial para saber qual linha se moveu.
