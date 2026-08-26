@@ -1,0 +1,233 @@
+---
+# ==============================================================================
+# Pools do mergerfs no NAS: cache em SSD na frente de um pool só de HDD
+# ==============================================================================
+# Incluído por playbooks/00-omv-setup.yml. Reconstrói, como IaC, o que existia
+# na máquina antiga e NÃO sobreviveu: o garimpo de 25/08/2026 achou o plugin
+# instalado e `<mergerfs><pools></pools></mergerfs>` vazio, sem `/srv/mergerfs/`
+# e sem o script mover.
+#
+# ⚠️ A topologia é DOIS pools, e o de cache aponta para o pool base — não para
+# os discos soltos:
+#
+#     DATA_NOCACHE = [hdd1, hdd2, hdd3]                  createpolicy=lus
+#     DATA         = [<ssd>/cache, /srv/mergerfs/DATA_NOCACHE]  createpolicy=lfs
+#
+# `lfs` (least free space) faz o SSD vencer sempre: 223 G livres perdem para os
+# ~11 T do pool base em qualquer situação normal. Quando o SSD cai abaixo de
+# `minfreespace`, o mergerfs o exclui sozinho e a escrita passa a ir direto para
+# os HDDs — degradação graciosa, sem ENOSPC no cliente.
+#
+# ⚠️ Isto substitui a ideia anterior de marcar os HDDs com `=NC` no pool de
+# cache. `=NC` funciona (o RPC do plugin só descarta caminho com menos de 3
+# caracteres), mas o `omv-findmnt`, que o template da unit usa para montar o
+# `RequiresMountsFor=`, filtra por `[ -d "$dir" ]` — e `/srv/...=NC` não é
+# diretório. A unit do pool sairia sem dependência dos mounts dos discos, e
+# poderia montar antes deles. Aninhar os pools resolve os dois problemas de uma
+# vez: todo caminho é um diretório de verdade.
+#
+# ⚠️ Este arquivo NÃO move dado e NÃO mexe em compartilhamento existente. Cria
+# os pools e o mover. Migrar conteúdo é decisão de operador.
+
+- name: Coletar o mapa de blocos do NAS
+  ansible.builtin.command: lsblk -J -b -o NAME,ROTA,SIZE,MOUNTPOINT,PKNAME
+  register: mergerfs_lsblk
+  changed_when: false
+  check_mode: false
+
+# `rota` vem como booleano no JSON do lsblk (não como '0'/'1'), e só as
+# partições que o OMV já montou em /srv/dev-disk-by-uuid-* são candidatas —
+# disco cru, não montado, fica de fora por construção.
+#
+# ⚠️ O filtro por `rota` sozinho NÃO serve: o disco de boot desta VM é QEMU
+# virtual e também reporta `rota: false`. Sem o recorte pelo prefixo do
+# mountpoint, o disco raiz de 16 G entraria como "SSD de cache".
+- name: Separar as partições montadas pelo OMV entre SSD e HDD
+  ansible.builtin.set_fact:
+    mergerfs_parts: >-
+      {{ mergerfs_lsblk.stdout | from_json
+         | json_query('blockdevices[].children[]')
+         | selectattr('mountpoint', 'defined')
+         | selectattr('mountpoint', 'string')
+         | selectattr('mountpoint', 'match', '^' ~ mergerfs_omv_mount_prefix)
+         | list }}
+
+- name: Eleger a branch de cache (SSD) e as branches de dados (HDD)
+  ansible.builtin.set_fact:
+    mergerfs_ssd_parts: >-
+      {{ mergerfs_parts | rejectattr('rota') | list }}
+    mergerfs_hdd_parts: >-
+      {{ mergerfs_parts | selectattr('rota')
+         | selectattr('size', 'ge', mergerfs_hdd_min_bytes) | list }}
+
+# A eleição falha alto, e não em silêncio. Um disco que não montou, um SSD novo
+# que entrou sem ninguém avisar, ou o de 2,7 T subindo de tamanho mudariam a
+# topologia dos pools — e um pool com branch errada só aparece quando o dado já
+# está no lugar errado.
+- name: Conferir que a eleição de discos bate com o esperado
+  ansible.builtin.assert:
+    that:
+      - mergerfs_ssd_parts | length == 1
+      - mergerfs_hdd_parts | length == mergerfs_expected_hdd_count
+    fail_msg: >-
+      Topologia de disco inesperada: {{ mergerfs_ssd_parts | length }} SSD
+      (esperado 1) e {{ mergerfs_hdd_parts | length }} HDD de
+      {{ mergerfs_hdd_min_bytes }} bytes ou mais (esperado
+      {{ mergerfs_expected_hdd_count }}). Montados sob
+      {{ mergerfs_omv_mount_prefix }}:
+      {{ mergerfs_parts | map(attribute='mountpoint') | list }}. Confira o
+      inventário antes de deixar o playbook criar pool nenhum.
+
+- name: Fixar os caminhos das branches
+  ansible.builtin.set_fact:
+    # ⚠️ A branch de cache é uma SUBPASTA do SSD, nunca a raiz dele. O SSD é o
+    # disco rápido da máquina e tende a receber outras coisas (imagem de VM,
+    # download, dado de container); usar a raiz faria tudo isso aparecer dentro
+    # do compartilhamento.
+    mergerfs_cache_branch: "{{ mergerfs_ssd_parts[0].mountpoint }}/{{ mergerfs_cache_dir_name }}"
+    mergerfs_hdd_branches: "{{ mergerfs_hdd_parts | map(attribute='mountpoint') | sort | list }}"
+    mergerfs_base_mount: "/srv/mergerfs/{{ mergerfs_base_pool_name }}"
+
+- name: "Criar a pasta de cache no SSD: {{ mergerfs_cache_branch }}"
+  ansible.builtin.file:
+    path: "{{ mergerfs_cache_branch }}"
+    state: directory
+    owner: root
+    group: users
+    # 2775: setgid, para que todo arquivo criado herde o grupo `users` — é o que
+    # mantém o compartilhamento coerente quando o mover leva o arquivo para o
+    # pool base com outro dono efetivo.
+    mode: "2775"
+
+- name: Levantar os pools de mergerfs que já existem
+  ansible.builtin.command: omv-rpc -u admin "Mergerfs" "getList" '{"start":0,"limit":-1}'
+  register: mergerfs_existing
+  changed_when: false
+  check_mode: false
+
+- name: Guardar os nomes de pool já configurados
+  ansible.builtin.set_fact:
+    mergerfs_existing_names: >-
+      {{ (mergerfs_existing.stdout | from_json).data
+         | default([], true) | map(attribute='name') | list }}
+
+# ----------------------------------------------------------------------------
+# Pool base, só HDD
+# ----------------------------------------------------------------------------
+# ⚠️ A ORDEM entre os dois pools importa e não é estética. O pool de cache tem o
+# ponto de montagem do pool base como branch; se o base não existir e não
+# estiver montado quando o de cache for renderizado, o `omv-findmnt` resolve o
+# caminho para `/` — que o próprio script descarta — e a unit do cache nasce sem
+# `RequiresMountsFor`. Por isso: cria o base, aplica, e só então cria o cache.
+- name: "Criar o pool base, somente HDD: {{ mergerfs_base_pool_name }}"
+  ansible.builtin.command:
+    argv:
+      - omv-rpc
+      - -u
+      - admin
+      - Mergerfs
+      - set
+      - "{{ mergerfs_base_pool_payload | to_json }}"
+  vars:
+    mergerfs_base_pool_payload:
+      uuid: "{{ mergerfs_new_object_uuid }}"
+      name: "{{ mergerfs_base_pool_name }}"
+      mntentref: "{{ mergerfs_new_object_uuid }}"
+      usesf: false
+      sharedfolderrefs: []
+      filesystems: []
+      usepath: true
+      paths: "{{ mergerfs_hdd_branches | join(':') }}"
+      # `lus` = least used space: espalha o dado pelos HDDs pelo MENOS ocupado,
+      # o que mantém os três parelhos. Não confundir com `lfs` (least FREE
+      # space), que é a do pool de cache e tem efeito oposto de propósito.
+      createpolicy: lus
+      minfreespace: "{{ mergerfs_base_minfreespace }}"
+      minfreespaceunit: G
+      options: "{{ mergerfs_common_options }}"
+  when: mergerfs_base_pool_name not in mergerfs_existing_names
+  changed_when: true
+
+- name: Aplicar o pool base e montá-lo
+  ansible.builtin.command: omv-salt deploy run mergerfs
+  when: mergerfs_base_pool_name not in mergerfs_existing_names
+  changed_when: true
+
+- name: "Confirmar que o pool base montou antes de o cache apontar para ele: {{ mergerfs_base_mount }}"
+  ansible.builtin.command: findmnt --noheadings --output TARGET --mountpoint "{{ mergerfs_base_mount }}"
+  register: mergerfs_base_mounted
+  changed_when: false
+  failed_when: mergerfs_base_mounted.rc != 0
+  when: not ansible_check_mode
+
+# ----------------------------------------------------------------------------
+# Pool de cache: SSD na frente do pool base
+# ----------------------------------------------------------------------------
+- name: "Criar o pool de cache com o SSD na frente do pool base: {{ mergerfs_cache_pool_name }}"
+  ansible.builtin.command:
+    argv:
+      - omv-rpc
+      - -u
+      - admin
+      - Mergerfs
+      - set
+      - "{{ mergerfs_cache_pool_payload | to_json }}"
+  vars:
+    mergerfs_cache_pool_payload:
+      uuid: "{{ mergerfs_new_object_uuid }}"
+      name: "{{ mergerfs_cache_pool_name }}"
+      mntentref: "{{ mergerfs_new_object_uuid }}"
+      usesf: false
+      sharedfolderrefs: []
+      filesystems: []
+      usepath: true
+      paths: "{{ mergerfs_cache_branch }}:{{ mergerfs_base_mount }}"
+      # `lfs` = least free space. Com 223 G no SSD contra ~11 T no pool base, o
+      # SSD ganha toda escrita nova. Quando ele cai abaixo de `minfreespace`, o
+      # mergerfs o descarta e a escrita cai direto no pool base.
+      createpolicy: lfs
+      minfreespace: "{{ mergerfs_cache_minfreespace }}"
+      minfreespaceunit: G
+      options: "{{ mergerfs_common_options }}"
+  when: mergerfs_cache_pool_name not in mergerfs_existing_names
+  changed_when: true
+
+- name: Aplicar o pool de cache
+  ansible.builtin.command: omv-salt deploy run mergerfs
+  when: mergerfs_cache_pool_name not in mergerfs_existing_names
+  changed_when: true
+
+# ----------------------------------------------------------------------------
+# Drenagem do cache
+# ----------------------------------------------------------------------------
+# `no-relative-paths` silenciado pelo mesmo motivo já registrado no
+# 07-nut-ups.yml: a regra pede estrutura de role, e estes playbooks são de host,
+# não de role. O `{{ playbook_dir }}/../templates/` é a convenção do repositório.
+- name: Instalar o script que drena o cache para o pool base  # noqa: no-relative-paths
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/../templates/omv/mergerfs-cache-mover.sh.j2"
+    dest: /usr/local/sbin/mergerfs-cache-mover
+    owner: root
+    group: root
+    # 0750, e não 0755: o host tem usuário de compartilhamento com shell, e o
+    # script roda como root por timer. Ver o achado de propriedade do binário do
+    # node_exporter no garimpo de 25/08/2026.
+    mode: "0750"
+
+- name: Instalar a unit e o timer da drenagem  # noqa: no-relative-paths
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/../templates/omv/mergerfs-cache-mover.{{ item }}.j2"
+    dest: "/etc/systemd/system/mergerfs-cache-mover.{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - service
+    - timer
+
+- name: Habilitar o timer de drenagem do cache
+  ansible.builtin.systemd_service:
+    name: mergerfs-cache-mover.timer
+    enabled: true
+    state: started
+    daemon_reload: true

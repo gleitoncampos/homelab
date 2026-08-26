@@ -1,0 +1,13 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Drena o cache em SSD do mergerfs para o pool base
+# Sem os dois pools montados não há de onde nem para onde mover, e rodar assim
+# copiaria para o diretório vazio que serve de ponto de montagem.
+RequiresMountsFor={{ mergerfs_cache_branch }} {{ mergerfs_base_mount }}
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/mergerfs-cache-mover
+# A drenagem é I/O de fundo e não pode competir com acesso de cliente ao NAS.
+IOSchedulingClass=idle
+Nice=19

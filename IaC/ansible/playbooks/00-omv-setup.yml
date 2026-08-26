@@ -8,10 +8,99 @@
     # sobem de versão juntos, e é por isso que a variável tem o mesmo nome nos
     # dois playbooks. Trocar de suíte é uma linha aqui.
     omv_debian_suite: trixie
-    # Codinome da linha do OMV, não do Debian. OMV 8 ("sandworm") acompanha o
-    # Debian 13; os dois sobem de versão juntos.
-    omv_release: sandworm
+    # Codinome da linha do OMV, não do Debian. OMV 8 é "synchrony", lançado em
+    # 24/12/2025 sobre o Debian 13; os dois sobem de versão juntos. O valor
+    # anterior aqui era "sandworm", que é a linha do OMV *7* sobre o Debian 12 —
+    # e o par trixie+sandworm declararia o repositório do OMV 7 sobre uma base
+    # Debian 13. Corrigido em 25/08/2026, depois de o garimpo do NAS mostrar
+    # que a produção roda exatamente esse par antigo (OMV 7.7.2 / bookworm).
+    omv_release: synchrony
     omv_keyring_url: https://packages.openmediavault.org/public/archive.key
+
+    # ------------------------------------------------------------------------
+    # Script de instalação do OMV — fixado por commit E por checksum
+    # ------------------------------------------------------------------------
+    # A URL aponta para um COMMIT, nunca para `master`. Um caminho de commit é
+    # imutável, então o checksum abaixo não quebra sozinho quando o upstream
+    # publica uma revisão nova — subir de versão é trocar estas duas linhas de
+    # propósito, com o diff do script lido antes.
+    #
+    # O checksum é o que preserva a objeção original a `curl | bash`: se o
+    # conteúdo servido não bater, o playbook FALHA em vez de executar código
+    # desconhecido como root. É a diferença entre "script de terceiro" e
+    # "script de terceiro que eu revisei nesta revisão exata".
+    #
+    # Revisão fixada: 6983f480 (21/06/2026), 27618 bytes.
+    omv_install_script_commit: 6983f480513e23e8362a0f043879745df557cab7
+    omv_install_script_sha256: 908e7b4170d5d1bd334184fc779e564b0b8c72ca23efe9c33c800b191c6dfc0e
+
+    # Plugins do OMV a declarar EXPLICITAMENTE. Conferidos contra os índices
+    # `Packages.gz` da suíte `synchrony` em 25/08/2026 — nenhum destes nomes é
+    # suposição:
+    #
+    #   - `openmediavault-clamav`   vem do repositório OFICIAL (main)
+    #   - `openmediavault-mergerfs` vem do repositório da COMUNIDADE (omvextras)
+    #   - `openmediavault-snapraid` vem do repositório da COMUNIDADE (omvextras)
+    #
+    # ⚠️ Dois plugins que a produção tem NÃO entram nesta lista, e por motivos
+    # diferentes:
+    #
+    #   - `openmediavault-omvextrasorg` é instalado pelo próprio script, a
+    #     partir de um .deb que ele baixa. É ele quem cria o
+    #     `/etc/apt/sources.list.d/omvextras.sources`, e portanto quem torna os
+    #     dois plugins da comunidade acima alcançáveis pelo apt. Declará-lo aqui
+    #     não adiantaria: antes de o script rodar, ele não existe em repositório
+    #     nenhum.
+    #
+    #   - `openmediavault-flashmemory` MUDOU DE NOME no OMV 8: chama-se
+    #     `openmediavault-writecache`. O nome antigo não existe na suíte
+    #     `synchrony` — pedi-lo aqui faria o apt falhar. E o novo também não
+    #     entra na lista, porque o script já o instala por padrão (`flash=
+    #     "writecache"`, só pulado com a flag `-f`).
+    #
+    # `openmediavault-sharerootfs` também fica de fora: é dependência, entra
+    # sozinho.
+    omv_plugins:
+      - openmediavault-clamav
+      - openmediavault-mergerfs
+      - openmediavault-snapraid
+
+    # ------------------------------------------------------------------------
+    # Pools do mergerfs — ver tasks/mergerfs_pools.yml para a topologia
+    # ------------------------------------------------------------------------
+    # Prefixo sob o qual o OMV monta todo filesystem que ele conhece. É o
+    # recorte que separa "disco de dados do NAS" de "disco de boot": o disco
+    # raiz desta VM é virtual e também reporta `rota: false`, então filtrar só
+    # por rotacional elegeria os 16 G de boot como SSD de cache.
+    mergerfs_omv_mount_prefix: /srv/dev-disk-by-uuid-
+    # ⚠️ 3,5 TB é a linha que separa os três discos de 4 TB (que entram no pool)
+    # do de 2,7 TB (que fica fora, por decisão de 25/08/2026). Mexer neste
+    # número muda quais discos formam o pool — é limiar de topologia, não de
+    # desempenho.
+    mergerfs_hdd_min_bytes: 3500000000000
+    mergerfs_expected_hdd_count: 3
+    mergerfs_base_pool_name: DATA_NOCACHE
+    mergerfs_cache_pool_name: DATA
+    mergerfs_cache_dir_name: cache
+    # Espaço livre abaixo do qual o mergerfs para de criar arquivo na branch.
+    # No pool base é folga de manobra; no de cache é o piso que faz a escrita
+    # cair direto no HDD se o mover tiver ficado para trás.
+    mergerfs_base_minfreespace: 25
+    mergerfs_cache_minfreespace: 20
+    # ⚠️ `category.create` NÃO entra aqui. O RPC do plugin arranca qualquer
+    # `category.create=` desta string (`preg_grep(..., PREG_GREP_INVERT)`) e o
+    # template Jinja da unit arranca de novo — a política tem campo próprio, e é
+    # diferente em cada pool. `nonempty`, `use_ino` e `allow_other` também são
+    # descartados em silêncio pelo RPC; não vale declará-los.
+    mergerfs_common_options: cache.files=partial,dropcacheonclose=true,moveonenospc=true,readahead=1024
+    # Uso do SSD acima do qual a drenagem roda: 80% usado = 20% livre.
+    mergerfs_mover_max_used_percent: 80
+    mergerfs_mover_oncalendar: "*-*-* 03:00:00"
+    # Constante do OMV para "objeto de configuração novo"
+    # (OMV_CONFIGOBJECT_NEW_UUID em /etc/default/openmediavault). É o que faz o
+    # RPC criar em vez de atualizar, e é ele que dispara a criação automática do
+    # mntent do pool via FsTab.set.
+    mergerfs_new_object_uuid: fa4b1c66-ef79-11e5-87a0-0002b3a176b4
     # Usuário SMB com que o Proxmox monta o share de backup. O nome tem de
     # bater com o `username` do templates/proxmox/proxmox_storage.j2, e a senha
     # com a que o 00-proxmox-setup.yml grava em
@@ -109,44 +198,178 @@
     # alguém ter clicado numa UI. Era exatamente o estado manual que a detecção
     # de dependências existe para dispensar.
     #
-    # Repositório declarado, e não o `curl | bash` do script de instalação
-    # oficial: o mecanismo já está aqui, é auditável, e não executa código
-    # remoto não verificado como root.
-    - name: "Declarar o repositório do OpenMediaVault ({{ omv_release }})"
-      ansible.builtin.deb822_repository:
-        name: openmediavault
-        types: [deb]
-        uris: https://packages.openmediavault.org/public
-        suites: "{{ omv_release }}"
-        components: [main]
-        signed_by: "{{ omv_keyring_url }}"
-        state: present
+    # ⚠️ MUDANÇA DE ABORDAGEM, 25/08/2026. Este bloco declarava o repositório do
+    # OMV com `deb822_repository` e instalava `openmediavault` com `apt`,
+    # justamente para NÃO usar o script da comunidade. Passou a usar o script,
+    # por decisão registrada, e o motivo é que a produção foi construída assim —
+    # o garimpo do NAS achou o `./install -n` no `.bash_history`. Manter o
+    # caminho do apt significaria que o playbook nunca reproduziria a máquina
+    # que existe.
+    #
+    # A objeção original ao `curl | bash` continua válida e continua atendida:
+    # o script é baixado de um COMMIT fixo, com CHECKSUM conferido, e só então
+    # executado. Ver os comentários de `omv_install_script_commit` no `vars:`.
+    #
+    # ⚠️ O repositório oficial do OMV NÃO é mais declarado aqui. O script
+    # escreve `/etc/apt/sources.list.d/openmediavault.list` por conta própria
+    # (linha 418 da revisão fixada). Declarar em paralelo criaria dois arquivos
+    # apontando para o mesmo repositório, com duas suítes que divergem no
+    # próximo major — exatamente a duplicação de fonte da verdade que este
+    # repositório existe para evitar. A variável `omv_release` sobreviveu, mas
+    # mudou de papel: em vez de DECLARAR a suíte, ela agora CONFERE a que o
+    # script escreveu.
+    - name: Verificar se o OMV já está instalado
+      ansible.builtin.command: dpkg-query -W -f=${Status} openmediavault
+      register: omv_installed
+      changed_when: false
+      failed_when: false
+      check_mode: false
 
-    - name: Instalar o OpenMediaVault
-      ansible.builtin.apt:
-        name: openmediavault
-        state: present
-        update_cache: true
-        # O pacote roda os próprios scripts de pós-instalação, que mexem em
-        # rede e serviços; sem isto o dpkg pode parar num prompt de conffile e
-        # travar o playbook até o timeout.
-        force_apt_get: true
+    - name: Baixar o script de instalação do OMV no commit fixado
+      ansible.builtin.get_url:
+        url: >-
+          https://raw.githubusercontent.com/OpenMediaVault-Plugin-Developers/installScript/{{
+          omv_install_script_commit }}/install
+        dest: /usr/local/src/omv-install-{{ omv_install_script_commit[:8] }}.sh
+        checksum: "sha256:{{ omv_install_script_sha256 }}"
+        owner: root
+        group: root
+        # 0700: o script roda como root e o host tem usuários com shell
+        # (o usuário de compartilhamento SMB entre eles). Ver o achado de
+        # propriedade do binário do node_exporter no garimpo de 25/08/2026.
+        mode: "0700"
+      when: "'install ok installed' not in omv_installed.stdout"
+
+    # ⚠️ A flag `-n` pula a configuração de rede do script. Em amd64 ela é, hoje,
+    # redundante: a revisão fixada sai com `exit 0` na linha 711, antes do bloco
+    # de rede da linha 769. Ela é passada assim mesmo por duas razões — é o que
+    # a produção usou, e o bloco que ela desarma faz
+    # `apt purge network-manager dhcpcd5 cloud-init` seguido de
+    # `omv-salt deploy run systemd-networkd`. Neste host a rede INTEIRA é o
+    # `50-cloud-init.yaml` de uma imagem cloud do Debian; se o `exit 0` de amd64
+    # sair do script um dia, a diferença entre passar e não passar `-n` é a
+    # máquina voltar sem rede. O checksum acima é o que torna esse "um dia" um
+    # evento visível em vez de uma surpresa.
+    #
+    # `-r` pula o reboot. Também está dentro do bloco de rede, portanto também
+    # redundante hoje, e passado pelo mesmo motivo: quem reinicia este host é o
+    # operador, com o playbook mostrando no log que reiniciou.
+    - name: Instalar o OMV pelo script fixado (rede e reboot desarmados)
+      ansible.builtin.command:
+        cmd: /usr/local/src/omv-install-{{ omv_install_script_commit[:8] }}.sh -n -r
+      register: omv_install_run
+      changed_when: true
+      when:
+        - "'install ok installed' not in omv_installed.stdout"
+        - not ansible_check_mode
       environment:
         DEBIAN_FRONTEND: noninteractive
         APT_LISTCHANGES_FRONTEND: none
 
+    - name: "Relatar o que a instalação do OMV faria (modo --check)"
+      ansible.builtin.debug:
+        msg: >-
+          O OMV seria instalado pelo script no commit
+          {{ omv_install_script_commit[:8] }}, com as flags -n -r.
+      when:
+        - "'install ok installed' not in omv_installed.stdout"
+        - ansible_check_mode
+
+    # A conferência que a declaração de repositório deixou de fazer. Se o script
+    # escrever uma suíte diferente da esperada, é porque o par Debian/OMV mudou
+    # debaixo do playbook — e é melhor parar aqui do que instalar plugins da
+    # linha errada dois passos adiante.
+    - name: Ler o repositório do OMV que o script declarou
+      ansible.builtin.slurp:
+        src: /etc/apt/sources.list.d/openmediavault.list
+      register: omv_sources
+      when: not ansible_check_mode
+
+    - name: "Conferir que a suíte declarada é a esperada ({{ omv_release }})"
+      ansible.builtin.assert:
+        that:
+          - omv_release in (omv_sources.content | b64decode)
+        fail_msg: >-
+          O script declarou uma suíte do OMV diferente de '{{ omv_release }}'.
+          Conteúdo: {{ omv_sources.content | b64decode | trim }}. Confira o par
+          Debian/OMV antes de seguir — os plugins abaixo saem desta suíte.
+      when: not ansible_check_mode
+
     # `omv-confdbadm populate` semeia o banco de configuração do OMV. É
-    # idempotente, mas só existe depois de o pacote instalar — daí o `stat`, que
-    # também torna a task honesta num host onde a instalação falhou.
+    # idempotente, mas só existe depois de o pacote instalar — daí o `stat`.
     - name: Verificar se as ferramentas do OMV estão presentes
       ansible.builtin.stat:
         path: /usr/sbin/omv-confdbadm
       register: omv_bin
 
+    # ⚠️ Isto é um assert, e não um `when:` que pula em silêncio. O script tem
+    # muitos caminhos de saída, e um `when: omv_bin.stat.exists` faria o play
+    # seguir sem semear o banco, sem instalar plugin nenhum, e ainda imprimir o
+    # banner de sucesso no fim. Sucesso relatado sem efeito é o modo de falha
+    # mais caro que já apareceu neste repositório; aqui ele para.
+    - name: Confirmar que a instalação do OMV realmente aconteceu
+      ansible.builtin.assert:
+        that:
+          - omv_bin.stat.exists
+        fail_msg: >-
+          /usr/sbin/omv-confdbadm não existe: o script de instalação do OMV não
+          concluiu. Leia o log do script no host antes de rodar de novo — as
+          tasks seguintes (banco de configuração, plugins, usuário SMB) dependem
+          desta e seriam puladas em silêncio.
+      when: not ansible_check_mode
+
     - name: Semear o banco de configuração do OMV
       ansible.builtin.command: omv-confdbadm populate
       when: omv_bin.stat.exists
       changed_when: true
+
+    # ------------------------------------------------------------------------
+    # Plugins do OMV
+    # ------------------------------------------------------------------------
+    # ⚠️ Plugin do OMV é pacote apt puro. A página de plugins da console web é
+    # frontend de apt, e não faz nada além dele: o postinst de cada pacote semeia
+    # o próprio schema no `config.xml`. Foi assim que os seis plugins da produção
+    # entraram — pela UI — e é por isso que `ansible.builtin.apt` os reproduz sem
+    # precisar de `omv-rpc`.
+    #
+    # A ordem aqui é obrigatória e não é óbvia: estes pacotes só existem para o
+    # apt DEPOIS de o script ter instalado o `openmediavault-omvextrasorg`, que
+    # é quem escreve o `omvextras.sources`. Por isso este bloco vem depois da
+    # instalação, e não junto dos outros pacotes lá em cima.
+    #
+    # ⚠️ Sem versão fixada, de propósito. A suíte já limita o major, que é o que
+    # importa — plugin da linha errada não instala. Fixar o patch quebraria no
+    # primeiro `omv-upgrade` disparado pela UI, que é a via normal de atualização
+    # desta máquina: o `apt/history.log` dos últimos nove meses não contém outro
+    # comando. A regra de tag fixa do CLAUDE.md é sobre imagem Docker, não sobre
+    # pacote apt de distribuição.
+    #
+    # ⚠️ O `mergerfs` (pacote base, não o plugin) estava fixado à mão na produção
+    # em `2.39.0~debian-bookworm`, um build do upstream. O pin CAI aqui, e não
+    # por preferência: aquela string de versão é de bookworm e não resolve em
+    # trixie. O plugin `openmediavault-mergerfs` puxa o `mergerfs` do Debian
+    # como dependência, e o trixie traz 2.40.2-5 — mais novo que o pin que saiu.
+    - name: Atualizar o cache do APT com os repositórios que o OMV acrescentou
+      ansible.builtin.apt:
+        update_cache: true
+      when: not ansible_check_mode
+
+    - name: "Instalar os plugins do OMV ({{ omv_plugins | join(', ') }})"
+      ansible.builtin.apt:
+        name: "{{ omv_plugins }}"
+        state: present
+        # Os plugins rodam `omv-salt` no pós-instalação e mexem em serviços;
+        # sem isto o dpkg pode parar num prompt de conffile e travar o playbook
+        # até o timeout.
+        force_apt_get: true
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+        APT_LISTCHANGES_FRONTEND: none
+      when: omv_bin.stat.exists
+
+    - name: Configurar os pools do mergerfs e a drenagem do cache
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/mergerfs_pools.yml"
+      when: omv_bin.stat.exists
 
     # ------------------------------------------------------------------------
     # Usuário e compartilhamento SMB do backup

@@ -1,0 +1,89 @@
+#!/bin/sh
+# {{ ansible_managed }}
+#
+# Drena a branch de cache (SSD) para o pool base (só HDD) do mergerfs.
+#
+# Derivado de tools/mergerfs.percent-full-mover do projeto mergerfs
+# (https://github.com/trapexit/mergerfs), com duas diferenças deliberadas,
+# ambas explicadas abaixo: trava contra execução concorrente e recusa de mover
+# arquivo que está aberto.
+#
+# A seleção é por ATIME — `find -printf '%A@'` ordenado do menor para o maior,
+# ou seja, o arquivo lido há mais tempo sai primeiro. É isso que faz o cache
+# guardar o que ainda está em uso, em vez de esvaziar às cegas.
+#
+# ⚠️ Os sistemas de arquivo estão montados com `relatime`, então o atime só é
+# reescrito quando o anterior tem mais de 24 h (ou é mais antigo que o mtime).
+# Isso dá granularidade de cerca de um dia, que é suficiente para "não é lido
+# há N dias" e é o motivo de não existir aqui nenhuma lógica de hora.
+
+set -eu
+
+CACHE_BRANCH="{{ mergerfs_cache_branch }}"
+BASE_POOL="{{ mergerfs_base_mount }}"
+# Percentual de USO acima do qual a drenagem roda. {{ mergerfs_mover_max_used_percent }}
+# significa parar quando restarem {{ 100 | int - (mergerfs_mover_max_used_percent | int) }}% livres.
+MAX_USED_PERCENT={{ mergerfs_mover_max_used_percent }}
+LOCK_FILE=/run/lock/mergerfs-cache-mover.lock
+
+log() { echo "$(date -Is) $*"; }
+
+# ⚠️ Trava obrigatória. Sem ela, um timer que dispara enquanto a execução
+# anterior ainda copia coloca dois rsync sobre o mesmo arquivo, e o
+# --remove-source-files do primeiro apaga a origem debaixo do segundo.
+exec 9>"${LOCK_FILE}"
+if ! flock -n 9; then
+  log "outra execução em andamento; saindo"
+  exit 0
+fi
+
+used_percent() {
+  df -P "${CACHE_BRANCH}" | tail -n1 | awk '{print $5}' | tr -d '%'
+}
+
+log "início — uso do cache: $(used_percent)%, alvo: <= ${MAX_USED_PERCENT}%"
+
+moved=0
+while [ "$(used_percent)" -gt "${MAX_USED_PERCENT}" ]; do
+  # Arquivo com o atime mais antigo, relativo à raiz da branch de cache.
+  file=$(find "${CACHE_BRANCH}" -type f -printf '%A@ %P\n' | sort -n | head -n1 | cut -d' ' -f2-)
+  if [ -z "${file}" ]; then
+    log "nada mais a mover, e o uso segue em $(used_percent)%"
+    break
+  fi
+
+  # ⚠️ Recusa de arquivo aberto. O rsync copia o que existe AGORA e então apaga
+  # a origem; se um cliente SMB ainda está gravando, ele segue escrevendo num
+  # inode apagado e o que chega ao pool base é um arquivo truncado. O mover
+  # anterior desta casa usava `mv` puro e tinha exatamente esse buraco.
+  if fuser -s "${CACHE_BRANCH}/${file}" 2>/dev/null; then
+    log "PULADO (em uso): ${file}"
+    # Um arquivo aberto e em primeiro lugar na fila travaria o laço para sempre.
+    # Toca o atime para mandá-lo ao fim da fila e segue para o próximo.
+    touch -a "${CACHE_BRANCH}/${file}"
+    continue
+  fi
+
+  rsync \
+    --archive \
+    --acls \
+    --xattrs \
+    --atimes \
+    --hard-links \
+    --one-file-system \
+    --quiet \
+    --preallocate \
+    --remove-source-files \
+    --relative \
+    "${CACHE_BRANCH}/./${file}" \
+    "${BASE_POOL}/"
+
+  moved=$((moved + 1))
+  log "movido: ${file}"
+done
+
+# Diretório vazio deixado para trás pelo --remove-source-files, que só apaga
+# arquivo. Sem isto a árvore da branch de cache cresce sem parar.
+find "${CACHE_BRANCH}" -mindepth 1 -type d -empty -delete 2>/dev/null || true
+
+log "fim — ${moved} arquivo(s) movido(s), uso do cache: $(used_percent)%"

@@ -1,0 +1,15 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Agenda a drenagem do cache em SSD do mergerfs
+
+[Timer]
+OnCalendar={{ mergerfs_mover_oncalendar }}
+# Se o NAS estava desligado na hora marcada, roda assim que ele voltar em vez de
+# esperar a próxima janela — o cache pode ter passado do limiar nesse meio-tempo.
+Persistent=true
+# Espalha o disparo para não coincidir com outro trabalho agendado na mesma hora
+# cheia (o fstrim semanal, a sincronização do SnapRAID quando ela existir).
+RandomizedDelaySec=15m
+
+[Install]
+WantedBy=timers.target
