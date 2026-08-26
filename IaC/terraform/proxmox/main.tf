@@ -318,6 +318,34 @@ resource "proxmox_virtual_environment_vm" "omv_nas" {
 
   scsi_hardware = "virtio-scsi-single"
 
+  # ⚠️ q35 é REQUISITO do passthrough abaixo, não preferência. O chipset padrão
+  # (i440fx) não expõe barramento PCIe ao convidado, e `pcie = true` num
+  # i440fx é ignorado: a controladora entra como PCI legado, ou não entra.
+  machine = "q35"
+
+  # ----------------------------------------------------------------------------
+  # Passthrough da controladora SATA - é por aqui que entram os discos do NAS
+  # ----------------------------------------------------------------------------
+  # ⚠️ Sem este bloco a VM sobe com o disco de sistema e MAIS NADA. Os discos de
+  # dados do NAS não são virtuais: são físicos, atrás de uma controladora SATA
+  # dedicada, e o convidado só os enxerga porque a controladora inteira é
+  # entregue a ele. O `fstab` do OMV declara essas montagens com `nofail`, então
+  # a ausência não trava o boot - ela some, e o NAS sobe vazio.
+  #
+  # Pré-requisitos no host, todos já cobertos por ansible/playbooks/00-proxmox-setup.yml:
+  # IOMMU na cmdline do kernel (derivado do fabricante da CPU, `intel_iommu=on`
+  # ou `amd_iommu=on`, mais `iommu=pt`) e o reboot que a flag exige. NÃO é
+  # preciso carregar módulo do VFIO: o Proxmox faz o bind dinâmico no start da
+  # VM a partir deste bloco - ver a nota longa no fim daquele playbook.
+  #
+  # `pcie = true` (e não `false` como no OPNsense): esta VM é q35 e a
+  # controladora é PCIe. O OPNsense usa i440fx com uma NIC PCI, daí a diferença.
+  hostpci {
+    device = "hostpci0"
+    id     = var.omv_hba_pci_id
+    pcie   = true
+  }
+
   disk {
     datastore_id = var.vm_datastore_id
     # Importa a imagem cloud baixada acima como disco de boot e redimensiona
@@ -361,9 +389,21 @@ resource "proxmox_virtual_environment_vm" "omv_nas" {
 
   started = true
 
-  # Mesmo aviso da nota no topo do arquivo: confira se o VMID 300 já existe
-  # manualmente no cluster antes do primeiro apply. Se existir com dados
-  # reais no NAS, importe antes de aplicar - não recrie do zero.
+  # ⚠️ Decisão de 25/08/2026: esta VM é para ser RECRIADA, não importada. O
+  # VMID 300 e o nome daqui são portanto o ALVO, e divergem de propósito da VM
+  # que roda hoje no nó secundário - que tem outro VMID e outro nome. Não
+  # "corrija" estes dois campos para bater com a produção: fazê-lo transformaria
+  # uma recriação limpa numa adoção pela metade.
+  #
+  # ⚠️ O que a recriação destrói e o que ela preserva, e a diferença importa:
+  # os discos de DADOS são físicos, entram pelo hostpci acima e sobrevivem
+  # intactos. O disco de SISTEMA é virtual e é perdido - e com ele vai o
+  # /etc/openmediavault/config.xml, que é onde vivem usuários, pastas
+  # compartilhadas, exports e a associação entre cada UUID de filesystem e seu
+  # ponto de montagem. Numa OMV recém-instalada os discos de dados existem no
+  # `lsblk` e NÃO estão montados sob /srv/dev-disk-by-uuid-*, que é justamente o
+  # recorte de que ansible/tasks/mergerfs_pools.yml depende para eleger as
+  # branches dos pools. Ver .local/docs/TODO-E-ROADMAP.md §1.1.12.
 }
 
 # 4. CT 201 - Docker Swarm Worker Node 02 (no nó secundário)

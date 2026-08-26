@@ -68,6 +68,13 @@ nos:
 # primário. Valor errado aqui cria a VM do firewall sem WAN.
 opnsense_wan_pci_id: "0000:05:00.0"
 
+# Endereço PCI da controladora SATA em passthrough para a VM do NAS. Descubra
+# com `lspci` no nó SECUNDÁRIO — é outro host e quase certamente outro endereço.
+# Valor errado aqui cria a VM do NAS sem disco de dados nenhum, e ela sobe
+# assim mesmo: as montagens estão declaradas com `nofail`, então a falta some
+# em vez de travar o boot.
+omv_hba_pci_id: "0000:05:00.0"
+
 # =============================================================================
 # Proxmox — o que o 00-proxmox-setup.yml precisa saber
 # =============================================================================

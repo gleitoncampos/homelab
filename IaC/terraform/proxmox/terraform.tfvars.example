@@ -34,6 +34,10 @@ ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... exemplo@homelab"
 # Endereço PCI (lspci no nó primário) da NIC física de WAN em passthrough.
 opnsense_wan_pci_id = "0000:05:00.0"
 
+# Endereço PCI (lspci no nó secundário) da controladora SATA passada para a VM
+# do OMV. É por ela que entram todos os discos de dados do NAS.
+omv_hba_pci_id = "0000:05:00.0"
+
 # IPs estáticos (CIDR) na VLAN homelab - RFC 5737, substitua pelos reais.
 docker_swarm_node01_ip = "198.51.100.10/24"
 docker_swarm_node02_ip = "198.51.100.11/24"
