@@ -1,0 +1,9 @@
+@@ -1458,7 +1486,7 @@
+             <quick>1</quick>
+             <interfacenot>0</interfacenot>
+             <interface>wan</interface>
+-            <direction>any</direction>
++            <direction>in</direction>
+             <ipprotocol>inet</ipprotocol>
+             <protocol>any</protocol>
+             <icmptype/>

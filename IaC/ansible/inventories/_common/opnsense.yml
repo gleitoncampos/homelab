@@ -1060,6 +1060,22 @@ opnsense_rules:
     shaper1: ''
     shaper2: ''
     description: Default allow LAN IPv6 to any rule
+  # ⚠️ `direction: in`, e NUNCA `any`. Esta regra casa por ORIGEM contra sete
+  # blocklists públicas, e omitir a direção faz o `pf` avaliá-la nos dois
+  # sentidos — inclusive na saída, onde a origem é o IP da própria WAN.
+  #
+  # Isso derrubou a internet da casa em 26/08/2026, e o modo de falha é
+  # traiçoeiro: só se manifesta quando o provedor entrega um endereço CGNAT
+  # (`100.64.0.0/10`, RFC 6598), porque essa faixa está DENTRO das listas —
+  # é a linha 519 do `firehol_level1.netset`, e a lista existe justamente
+  # para barrar tráfego de entrada vindo de espaço que não deveria aparecer
+  # na internet pública. Com IP público na WAN nada acontece; com CGNAT, o
+  # firewall bloqueia a si mesmo, e todo tráfego da casa junto, porque depois
+  # do NAT a origem também vira o IP da WAN. O contador do `pf` mostrou 16550
+  # avaliações e 16550 bloqueios — 100% de casamento.
+  #
+  # Como blocklist de origem, o lugar dela é só na entrada. As outras 11
+  # regras deste arquivo já são `in`; esta era a única exceção.
   - uuid: cd96ee46-46bf-429f-ba88-7cc0c3d66e4d
     enabled: '1'
     statetype: keep
@@ -1069,7 +1085,7 @@ opnsense_rules:
     quick: '1'
     interfacenot: '0'
     interface: wan
-    direction: any
+    direction: in
     ipprotocol: inet
     protocol: any
     icmptype: ''
