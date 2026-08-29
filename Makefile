@@ -24,7 +24,8 @@ PLAYBOOKS   := $(wildcard $(ANSIBLE_DIR)/playbooks/*.yml $(ANSIBLE_DIR)/playbook
 # Um alvo por ferramenta, para que a saída diga qual falhou.
 .PHONY: help hooks check lint lint-yaml lint-ansible lint-shell lint-tf ssh-keys \
         validate-compose validate-ansible validate-patterns check-common-copies \
-        secrets links snapshot omv-fs discover clean render-opnsense render-monitoring
+        secrets links snapshot omv-fs discover clean render-opnsense render-monitoring \
+        render-proxmox-ifaces
 
 help: ## Lista os alvos
 	@echo "Alvos disponíveis:"
@@ -53,7 +54,7 @@ ssh-keys: ## Instala a chave gerada pelo bootstrap em todo host do inventário (
 test-bootstrap: ## Testa os renderizadores do bootstrap contra os consumidores reais
 	@python3 IaC/bootstrap/test_render.py
 
-check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring ## Tudo que a CI roda
+check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces ## Tudo que a CI roda
 	@echo
 	@echo "✓ check completo"
 
@@ -130,6 +131,9 @@ check-common-copies: ## Falha se as cópias de 00-common.yml divergirem da fonte
 # documentada, não um convite a repetir a regeneração depois.
 render-monitoring: ## Renderiza os templates da stack de monitoramento com 2 hosts por grupo
 	@python3 $(ANSIBLE_DIR)/tests/render_monitoring.py
+
+render-proxmox-ifaces: ## Renderiza proxmox_interfaces.j2 e valida o gate de sub-rede (gateway na /24 do address)
+	@python3 $(ANSIBLE_DIR)/tests/render_proxmox_ifaces.py
 
 render-opnsense: ## Renderiza o template do OPNsense e compara com o baseline congelado
 	@set -euo pipefail; \

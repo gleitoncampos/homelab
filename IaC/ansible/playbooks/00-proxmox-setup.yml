@@ -125,6 +125,74 @@
           grupo [opnsense] se o firewall ainda não existir.
       when: firewall_disponivel
 
+    # Redundância defensiva contra o host REAL, no momento do apply — a mesma
+    # invariante que o teste de render `render_proxmox_ifaces.py` checa na CI
+    # (sem host), aqui checada contra os facts do hipervisor. A deliberada
+    # duplicação existe porque os dois pegam falhas diferentes: o render pega
+    # divergência nas fixtures/template antes do merge; este assert pega o caso
+    # em que o valor de `proxmox_gateway_ip` do inventário do ambiente cai em
+    # /24 diferente do `ansible_host` deste nó específico.
+    #
+    # ⚠️ Sem este gate, o template escreveria em /etc/network/interfaces um
+    # `gateway` fora da /24 do `address`. Este playbook não recarrega a rede: a
+    # rota default só é montada quando a rede subir — no próximo reboot, ou num
+    # `systemctl restart networking`. Aí o kernel recusa a rota (gateway
+    # inalcançável pela interface), o acesso remoto ao hipervisor cai, e a
+    # recuperação passa a ser só por console físico ou IPMI (Req 5.3, 5.4).
+    #
+    # A comparação é por 3 octetos e vale APENAS para /24 — por isso o `that:`
+    # também exige `proxmox_lan_prefix == 24`. Com /25 dois endereços podem ter
+    # os mesmos 3 octetos e ainda cair em sub-redes diferentes (falso negativo,
+    # o gate viraria no-op); com /16 o oposto (falso positivo). Suportar outro
+    # prefixo exige recalcular a rede de verdade (ansible.utils.ipaddr), que
+    # este repositório evita depender aqui — logo, prefixo != 24 FALHA ALTO em
+    # vez de desarmar o gate em silêncio.
+    #
+    # O `.split('/')[0]` remove um único sufixo /prefixo simples de
+    # `ansible_host` (ex.: "203.0.113.10/24" -> "203.0.113.10"); não pretende
+    # cobrir valor malformado.
+    #
+    # ⚠️ `proxmox_gateway_ip` tem que ser um IP PURO, sem /prefixo. O template
+    # escreve `gateway {{ proxmox_gateway_ip }}` cru numa stanza
+    # `iface ... inet static` do Debian, onde o gateway não leva prefixo — o
+    # prefixo da rede vem de `proxmox_lan_prefix`, aplicado só ao `address`. Um
+    # valor "192.0.2.1/24" passaria pelo `.split('/')[0]` da comparação de
+    # octetos acima (o assert aprovaria), mas viraria `gateway 192.0.2.1/24`
+    # literal em /etc/network/interfaces — valor inválido, vmbr0 sobe SEM rota
+    # default no reboot. É a mesma classe de lockout que este gate existe para
+    # impedir, por isso o `/` é rejeitado antes de chegar ao template.
+    # `ansible_host` recebe a mesma checagem por defesa: vindo de fact/inventário
+    # ele não costuma ter sufixo, mas se tivesse o template geraria `.../24/24`.
+    - name: "Abortar se o gateway e o endereço do nó caírem em /24 diferentes"
+      ansible.builtin.assert:
+        that:
+          - (proxmox_lan_prefix | default(24) | int) == 24
+          - "'/' not in proxmox_gateway_ip"
+          - "'/' not in ansible_host"
+          - >-
+            ansible_host.split('/')[0].split('.')[:3]
+            == proxmox_gateway_ip.split('/')[0].split('.')[:3]
+        fail_msg: >-
+          ansible_host ({{ ansible_host }}) e proxmox_gateway_ip
+          ({{ proxmox_gateway_ip }}) precisam cair na mesma /24, e
+          proxmox_lan_prefix precisa ser 24. proxmox_gateway_ip deve ser um IP
+          PURO, sem /prefixo: o gateway de uma stanza `iface ... inet static`
+          não leva prefixo, e o template o escreve cru — um "192.0.2.1/24" iria
+          literal para /etc/network/interfaces e a vmbr0 subiria sem rota
+          default. O prefixo da rede vem de proxmox_lan_prefix, aplicado só ao
+          address. Ou proxmox_gateway_ip/ansible_host contêm "/", ou os
+          endereços divergem de /24, ou proxmox_lan_prefix != 24 (a checagem por
+          3 octetos só é válida para /24; outro prefixo exige recalcular a rede
+          com ansible.utils.ipaddr, hoje não suportado aqui). Aplicar assim
+          escreveria em /etc/network/interfaces um gateway inválido ou fora da
+          sub-rede do address; a rota default fica inalcançável quando a rede
+          subir (reboot) e o acesso remoto ao hipervisor cai — recuperação só
+          por console físico ou IPMI. Corrija proxmox_gateway_ip (IP puro) e, se
+          for o caso, proxmox_lan_prefix em [all:vars] no hosts.ini do ambiente
+          para a mesma /24 do address deste nó.
+        quiet: true
+      when: firewall_disponivel
+
     # A bridge é montada com as interfaces físicas descobertas nos facts. Zero
     # interfaces significaria escrever `bridge-ports` vazio: a bridge sobe, o
     # host perde a rede, e o arquivo continua sintaticamente válido — falha sem

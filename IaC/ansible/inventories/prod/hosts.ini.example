@@ -59,6 +59,15 @@ openwrt
 # e um host do grupo [proxmox] nunca a enxerga. O `make bootstrap` preenche.
 # proxmox_gateway_ip=<IP-DO-GATEWAY>
 
+# Prefixo CIDR da rede de gerência do hipervisor — o /N do `address` de vmbr0
+# em /etc/network/interfaces. OPCIONAL: o template usa `| default(24)`, então
+# omitir vale /24. ⚠️ O gate de sub-rede em playbooks/00-proxmox-setup.yml HOJE
+# só suporta /24 (o assert exige == 24; a checagem de "mesma sub-rede" compara 3
+# octetos, válida apenas para /24). Mudar para outro prefixo NÃO é só trocar
+# este valor: exige recalcular a rede de verdade (ansible.utils.ipaddr) e
+# ajustar aquele gate — não altere sem tratar os dois juntos.
+# proxmox_lan_prefix=24
+
 # Interface física de WAN do nó primário, EXCLUÍDA da bridge vmbr0 por ser
 # dedicada à VM do firewall via PCIe pass-through. Opcional: vazio faz todas as
 # interfaces físicas descobertas nos facts entrarem na bridge.
