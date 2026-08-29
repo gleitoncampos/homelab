@@ -87,6 +87,47 @@
   loop_control:
     label: "{{ item }}"
 
+# Continuação natural da task anterior: aquela recusa placeholder pela FORMA
+# (prefixo TROCAR-, <...>, etc); os 4 SSID de exemplo do template
+# (Homelab-Main/IoT/Media/Guest, ver vault.yml.example) NÃO têm essa forma —
+# são strings normais e passariam. Sem este gate, aplicar 02-openwrt-setup.yml
+# com o vault ainda no exemplo reescreveria os SSID da casa para os nomes
+# publicados no repositório. A comparação é contra a lista fixa de nomes de
+# exemplo (case-insensitive): só uma variável de SSID conteria um desses
+# valores, então não é preciso filtrar por nome de variável.
+#
+# SEM no_log aqui, mesma justificativa da task de placeholder acima: o NOME da
+# variável (`item`) precisa aparecer no erro para o operador saber qual SSID
+# trocar; o fail_msg nunca ecoa `vars[item]`, só compara contra a lista fixa e
+# nomeia a variável. A condição em si não contém o literal do segredo.
+- name: Recusar SSID ainda igual a um dos nomes de exemplo do template
+  ansible.builtin.assert:
+    that:
+      - vars[item] | lower not in vault_example_ssids
+    fail_msg: >-
+      Segredo '{{ item }}' ainda está com um SSID de exemplo do template
+      (Homelab-Main/IoT/Media/Guest) — não é o SSID real da rede.
+      Edite o Vault do ambiente em uso e defina o SSID real antes de aplicar:
+        cd ansible/
+        ansible-vault edit inventories/prod/group_vars/all/vault.yml   # ou dev/
+      Nunca aplique 02-openwrt-setup.yml com SSID de exemplo: ele reescreveria
+      os SSID da casa para os nomes publicados no repositório.
+    success_msg: "Segredo '{{ item }}' não é SSID de exemplo."
+    quiet: true
+  vars:
+    # ⚠️ Lista fixa, sem vínculo automático com vault.yml.example: se os SSID de
+    # exemplo mudarem lá (wifi_*_ssid), espelhe a mudança aqui — senão o gate
+    # deixa de reconhecer o novo nome de exemplo. Sincronizar por script seria
+    # over-engineering para 4 valores; a duplicação é intencional e manual.
+    vault_example_ssids:
+      - homelab-main
+      - homelab-iot
+      - homelab-media
+      - homelab-guest
+  loop: "{{ required_secrets }}"
+  loop_control:
+    label: "{{ item }}"
+
 - name: Exigir comprimento mínimo da senha de admin do Portainer
   ansible.builtin.assert:
     that:

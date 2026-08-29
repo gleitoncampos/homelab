@@ -11,6 +11,15 @@
           - wifi_iot_password
           - wifi_media_password
           - wifi_guest_password
+          # SSID entram aqui para o gate de SSID-de-exemplo em validate_vault.yml
+          # de fato percorrê-los: aquela assertion itera required_secrets, então
+          # SSID fora da lista = gate morto. openwrt_wireless.j2 teve os
+          # `| default("Homelab-*")` removidos de propósito — SSID ausente vira
+          # undefined e cai no gate, em vez de escrever o nome de exemplo.
+          - wifi_main_ssid
+          - wifi_iot_ssid
+          - wifi_media_ssid
+          - wifi_guest_ssid
   tasks:
     - name: Fazer backup da configuração /etc/config/system no OpenWrt
       ansible.builtin.raw: "cp /etc/config/system /etc/config/system.bak"
