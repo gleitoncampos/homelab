@@ -1,51 +1,95 @@
 @echo off
 REM ==========================================================================
-REM install.bat — mapeia o compartilhamento do NAS no convidado Windows
+REM install.bat -- mapeia o compartilhamento do NAS no convidado Windows
 REM ==========================================================================
 REM
 REM Renderizado por tasks/windows_oem_smb.yml. NAO editar no convidado: o
 REM arquivo e reescrito a cada execucao do playbook, e o que vale e o template.
 REM
 REM QUANDO RODA: uma unica vez, no passo final da instalacao automatica do
-REM dockur/windows. A pasta montada em /oem e copiada para C:\OEM e este
-REM arquivo e executado la. Nao roda a cada boot -- por isso o mapeamento
+REM dockur/windows. A pasta montada em /oem vira `$OEM$\$1\OEM` na midia e o
+REM Setup a copia para C:\OEM. Nao roda a cada boot -- por isso o mapeamento
 REM precisa sobreviver sozinho, e e o que `cmdkey` mais `/persistent:yes`
 REM garantem: o primeiro guarda a credencial cifrada no Gerenciador de
-REM Credenciais do Windows, o segundo persiste a letra de unidade no perfil.
+REM Credenciais, o segundo persiste a letra de unidade no perfil.
 REM
-REM SEM ACENTO DE PROPOSITO: o interpretador de lote roda em code page OEM
-REM (437/850), nao em UTF-8. Acento aqui vira caractere corrompido na tela e,
-REM em caminho de arquivo, erro de "nao encontrado".
+REM ATENCAO -- EM QUAL CONTA ISTO RODA, QUE E A PREMISSA DE TUDO ACIMA:
+REM   `cmdkey` grava no Gerenciador de Credenciais DA CONTA QUE EXECUTA, e
+REM   `net use /persistent:yes` grava o mapeamento em HKCU\Network DA CONTA QUE
+REM   EXECUTA. Se isto rodar como SYSTEM, o `net use` funciona naquela sessao,
+REM   o log abaixo diz OK, e o usuario interativo NUNCA ve a unidade -- falha
+REM   silenciosa que so aparece no primeiro logon.
+REM
+REM   O que foi apurado no codigo do dockur (29/08/2026): o arquivo de resposta
+REM   (`assets/win10x64.xml:326`) invoca `SetupComplete.cmd logon` dentro de
+REM   <FirstLogonCommands> do passe `oobeSystem`, que roda NO CONTEXTO DO
+REM   USUARIO. Isso sustenta o desenho.
+REM
+REM   NAO CONFIRMADO: o argumento `logon` indica que o mesmo script tambem
+REM   roda numa fase anterior como SYSTEM, e nao foi possivel localizar onde
+REM   `C:\OEM\install.bat` e de fato invocado -- ele nao aparece no XML.
+REM   CONFERIR NO PRIMEIRO CONVIDADO REAL: apos a instalacao, logar como o
+REM   usuario e rodar `net use`. Se a unidade nao aparecer, foi SYSTEM, e o
+REM   desenho precisa de tarefa agendada de logon em vez destas duas linhas.
+REM
+REM SEM ACENTO NEM CARACTERE NAO-ASCII: o interpretador de lote roda em code
+REM page OEM (437/850), nao em UTF-8.
 REM ==========================================================================
 
 setlocal
 
-set "OEMLOG=C:\OEM\install.log"
-echo [%DATE% %TIME%] iniciando o mapeamento do compartilhamento> "%OEMLOG%"
+REM Relativo ao proprio script: se o destino da copia mudar, log e script
+REM continuam juntos.
+set "OEMLOG=%~dp0install.log"
 
-REM Guarda a credencial cifrada, por usuario, no Gerenciador de Credenciais.
-REM E isto que faz o mapeamento sobreviver a reinicio sem o .bat existir mais.
+set "DRV={{ windows_smb_drive | default('W') }}"
+set "UNC=\\{{ windows_smb_host }}\{{ windows_smb_share }}"
+
+echo [%DATE% %TIME%] iniciando o mapeamento de %UNC% em %DRV%: >> "%OEMLOG%"
+
+REM Guarda a credencial cifrada. E isto que faz o mapeamento sobreviver a
+REM reinicio depois que este arquivo deixar de existir.
 cmdkey /add:{{ windows_smb_host }} /user:{{ windows_smb_user }} /pass:"{{ windows_smb_password }}" >> "%OEMLOG%" 2>&1
+if errorlevel 1 echo [%DATE% %TIME%] FALHOU: cmdkey retornou erro. O mapeamento pode funcionar agora e morrer no primeiro reboot. >> "%OEMLOG%"
 
-net use {{ windows_smb_drive | default('Z') }}: \\{{ windows_smb_host }}\{{ windows_smb_share }} /persistent:yes >> "%OEMLOG%" 2>&1
-if errorlevel 1 (
-  echo [%DATE% %TIME%] FALHOU: net use retornou erro. Confira usuario, senha e se o NAS esta no ar.>> "%OEMLOG%"
-) else (
-  echo [%DATE% %TIME%] OK: unidade {{ windows_smb_drive | default('Z') }}: mapeada.>> "%OEMLOG%"
+REM Retentativa: este script roda UMA vez na vida. Uma falha transitoria no
+REM primeiro logon -- SMB do NAS ainda subindo, DHCP ainda negociando -- deixaria
+REM o mapeamento quebrado para sempre, com recuperacao manual.
+REM
+REM `if defined` e `if errorlevel` sao avaliados em tempo de execucao, entao
+REM funcionam dentro do bloco SEM expansao retardada. Nao ligar `enabledelayed-
+REM expansion` aqui: ela faria `!` em qualquer valor ser comido.
+set "MAPEADO="
+for /L %%i in (1,1,10) do (
+  if not defined MAPEADO (
+    net use %DRV%: "%UNC%" /persistent:yes >> "%OEMLOG%" 2>&1
+    if not errorlevel 1 (
+      set "MAPEADO=1"
+      echo [%DATE% %TIME%] OK: unidade %DRV%: mapeada na tentativa %%i. >> "%OEMLOG%"
+    ) else (
+      echo [%DATE% %TIME%] tentativa %%i falhou; aguardando 6s. >> "%OEMLOG%"
+      timeout /t 6 /nobreak > nul
+    )
+  )
 )
+
+if not defined MAPEADO echo [%DATE% %TIME%] FALHOU: 10 tentativas esgotadas. Confira usuario, senha e se o NAS esta no ar. >> "%OEMLOG%"
 
 endlocal
 
 REM ==========================================================================
-REM ⚠️ APAGA A SI MESMO. Nao remover esta linha.
+REM ATENCAO -- APAGA A SI MESMO. Nao remover.
 REM
-REM Este arquivo carrega a senha do compartilhamento em texto puro. O `cmdkey`
-REM acima ja a guardou cifrada, entao a copia em texto nao tem mais razao de
-REM existir -- e, se ficar, fica em C:\OEM\install.bat dentro do disco do
-REM convidado: o tipo de arquivo que ninguem revisita e que sobrevive a todo
-REM backup daquele disco.
+REM Este arquivo carrega a senha em texto puro. O `cmdkey` acima ja a guardou
+REM cifrada, entao a copia em texto nao tem mais razao de existir -- e, se
+REM ficar, fica em C:\OEM\install.bat dentro do disco do convidado: o tipo de
+REM arquivo que ninguem revisita e que sobrevive a todo backup daquele disco.
 REM
-REM O log ao lado permanece de proposito: ele nao contem a senha, e e como se
+REM O log ao lado permanece de proposito: nao contem a senha, e e como se
 REM descobre depois se o mapeamento funcionou.
+REM
+REM O `(goto) 2>nul &` antes do `del` nao e enfeite: sem ele o cmd tenta ler a
+REM proxima linha de um arquivo que acabou de sumir e imprime "The batch file
+REM cannot be found." na tela, no meio da instalacao, assustando quem assiste.
 REM ==========================================================================
-del /f /q "%~f0"
+(goto) 2>nul & del /f /q "%~f0"

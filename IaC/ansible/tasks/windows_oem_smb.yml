@@ -6,21 +6,35 @@
 # Ainda não há playbook que a inclua: ela existe antes do resto para que o
 # desenho não precise ser redescoberto quando o item sair da prioridade baixa.
 #
-# COMO O ARQUIVO CHEGA AO WINDOWS: o dockur/windows copia para `C:\OEM` tudo
-# que estiver no volume montado em `/oem`, e executa o `install.bat` de dentro
-# dele no passo final da instalação automática. Esta task só escreve o arquivo
-# no host; quem o executa é o instalador do Windows.
+# COMO O ARQUIVO CHEGA AO WINDOWS: o dockur/windows transforma o volume montado
+# em `/oem` na estrutura `$OEM$\$1\OEM` da mídia, e o Setup a copia para
+# `C:\OEM`. O `install.bat` de dentro dela é executado no passo final da
+# instalação automática. Esta task só escreve o arquivo no host; quem o executa
+# é o instalador do Windows.
 #
 # ⚠️ RODA UMA VEZ, na instalação — não a cada boot. Por isso o template usa
 # `cmdkey` mais `net use /persistent:yes`: as duas coisas sobrevivem a reinício
 # sozinhas. Se a credencial mudar depois, o remapeamento é manual ou exige
 # recriar o convidado.
 #
+# ⚠️ PREMISSA NÃO CONFIRMADA, e ela sustenta o mecanismo inteiro: `cmdkey` e
+# `net use /persistent:yes` gravam no perfil da CONTA QUE EXECUTA. Rodando como
+# SYSTEM, o log diz OK e o usuário interativo nunca vê a unidade. O cabeçalho do
+# template registra o que foi apurado no código do dockur e o teste de uma linha
+# que fecha a questão no primeiro convidado real. Ler antes de confiar nisto.
+#
 # ⚠️ POR QUE O SMB VAI DIRETO NO CONVIDADO, e não pelo `/shared` do dockur: o
 # `/shared` chega ao Windows como compartilhamento de rede, então usar o CIFS do
 # host faria o caminho virar SMB → cifs → SMB. Dois saltos para arquivo de vídeo
 # grande, que é a carga esperada. A alternativa foi considerada e descartada por
 # desempenho — ver §3.11.8 do roadmap.
+#
+# ⚠️ A SENHA EM TEXTO PURO PERSISTE NO HOST. O template apaga a si mesmo no
+# convidado, mas a cópia renderizada aqui fica em `/srv/containers/windows/oem/`
+# indefinidamente. Modo 0600 e dono root limitam a leitura, mas o diretório está
+# no rootfs do LXC e entra no `vzdump` dele. Excluí-lo do backup é item do
+# §3.11.8, junto com o disco de 64 GB do convidado — decisão de plano, não desta
+# task.
 # ==============================================================================
 
 - name: Validar as variáveis obrigatórias do compartilhamento do convidado Windows
@@ -41,19 +55,63 @@
       privilégio no OMV — nunca o administrativo.
     quiet: true
 
-# O interpretador de lote do Windows expande `%` e quebra em `"`, `^`, `&`,
-# `<`, `>` e `|` mesmo dentro de aspas. Uma senha com qualquer um desses gera
-# um `.bat` sintaticamente válido que mapeia a unidade errada, ou vaza parte da
-# senha para o log — falha silenciosa, e das piores de diagnosticar. Barrar na
-# renderização é mais barato que descobrir no convidado.
-- name: Recusar senha com caractere que o interpretador de lote do Windows expande
+# Cada valor é validado por LISTA DE PERMITIDOS, não por lista de proibidos.
+#
+# ⚠️ A escolha é deliberada e foi forçada por um resultado de teste, não por
+# gosto. A tentativa original barrava `% " ^ & < > | ! \`, e a barra invertida
+# se mostrou impossível de detectar de forma confiável: cada estilo de aspas do
+# YAML consome um nível de escape diferente, então a mesma expressão precisa de
+# 2, 4 ou 8 barras conforme onde está escrita, e `search`, `regex_search`,
+# `replace` e `split` todos devolveram "não tem barra" para um valor que
+# comprovadamente tinha uma (`length` == 9 em `com\barra`). Um gate que responde
+# "está limpo" para entrada suja é pior que gate nenhum.
+#
+# A lista de permitidos não contém nenhuma barra invertida, então não há o que
+# escapar — e ela falha fechada: caractere novo e desconhecido é recusado por
+# omissão, em vez de passar porque ninguém lembrou de proibi-lo.
+#
+# O QUE ISSO EVITA, concretamente: `%` é expandido antes de a citação ser
+# considerada, `"` encerra a citação, e `\` no fim do valor produz
+# `/pass:"senha\"` — o parser de argumentos da CRT lê `\"` como aspa escapada, o
+# argumento não fecha e o `cmdkey` recebe lixo. Os três geram um `.bat`
+# sintaticamente VÁLIDO que faz outra coisa: mapeia a unidade errada, ou vaza
+# parte da senha para o log. Falha silenciosa, num convidado que ninguém alcança
+# por SSH.
+#
+# ⚠️ Usuário de domínio (`DOMINIO\usuario`) é recusado de propósito: o NAS é um
+# OMV autônomo, com usuários locais. Se um dia precisar de domínio, a barra volta
+# a ser problema e o desenho precisa mudar junto — não relaxe só o regex.
+- name: Validar os valores do compartilhamento contra o interpretador de lote do Windows
   ansible.builtin.assert:
     that:
-      - windows_smb_password is not search('[%"^&<>|]')
+      - windows_smb_password is match('^[A-Za-z0-9_@#:.,+=~-]+$')
+      - windows_smb_host is match('^[A-Za-z0-9._-]+$')
+      - windows_smb_user is match('^[A-Za-z0-9._@-]+$')
+      - windows_smb_share is match('^[A-Za-z0-9 ._-]+$')
     fail_msg: >-
-      A senha em windows_smb_password contém um destes caracteres: % " ^ & < > |
-      Todos têm significado especial no interpretador de lote do Windows e não
-      são escapáveis de forma confiável. Gere outra senha no vault.
+      Um dos valores do compartilhamento tem caractere fora da lista de
+      permitidos. Aceito: letras, dígitos e `_ @ # : . , + = ~ -` na senha;
+      letras, dígitos e `. _ -` no host; o mesmo mais `@` no usuário; o mesmo
+      mais espaço no nome do compartilhamento. Barra invertida, `%`, aspa, `!`,
+      `^`, `&`, `<`, `>` e `|` são recusados porque o interpretador de lote do
+      Windows os trata de forma que não é escapável com segurança aqui. Gere
+      outro valor — a senha, no vault — em vez de tentar escapar.
+    quiet: true
+
+# A letra vira `set "DRV=X"` e depois `net use %DRV%:` no template. Um valor
+# como 'Z:' renderiza `Z::`, que falha só dentro do convidado, sem erro nenhum
+# do lado do Ansible.
+#
+# Faixa D-Y de propósito: A/B são disquete, C é o sistema, e Z é a letra que o
+# `/shared` do próprio dockur ocupa (§3.11.8) — colidir com ela faz as duas
+# montagens brigarem, e quem ganha depende de ordem de execução.
+- name: Validar a letra de unidade do compartilhamento
+  ansible.builtin.assert:
+    that:
+      - windows_smb_drive | default('W') is match('^[D-Yd-y]$')
+    fail_msg: >-
+      windows_smb_drive precisa ser UMA letra entre D e Y, sem dois-pontos.
+      A e B são disquete, C é o sistema, e Z é a letra do `/shared` do dockur.
     quiet: true
 
 - name: Criar o diretório OEM do convidado Windows
@@ -65,12 +123,26 @@
     mode: "0700"
 
 # `no_log` porque o módulo template expõe o conteúdo renderizado em `--diff` e
-# em modo verboso, e este conteúdo carrega a senha. Não é supressão de erro: a
-# task ainda falha normalmente, só não imprime o que escreveu.
+# em modo verboso, e esse conteúdo carrega a senha.
 #
-# `newline_sequence` é obrigatório e não é preciosismo: o `.gitattributes` deste
-# repositório normaliza todo `.j2` para LF, e arquivo de lote com LF quebra o
-# `del "%~f0"` do fim do template. Fonte em LF no git, renderização em CRLF.
+# ⚠️ O CUSTO É REAL: `no_log` censura o resultado INTEIRO, inclusive a mensagem
+# de erro. Uma falha aparece como `{"censored": "the output has been hidden..."}`
+# — sem msg, sem caminho, sem motivo. Diretório inexistente, permissão negada e
+# erro de sintaxe Jinja viram todos a mesma linha opaca. Para diagnosticar,
+# remova o `no_log` temporariamente e rode contra um vault de teste, nunca
+# contra o de produção. Os asserts acima cobrem a maior classe de falha
+# (variável ausente ou malformada), o que torna o custo aceitável.
+#
+# `newline_sequence` produz CRLF a partir de um fonte que o `.gitattributes`
+# obriga a ser LF (`*.j2 text eol=lf`). ⚠️ É defesa em profundidade, não
+# necessidade: o próprio dockur roda `unix2dos` no arquivo antes de embutir na
+# mídia (`src/install.sh`). Mantido para que o arquivo escrito no host já esteja
+# correto se algum dia for consumido por outro caminho.
+#
+# O `# noqa` abaixo: `ansible-lint` (profile production) reprova o caminho
+# relativo, mas `templates/` é irmão de `tasks/` e não há raiz de role aqui —
+# esta é uma task avulsa incluída por playbook, não um role. Mesmo precedente de
+# `playbooks/00-proxmox-api-token.yml`.
 - name: Renderizar o install.bat que mapeia o compartilhamento do NAS
   ansible.builtin.template:
     src: "{{ playbook_dir }}/../templates/windows/install.bat.j2"  # noqa: no-relative-paths
