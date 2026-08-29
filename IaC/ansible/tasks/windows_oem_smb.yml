@@ -1,0 +1,82 @@
+---
+# ==============================================================================
+# windows_oem_smb — mapeia o compartilhamento do NAS dentro do convidado Windows
+# ==============================================================================
+# Task reutilizável, escrita para o convidado Windows em LXC (roadmap §3.11).
+# Ainda não há playbook que a inclua: ela existe antes do resto para que o
+# desenho não precise ser redescoberto quando o item sair da prioridade baixa.
+#
+# COMO O ARQUIVO CHEGA AO WINDOWS: o dockur/windows copia para `C:\OEM` tudo
+# que estiver no volume montado em `/oem`, e executa o `install.bat` de dentro
+# dele no passo final da instalação automática. Esta task só escreve o arquivo
+# no host; quem o executa é o instalador do Windows.
+#
+# ⚠️ RODA UMA VEZ, na instalação — não a cada boot. Por isso o template usa
+# `cmdkey` mais `net use /persistent:yes`: as duas coisas sobrevivem a reinício
+# sozinhas. Se a credencial mudar depois, o remapeamento é manual ou exige
+# recriar o convidado.
+#
+# ⚠️ POR QUE O SMB VAI DIRETO NO CONVIDADO, e não pelo `/shared` do dockur: o
+# `/shared` chega ao Windows como compartilhamento de rede, então usar o CIFS do
+# host faria o caminho virar SMB → cifs → SMB. Dois saltos para arquivo de vídeo
+# grande, que é a carga esperada. A alternativa foi considerada e descartada por
+# desempenho — ver §3.11.8 do roadmap.
+# ==============================================================================
+
+- name: Validar as variáveis obrigatórias do compartilhamento do convidado Windows
+  ansible.builtin.assert:
+    that:
+      - windows_smb_host is defined
+      - windows_smb_host | length > 0
+      - windows_smb_share is defined
+      - windows_smb_share | length > 0
+      - windows_smb_user is defined
+      - windows_smb_user | length > 0
+      - windows_smb_password is defined
+      - windows_smb_password | length > 0
+    fail_msg: >-
+      Faltam variáveis do compartilhamento do convidado Windows. Defina
+      windows_smb_host, windows_smb_share e windows_smb_user no inventário, e
+      windows_smb_password no vault. O usuário deve ser dedicado e de menor
+      privilégio no OMV — nunca o administrativo.
+    quiet: true
+
+# O interpretador de lote do Windows expande `%` e quebra em `"`, `^`, `&`,
+# `<`, `>` e `|` mesmo dentro de aspas. Uma senha com qualquer um desses gera
+# um `.bat` sintaticamente válido que mapeia a unidade errada, ou vaza parte da
+# senha para o log — falha silenciosa, e das piores de diagnosticar. Barrar na
+# renderização é mais barato que descobrir no convidado.
+- name: Recusar senha com caractere que o interpretador de lote do Windows expande
+  ansible.builtin.assert:
+    that:
+      - windows_smb_password is not search('[%"^&<>|]')
+    fail_msg: >-
+      A senha em windows_smb_password contém um destes caracteres: % " ^ & < > |
+      Todos têm significado especial no interpretador de lote do Windows e não
+      são escapáveis de forma confiável. Gere outra senha no vault.
+    quiet: true
+
+- name: Criar o diretório OEM do convidado Windows
+  ansible.builtin.file:
+    path: "{{ windows_oem_dir | default('/srv/containers/windows/oem') }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+# `no_log` porque o módulo template expõe o conteúdo renderizado em `--diff` e
+# em modo verboso, e este conteúdo carrega a senha. Não é supressão de erro: a
+# task ainda falha normalmente, só não imprime o que escreveu.
+#
+# `newline_sequence` é obrigatório e não é preciosismo: o `.gitattributes` deste
+# repositório normaliza todo `.j2` para LF, e arquivo de lote com LF quebra o
+# `del "%~f0"` do fim do template. Fonte em LF no git, renderização em CRLF.
+- name: Renderizar o install.bat que mapeia o compartilhamento do NAS
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/../templates/windows/install.bat.j2"  # noqa: no-relative-paths
+    dest: "{{ windows_oem_dir | default('/srv/containers/windows/oem') }}/install.bat"
+    owner: root
+    group: root
+    mode: "0600"
+    newline_sequence: "\r\n"
+  no_log: true

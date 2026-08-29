@@ -1,0 +1,51 @@
+@echo off
+REM ==========================================================================
+REM install.bat — mapeia o compartilhamento do NAS no convidado Windows
+REM ==========================================================================
+REM
+REM Renderizado por tasks/windows_oem_smb.yml. NAO editar no convidado: o
+REM arquivo e reescrito a cada execucao do playbook, e o que vale e o template.
+REM
+REM QUANDO RODA: uma unica vez, no passo final da instalacao automatica do
+REM dockur/windows. A pasta montada em /oem e copiada para C:\OEM e este
+REM arquivo e executado la. Nao roda a cada boot -- por isso o mapeamento
+REM precisa sobreviver sozinho, e e o que `cmdkey` mais `/persistent:yes`
+REM garantem: o primeiro guarda a credencial cifrada no Gerenciador de
+REM Credenciais do Windows, o segundo persiste a letra de unidade no perfil.
+REM
+REM SEM ACENTO DE PROPOSITO: o interpretador de lote roda em code page OEM
+REM (437/850), nao em UTF-8. Acento aqui vira caractere corrompido na tela e,
+REM em caminho de arquivo, erro de "nao encontrado".
+REM ==========================================================================
+
+setlocal
+
+set "OEMLOG=C:\OEM\install.log"
+echo [%DATE% %TIME%] iniciando o mapeamento do compartilhamento> "%OEMLOG%"
+
+REM Guarda a credencial cifrada, por usuario, no Gerenciador de Credenciais.
+REM E isto que faz o mapeamento sobreviver a reinicio sem o .bat existir mais.
+cmdkey /add:{{ windows_smb_host }} /user:{{ windows_smb_user }} /pass:"{{ windows_smb_password }}" >> "%OEMLOG%" 2>&1
+
+net use {{ windows_smb_drive | default('Z') }}: \\{{ windows_smb_host }}\{{ windows_smb_share }} /persistent:yes >> "%OEMLOG%" 2>&1
+if errorlevel 1 (
+  echo [%DATE% %TIME%] FALHOU: net use retornou erro. Confira usuario, senha e se o NAS esta no ar.>> "%OEMLOG%"
+) else (
+  echo [%DATE% %TIME%] OK: unidade {{ windows_smb_drive | default('Z') }}: mapeada.>> "%OEMLOG%"
+)
+
+endlocal
+
+REM ==========================================================================
+REM ⚠️ APAGA A SI MESMO. Nao remover esta linha.
+REM
+REM Este arquivo carrega a senha do compartilhamento em texto puro. O `cmdkey`
+REM acima ja a guardou cifrada, entao a copia em texto nao tem mais razao de
+REM existir -- e, se ficar, fica em C:\OEM\install.bat dentro do disco do
+REM convidado: o tipo de arquivo que ninguem revisita e que sobrevive a todo
+REM backup daquele disco.
+REM
+REM O log ao lado permanece de proposito: ele nao contem a senha, e e como se
+REM descobre depois se o mapeamento funcionou.
+REM ==========================================================================
+del /f /q "%~f0"
