@@ -222,14 +222,18 @@ objeto.
 │   │   ├── tasks/              # Tasks reutilizáveis, incluídas por playbook:
 │   │   │                       #   validate_vault, Portainer, regras do usuário docker,
 │   │   │                       #   detect/elect_nut_primary (07), node_exporter (00-proxmox),
-│   │   │                       #   omv_mount_filesystems + mergerfs_pools (00-omv)
+│   │   │                       #   omv_mount_filesystems + mergerfs_pools (00-omv),
+│   │   │                       #   windows_oem_smb (convidado Windows; sem playbook ainda)
 │   │   ├── templates/network/  # openwrt_{system,dhcp,firewall,wireless}.j2 + opnsense/: config.xml.j2 (esqueleto de includes) e 10 partials orientados a dado — ver IaC/ansible/README.md
 │   │   ├── templates/nut/      # ups.conf, upsd.{conf,users}, upsmon.conf, nut.conf, udev, tmpfiles (07-nut-ups)
 │   │   ├── templates/omv/      # mergerfs-cache-mover.{sh,service,timer}.j2 (00-omv)
 │   │   ├── templates/proxmox/  # proxmox_{datacenter,interfaces,storage}.j2
 │   │   ├── templates/terraform/  # tokens.auto.tfvars.j2 (escrito por 00-proxmox-api-token)
-│   │   ├── tests/               # Render do template do OPNsense fora da caixa (make render-opnsense)
-│   │   │   ├── render_opnsense.py  # Jinja com trim_blocks=True, igual ao Ansible
+│   │   ├── templates/windows/  # install.bat.j2 — mapeia o SMB do NAS no convidado (§3.11 do roadmap)
+│   │   ├── tests/               # Render de templates fora da caixa: OPNsense (baseline), monitoring e proxmox_interfaces — make render-*
+│   │   │   ├── render_opnsense.py  # Jinja com trim_blocks=True, igual ao Ansible; compara com baseline congelado
+│   │   │   ├── render_monitoring.py  # Render da stack de monitoramento com 2 hosts por grupo
+│   │   │   ├── render_proxmox_ifaces.py  # (1) afirma que o assert de sub-rede do 00-proxmox-setup.yml existe e tem as 3 condições; (2) renderiza proxmox_interfaces.j2 (RFC 5737). O gate EFETIVO é o assert do playbook
 │   │   │   ├── fixtures/       # Variáveis de exemplo (RFC 5737, MAC de documentação IANA); isenção por ARQUIVO no gate, nunca por diretório
 │   │   │   ├── baseline/       # Render congelado da fase 0 — nunca regenerar
 │   │   │   └── expected/       # Diff aprovado por fase, comparado byte a byte
@@ -406,8 +410,13 @@ make check     # o mesmo conjunto que a CI roda
 `shellcheck`, `terraform fmt`), `validate-compose`, `validate-ansible`,
 `validate-patterns` (a forma dos dois arquivos de padrões),
 `check-common-copies` (as cópias de `00-common.yml` em `prod/` e `dev/` não
-divergiram de `_common/all.yml`), `links`, `test-bootstrap` e `render-opnsense`
-(o render do template contra o baseline congelado). `make secrets` fica de fora,
+divergiram de `_common/all.yml`), `links`, `test-bootstrap` e os três renders de
+template fora da caixa: `render-opnsense` (contra o baseline congelado da fase 0),
+`render-monitoring` (render da stack de monitoramento com 2 hosts por grupo) e
+`render-proxmox-ifaces` (afirma que o assert de sub-rede do
+`00-proxmox-setup.yml` existe e mantém as 3 condições — apagar/descaracterizar o
+assert deixa o `make check` vermelho — e renderiza `proxmox_interfaces.j2`; o
+gate EFETIVO é o assert do playbook, este teste prova que ele está lá). `make secrets` fica de fora,
 e a CI o chama por último em passo próprio: a falha dele não é "corrija o
 estilo", é "isto não pode ser publicado".
 

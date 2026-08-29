@@ -49,8 +49,10 @@ ansible/
 │   │   ├── opnsense/          # Esqueleto (config.xml.j2) + 10 partials orientados a dado — ver seção abaixo
 │   │   └── openwrt_*.j2       # 4 templates do AP/roteador Wi-Fi, ainda monolíticos (fora deste refactor)
 │   └── proxmox/                # datacenter.cfg, interfaces e storage.cfg do host Proxmox VE
-├── tests/                     # Render do OPNsense fora da caixa — ver "make render-opnsense" abaixo
-│   ├── render_opnsense.py     # Jinja2 com trim_blocks=True, igual ao Ansible; nenhum inventário real
+├── tests/                     # Render de templates fora da caixa: OPNsense, monitoring e proxmox_interfaces — ver "make render-*" abaixo
+│   ├── render_opnsense.py     # Jinja2 com trim_blocks=True, igual ao Ansible; nenhum inventário real (make render-opnsense)
+│   ├── render_monitoring.py   # Render da stack de monitoramento com 2 hosts por grupo (make render-monitoring)
+│   ├── render_proxmox_ifaces.py  # (1) afirma que o assert de sub-rede do playbook existe e tem as 3 condições; (2) renderiza proxmox_interfaces.j2, RFC 5737 (make render-proxmox-ifaces)
 │   ├── fixtures/opnsense.yml  # Variáveis de exemplo — RFC 5737, MAC de documentação IANA
 │   ├── baseline/opnsense-fase0.xml  # Render congelado da fase 0 deste refactor — nunca regenerar
 │   └── expected/               # Diff aprovado por fase, comparado byte a byte (ver expected/README.md)
@@ -159,6 +161,29 @@ make render-opnsense
 ```
 
 Encadeado em `make check`, então roda em toda CI e a cada verificação local antes do PR.
+
+Este não é o único render fora da caixa. O baseline congelado descrito acima é
+específico do OPNsense — os outros dois provam a mudança de outra forma, mas no
+mesmo espírito (Jinja2 fora do Ansible, sem hardware, sem topologia real) e
+também entram em `make check`:
+
+- `make render-monitoring` — [`tests/render_monitoring.py`](./tests/render_monitoring.py)
+  renderiza os templates da stack de monitoramento com 2 hosts por grupo, provando
+  que o template lida com mais de um alvo.
+- `make render-proxmox-ifaces` — [`tests/render_proxmox_ifaces.py`](./tests/render_proxmox_ifaces.py)
+  protege o gate de sub-rede do Proxmox em duas camadas. O gate EFETIVO é o
+  `assert` da task "Abortar se o gateway e o endereço do nó caírem em /24
+  diferentes" em [`playbooks/00-proxmox-setup.yml`](./playbooks/00-proxmox-setup.yml),
+  avaliado no apply contra os facts do host — este teste **não** é o gate.
+  Camada 1: abre o playbook, localiza a task pelo `name` e afirma que o `that:`
+  dela ainda contém as três condições do gate (prefixo `== 24`, `'/' not in
+  proxmox_gateway_ip`, e a comparação de 3 octetos entre `ansible_host` e
+  `proxmox_gateway_ip`). Apagar ou descaracterizar o assert no playbook faz
+  este teste FALHAR — o teste verifica a PRESENÇA e a FORMA do gate real, não
+  uma cópia da lógica dele. Camada 2: renderiza `proxmox_interfaces.j2` com
+  fixtures RFC 5737 e confere que o template emite `address`/`gateway` a partir
+  das variáveis (o template não decide nada; a decisão é do assert do playbook,
+  coberto pela Camada 1).
 
 ---
 
