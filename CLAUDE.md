@@ -600,6 +600,14 @@ continuava consistentemente indentado, portanto sem erro. Depois de
 reformatação em massa, **compare a estrutura parseada**, antes e depois, em vez
 de confiar no linter.
 
+⚠️ **Vale para teste também: teste verde não é o mesmo que alvo testado.** Um
+teste que **reimplementa** a lógica do alvo passa mesmo com o alvo apagado — ele
+valida a própria cópia, não o código. Um teste de gate (o `assert` de um
+playbook, uma regra de CI) deve afirmar a **presença e a forma do alvo real** —
+ex.: fazer parse do playbook e conferir que a condição ainda está lá. Prove com
+o **controle negativo**: apague o alvo e veja o teste ficar vermelho. Se
+continuar verde, o teste não testa o que promete.
+
 ⚠️ `ignore_errors: true` só entra quando a falha é **esperada por definição** —
 por exemplo `kldload coretemp` contra `amdtemp`, em que um dos dois sempre falha
 conforme o fabricante da CPU. Nesse caso, use `failed_when:` com a condição
