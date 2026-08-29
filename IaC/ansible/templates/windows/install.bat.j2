@@ -3,8 +3,9 @@ REM ==========================================================================
 REM install.bat -- mapeia o compartilhamento do NAS no convidado Windows
 REM ==========================================================================
 REM
-REM Renderizado por tasks/windows_oem_smb.yml. NAO editar no convidado: o
-REM arquivo e reescrito a cada execucao do playbook, e o que vale e o template.
+REM Renderizado por tasks/windows_oem_smb.yml. NAO editar no convidado: a
+REM copia de la se autodeleta no fim deste script e NUNCA mais e reescrita.
+REM Quem o playbook reescreve e a copia do host; o que vale e o template.
 REM
 REM QUANDO RODA: uma unica vez, no passo final da instalacao automatica do
 REM dockur/windows. A pasta montada em /oem vira `$OEM$\$1\OEM` na midia e o
@@ -20,17 +21,24 @@ REM   EXECUTA. Se isto rodar como SYSTEM, o `net use` funciona naquela sessao,
 REM   o log abaixo diz OK, e o usuario interativo NUNCA ve a unidade -- falha
 REM   silenciosa que so aparece no primeiro logon.
 REM
-REM   O que foi apurado no codigo do dockur (29/08/2026): o arquivo de resposta
-REM   (`assets/win10x64.xml:326`) invoca `SetupComplete.cmd logon` dentro de
-REM   <FirstLogonCommands> do passe `oobeSystem`, que roda NO CONTEXTO DO
-REM   USUARIO. Isso sustenta o desenho.
+REM   CONFIRMADO NA FONTE DO DOCKUR em 29/08/2026, e a resposta e favoravel:
 REM
-REM   NAO CONFIRMADO: o argumento `logon` indica que o mesmo script tambem
-REM   roda numa fase anterior como SYSTEM, e nao foi possivel localizar onde
-REM   `C:\OEM\install.bat` e de fato invocado -- ele nao aparece no XML.
-REM   CONFERIR NO PRIMEIRO CONVIDADO REAL: apos a instalacao, logar como o
-REM   usuario e rodar `net use`. Se a unidade nao aparecer, foi SYSTEM, e o
-REM   desenho precisa de tarefa agendada de logon em vez destas duas linhas.
+REM     assets/win10x64.xml:326  <FirstLogonCommands> do passe oobeSystem chama
+REM                              `SetupComplete.cmd logon`
+REM     assets/win10x64.cmd:10   `if /i "%~1"=="logon" goto logon`
+REM     assets/win10x64.cmd:13   `:setup`  <- ramo SYSTEM
+REM     assets/win10x64.cmd:80   `:logon`
+REM     assets/win10x64.cmd:110  `if exist "C:\OEM\install.bat" start ...`
+REM
+REM   A linha 110 esta DENTRO do ramo :logon, alcancavel so pelo argumento
+REM   `logon`. O ramo SYSTEM (:setup) nao invoca o install.bat. Somado ao
+REM   <AutoLogon> que o XML declara, isto roda no contexto do usuario
+REM   interativo e elevado -- que e exatamente o que `cmdkey` e
+REM   `/persistent:yes` precisam.
+REM
+REM   O `whoami` abaixo grava a conta no log a cada execucao. O log sobrevive a
+REM   autodelecao deste arquivo, entao a resposta fica registrada no convidado
+REM   sem depender de alguem lembrar de conferir.
 REM
 REM SEM ACENTO NEM CARACTERE NAO-ASCII: o interpretador de lote roda em code
 REM page OEM (437/850), nao em UTF-8.
@@ -47,6 +55,14 @@ set "UNC=\\{{ windows_smb_host }}\{{ windows_smb_share }}"
 
 echo [%DATE% %TIME%] iniciando o mapeamento de %UNC% em %DRV%: >> "%OEMLOG%"
 
+REM Registra a conta que executa. E a premissa de que `cmdkey` e
+REM `/persistent:yes` dependem, e o log sobrevive a autodelecao deste arquivo.
+whoami >> "%OEMLOG%" 2>&1
+
+REM Torna o script re-executavel: letra ja mapeada e falha PERMANENTE, e sem
+REM isto o laco abaixo gastaria as cinco tentativas repetindo o mesmo erro.
+net use %DRV%: /delete /y > nul 2>&1
+
 REM Guarda a credencial cifrada. E isto que faz o mapeamento sobreviver a
 REM reinicio depois que este arquivo deixar de existir.
 cmdkey /add:{{ windows_smb_host }} /user:{{ windows_smb_user }} /pass:"{{ windows_smb_password }}" >> "%OEMLOG%" 2>&1
@@ -59,21 +75,35 @@ REM
 REM `if defined` e `if errorlevel` sao avaliados em tempo de execucao, entao
 REM funcionam dentro do bloco SEM expansao retardada. Nao ligar `enabledelayed-
 REM expansion` aqui: ela faria `!` em qualquer valor ser comido.
+REM
+REM CINCO tentativas, nao dez, e sem espera na ultima: com o NAS fora do ar cada
+REM `net use` ja bloqueia 20-30s na resolucao do nome. Dez tentativas com espera
+REM deixariam uma janela de console aberta por ate cinco minutos no primeiro
+REM logon do usuario, a vista, parecendo travamento.
+REM
+REM `ping` em vez de `timeout`: o `timeout` aborta com "Input redirection is not
+REM supported" quando a entrada padrao nao e console. Aqui funciona, porque o
+REM dockur invoca via `start ... cmd.exe`, que cria console proprio -- mas isso
+REM e circunstancia do chamador, nao garantia. O `ping` e invariante ao contexto.
 set "MAPEADO="
-for /L %%i in (1,1,10) do (
+for /L %%i in (1,1,5) do (
   if not defined MAPEADO (
     net use %DRV%: "%UNC%" /persistent:yes >> "%OEMLOG%" 2>&1
     if not errorlevel 1 (
       set "MAPEADO=1"
       echo [%DATE% %TIME%] OK: unidade %DRV%: mapeada na tentativa %%i. >> "%OEMLOG%"
     ) else (
-      echo [%DATE% %TIME%] tentativa %%i falhou; aguardando 6s. >> "%OEMLOG%"
-      timeout /t 6 /nobreak > nul
+      if %%i LSS 5 (
+        echo [%DATE% %TIME%] tentativa %%i falhou; aguardando 6s. >> "%OEMLOG%"
+        ping -n 7 127.0.0.1 > nul 2>&1
+      ) else (
+        echo [%DATE% %TIME%] tentativa %%i falhou. >> "%OEMLOG%"
+      )
     )
   )
 )
 
-if not defined MAPEADO echo [%DATE% %TIME%] FALHOU: 10 tentativas esgotadas. Confira usuario, senha e se o NAS esta no ar. >> "%OEMLOG%"
+if not defined MAPEADO echo [%DATE% %TIME%] FALHOU: 5 tentativas esgotadas. Confira usuario, senha e se o NAS esta no ar. >> "%OEMLOG%"
 
 endlocal
 
