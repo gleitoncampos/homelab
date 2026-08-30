@@ -82,6 +82,17 @@ alvo. Por isso o inventário consolidado rotula **todo** número de estado como
 `ALVO` ou `REAL`: sem o rótulo, os dois viram fatos contraditórios sobre o mesmo
 objeto.
 
+⚠️ **Ao reconciliar produção → template, cada campo do render sai do estado
+vivo observado, não de "boa prática genérica".** Ao portar uma configuração
+que já roda para o IaC, a tentação é preencher os campos com o que "geralmente
+se faz" — e a boa prática genérica pode ser incompatível com a topologia real.
+Exemplo real: `blockpriv=1` numa interface WAN é boa prática de manual, mas a
+segunda WAN entra por DHCP e o `blockpriv` derruba a própria negociação — o
+vivo tinha `blockbogons=1` só, e era essa a resposta. Antes de escrever um
+valor de config que o equipamento vivo já tem, **leia o valor no equipamento**;
+não o deduza do que costuma ser certo. É a mesma premissa de "não adivinhar,
+checar", aplicada ao campo individual de um template de reconciliação.
+
 ---
 
 ## 🏗️ Premissas de Arquitetura & Padrões Tecnológicos
