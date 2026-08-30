@@ -46,7 +46,7 @@ upnp_allowed_source: "198.51.100.0/24"
 
 # Listas de domínio do DNSBL (_dns.xml.j2) — sobrescrevem o default vazio de
 # group_vars/network/10-defaults.yml para exercitar o caminho não-vazio do
-# template, mesmo padrão de opnsense_gateway_monitor_ip abaixo. Domínio de
+# template, mesmo padrão de opnsense_wan_monitor_ipv4 abaixo. Domínio de
 # documentação (RFC 2606, sufixo .example), nunca o site ou dispositivo real
 # de ninguém.
 opnsense_dnsbl_allowlists: "shop.example,bank.example"
@@ -62,10 +62,19 @@ opnsense_dnsbl_blocklists: "iot-vendor.example,privaterelay.example"
 opnsense_ids_homenet: "198.51.100.0/24,203.0.113.0/24"
 opnsense_unbound_privateaddress: "192.0.2.0/24,198.51.100.0/24,203.0.113.0/24"
 
-# D4: sobrescreve o default de _common/opnsense.yml (9.9.9.9) para exercitar o
+# D4: sobrescreve o default de _common/opnsense.yml (1.1.1.1) para exercitar o
 # caminho não-default do template, mesmo padrão de opnsense_webgui_althostname
 # acima. RFC 5737, não IP real.
-opnsense_gateway_monitor_ip: "192.0.2.9"
+opnsense_wan_monitor_ipv4: "192.0.2.9"
+
+# 2ª WAN (CLARO): NIC física e IPs de monitor dos gateways novos. Os IPs de
+# monitor são anycast PÚBLICO (Cloudflare/Google), não topologia — batem com o
+# 10-defaults.yml versionado, que os carrega reais pelo mesmo motivo. A NIC é
+# nomenclatura de device (RFC não se aplica), espelha passthrough_wan_interface.
+passthrough_wan2_interface: "enp4s0"
+opnsense_wan_monitor_ipv6: "2606:4700:4700::1111"
+opnsense_wan2_monitor_ipv4: "8.8.8.8"
+opnsense_wan2_monitor_ipv6: "2001:4860:4860::8888"
 
 vlans:
   - tag: 10

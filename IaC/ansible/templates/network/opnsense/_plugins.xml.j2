@@ -16,8 +16,8 @@
 
    D3: cron origin=IDS enabled 0 -> 1.
    D4: Gateways/gateway_item monitor_disable 1 -> 0; monitor recebe
-   opnsense_gateway_monitor_ip, SEM default aqui — o default (9.9.9.9,
-   Quad9, mesmo de qualquer instalação) mora só em _common/opnsense.yml,
+   opnsense_wan_monitor_ipv4, SEM default aqui — o default (1.1.1.1,
+   Cloudflare, anycast público) mora só em _common/opnsense.yml,
    igual a opnsense_ids_homenet: se a variável sumir do dado,
    StrictUndefined derruba o render em vez de recuar em silêncio para
    Quad9. latencylow/high e losslow/high passam a existir porque o
@@ -507,9 +507,93 @@
         <monitor_noroute>0</monitor_noroute>
         <monitor_killstates>0</monitor_killstates>
         <monitor_killstates_priority>0</monitor_killstates_priority>
-        <monitor>{{ opnsense_gateway_monitor_ip }}</monitor>
+        <monitor>{{ opnsense_wan_monitor_ipv4 }}</monitor>
         <force_down>0</force_down>
         <priority>255</priority>
+        <weight>1</weight>
+        <latencylow>200</latencylow>
+        <latencyhigh>1000</latencyhigh>
+        <losslow>10</losslow>
+        <losshigh>20</losshigh>
+        <interval/>
+        <time_period/>
+        <loss_interval/>
+        <data_length/>
+      </gateway_item>
+      {# 2ª WAN (CLARO) — 3 gateways novos, espelhando a ESTRUTURA do WAN_GW
+         acima (monitor_disable=0, thresholds de latência/perda). uuids fixos
+         fictícios v4, não os do firewall vivo. monitor via variável nova
+         (anycast público). defaultgw v6 = WAN_PPPOEV6 (a WAN1 é a default v6
+         também); CLARO é backup nos dois protocolos (defaultgw=0). Prioridades
+         255/254/253 escalonam para o failover dos gateway_group. #}
+      <gateway_item uuid="9eb7dc4b-0a81-491c-bdee-1d9aee206bdb">
+        <disabled>0</disabled>
+        <name>CLARO_DHCP</name>
+        <descr>CLARO Gateway</descr>
+        <interface>opt1</interface>
+        <ipprotocol>inet</ipprotocol>
+        <gateway/>
+        <defaultgw>0</defaultgw>
+        <fargw>0</fargw>
+        <monitor_disable>0</monitor_disable>
+        <monitor_noroute>0</monitor_noroute>
+        <monitor_killstates>0</monitor_killstates>
+        <monitor_killstates_priority>0</monitor_killstates_priority>
+        <monitor>{{ opnsense_wan2_monitor_ipv4 }}</monitor>
+        <force_down>0</force_down>
+        <priority>255</priority>
+        <weight>1</weight>
+        <latencylow>200</latencylow>
+        <latencyhigh>1000</latencyhigh>
+        <losslow>10</losslow>
+        <losshigh>20</losshigh>
+        <interval/>
+        <time_period/>
+        <loss_interval/>
+        <data_length/>
+      </gateway_item>
+      <gateway_item uuid="aa164ccf-685e-481a-abc4-bdb6af5fe8d0">
+        <disabled>0</disabled>
+        <name>WAN_PPPOEV6</name>
+        <descr>WAN IPv6 Gateway</descr>
+        <interface>wan</interface>
+        <ipprotocol>inet6</ipprotocol>
+        <gateway/>
+        <defaultgw>1</defaultgw>
+        <fargw>0</fargw>
+        <monitor_disable>0</monitor_disable>
+        <monitor_noroute>0</monitor_noroute>
+        <monitor_killstates>0</monitor_killstates>
+        <monitor_killstates_priority>0</monitor_killstates_priority>
+        <monitor>{{ opnsense_wan_monitor_ipv6 }}</monitor>
+        <force_down>0</force_down>
+        <priority>254</priority>
+        <weight>1</weight>
+        <latencylow>200</latencylow>
+        <latencyhigh>1000</latencyhigh>
+        <losslow>10</losslow>
+        <losshigh>20</losshigh>
+        <interval/>
+        <time_period/>
+        <loss_interval/>
+        <data_length/>
+      </gateway_item>
+      <gateway_item uuid="cde56e7d-6a05-4355-ac23-b183157727cc">
+        <disabled>0</disabled>
+        <name>CLARO_DHCP6</name>
+        <descr>CLARO IPv6 Gateway</descr>
+        <interface>opt1</interface>
+        <ipprotocol>inet6</ipprotocol>
+        <gateway/>
+        <defaultgw>0</defaultgw>
+        <fargw>0</fargw>
+        <monitor_disable>0</monitor_disable>
+        <monitor_noroute>0</monitor_noroute>
+        <monitor_killstates>0</monitor_killstates>
+        <monitor_killstates_priority>0</monitor_killstates_priority>
+        <monitor>{{ opnsense_wan2_monitor_ipv6 }}</monitor>
+        <force_down>0</force_down>
+        <priority>253</priority>
         <weight>1</weight>
         <latencylow>200</latencylow>
         <latencyhigh>1000</latencyhigh>

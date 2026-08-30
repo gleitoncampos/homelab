@@ -35,4 +35,18 @@
       <ipaddrv6>pppoev6</ipaddrv6>
       <mss>1420</mss>
     </wan>
+    {# 2ª WAN (CLARO): DHCP na NIC física dedicada (pass-through). No OPNsense a
+       segunda WAN é sempre optN internamente — não existe <wan2>. blockbogons=1
+       espelha o estado vivo; blockpriv NÃO vem do vivo nesta interface (a <wan>
+       tem os dois, esta só bogons). if via variável, mesmo critério de
+       passthrough_wan_interface. #}
+    <opt1>
+      <if>{{ passthrough_wan2_interface }}</if>
+      <descr>CLARO</descr>
+      <enable>1</enable>
+      <spoofmac/>
+      <blockbogons>1</blockbogons>
+      <ipaddr>dhcp</ipaddr>
+      <ipaddrv6>dhcp6</ipaddrv6>
+    </opt1>
   </interfaces>

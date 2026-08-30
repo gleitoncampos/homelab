@@ -8,6 +8,16 @@
 # `99-local.yml` ao lado, gitignorado, carregado depois por ordem alfabética.
 # Sem ele o inventário continua válido — descreve uma rede de documentação em
 # vez desta. Mesmo desenho de `inventories/prod/group_vars/network/`.
+
+# IPs de monitor (dpinger) da 2ª WAN e NIC física dela. Dev não tem OPNsense
+# (grupo [opnsense] vazio), então nenhum host consome estas — ficam só para
+# manter as duas camadas 10-defaults.yml da rede paralelas. Anycast público,
+# não topologia; NIC é nomenclatura de device.
+passthrough_wan2_interface: "enp4s0"
+opnsense_wan_monitor_ipv6: "2606:4700:4700::1111"
+opnsense_wan2_monitor_ipv4: "8.8.8.8"
+opnsense_wan2_monitor_ipv6: "2001:4860:4860::8888"
+
 vlans:
   - tag: 20
     name: "HOMELAB"

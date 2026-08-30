@@ -1,4 +1,4 @@
-@@ -515,16 +494,9 @@
+@@ -515,16 +503,9 @@
      </rule>
    </nat>
    <filter/>
@@ -15,7 +15,7 @@
    <revision>
      <username>ansible</username>
      <description>Provisionado via Ansible</description>
-@@ -539,11 +511,11 @@
+@@ -539,11 +520,11 @@
        <general version="0.0.1">
          <enabled>0</enabled>
        </general>
@@ -29,7 +29,7 @@
        <general>
          <enabled/>
          <preferred_oldsa>0</preferred_oldsa>
-@@ -635,7 +607,7 @@
+@@ -635,7 +616,7 @@
        <Instances/>
        <StaticKeys/>
      </OpenVPN>
@@ -38,7 +38,7 @@
        <zones/>
        <templates/>
      </captiveportal>
-@@ -643,7 +615,7 @@
+@@ -643,7 +624,7 @@
        <jobs>
          <job uuid="29a4a8cb-f14d-4faa-b8f7-6d7ddb0a758c">
            <origin>IDS</origin>
@@ -47,7 +47,7 @@
            <minutes>0</minutes>
            <hours>0</hours>
            <days>*</days>
-@@ -660,7 +632,7 @@
+@@ -660,7 +641,7 @@
        <Lvtemplate version="0.0.1">
          <templates/>
        </Lvtemplate>
@@ -56,7 +56,7 @@
          <geoip>
            <url/>
          </geoip>
-@@ -1031,7 +1003,7 @@
+@@ -1031,7 +1012,7 @@
        <Category version="1.0.0">
          <categories/>
        </Category>

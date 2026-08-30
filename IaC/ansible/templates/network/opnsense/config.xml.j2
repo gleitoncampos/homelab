@@ -295,6 +295,31 @@
     </vlan>
 {% endfor %}
   </vlans>
+  {# Gateway groups (failover multi-WAN). ⚠️ POSIÇÃO: <gateways> é elemento
+     LEGADO de RAIZ do config (irmão de <vlans>/<ppps>), NÃO filho de
+     <OPNsense>. Confirmado na fonte: OPNsense\Routing\Gateways::getGroups lê
+     $config->gateways->gateway_group. Os gateway_item vivem no modelo MVC
+     <OPNsense><Gateways> (_plugins.xml.j2); os group ficam aqui. Cada <item>
+     é GWNAME|TIER — tier menor = mais prioritário. trigger=down: só cai para o
+     próximo tier quando o gateway está inteiramente offline. #}
+  <gateways>
+    <gateway_group>
+      <name>WAN_IPV4</name>
+      <trigger>down</trigger>
+      <descr>Failover IPv4 (WAN -> CLARO)</descr>
+      <ipprotocol>inet</ipprotocol>
+      <item>WAN_GW|1</item>
+      <item>CLARO_DHCP|2</item>
+    </gateway_group>
+    <gateway_group>
+      <name>WAN_IPV6</name>
+      <trigger>down</trigger>
+      <descr>Failover IPv6 (WAN -> CLARO)</descr>
+      <ipprotocol>inet6</ipprotocol>
+      <item>WAN_PPPOEV6|1</item>
+      <item>CLARO_DHCP6|2</item>
+    </gateway_group>
+  </gateways>
   <staticroutes version="1.0.0">
     <route/>
   </staticroutes>
