@@ -120,6 +120,14 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
     rombar = true
   }
 
+  # hostpci1 = segunda WAN (CLARO), adicionada 29/08/2026, endereço via variável.
+  hostpci {
+    device = "hostpci1"
+    id     = var.opnsense_wan2_pci_id
+    pcie   = false
+    rombar = true
+  }
+
   started = true
 
   # Deliberadamente SEM lifecycle.prevent_destroy aqui: diferente dos CTs

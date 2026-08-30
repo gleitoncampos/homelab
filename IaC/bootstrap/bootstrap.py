@@ -738,6 +738,9 @@ ssh_public_key = "{ssh_pub}"
 # Endereço PCI (lspci no nó primário) da NIC de WAN em passthrough.
 opnsense_wan_pci_id = "{resp.get("opnsense_wan_pci_id", "0000:05:00.0")}"
 
+# Endereço PCI (lspci no nó primário) da SEGUNDA NIC de WAN (CLARO) em passthrough.
+opnsense_wan2_pci_id = "{resp.get("opnsense_wan2_pci_id", "0000:04:00.0")}"
+
 # Endereço PCI (lspci no nó secundário) da controladora SATA passada para a VM
 # do OMV. Por ela entram todos os discos de dados do NAS.
 omv_hba_pci_id = "{resp.get("omv_hba_pci_id", "0000:05:00.0")}"

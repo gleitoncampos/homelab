@@ -28,6 +28,7 @@ resp = {
   "rede_alvo": {"cidr": 24, "gateway": "198.51.100.1", "manager": "198.51.100.10",
                 "worker": "198.51.100.11", "omv": "198.51.100.15", "dev": "198.51.100.20"},
   "opnsense_wan_pci_id": "0000:05:00.0",
+  "opnsense_wan2_pci_id": "0000:04:00.0",
   "omv_hba_pci_id": "0000:05:00.0",
   "proxmox": {"backup_storage_primario": "nas-bkp-1",
               "backup_storage_secundario": "nas-bkp-2",

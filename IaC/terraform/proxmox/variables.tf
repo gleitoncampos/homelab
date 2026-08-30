@@ -182,6 +182,16 @@ variable "opnsense_wan_pci_id" {
   EOT
 }
 
+variable "opnsense_wan2_pci_id" {
+  type        = string
+  description = <<-EOT
+    Endereço PCI (formato "0000:04:00") da SEGUNDA NIC de WAN (CLARO) em
+    passthrough VT-d/IOMMU para a VM do OPNsense. Sem default pelo mesmo motivo
+    da primeira (opnsense_wan_pci_id): é específico do hardware do host, obtido
+    via `lspci`, e nunca é o mesmo endereço em duas máquinas diferentes.
+  EOT
+}
+
 # ------------------------------------------------------------------------------
 # CT 200 / CT 201 - Docker Swarm (produção)
 # ------------------------------------------------------------------------------
