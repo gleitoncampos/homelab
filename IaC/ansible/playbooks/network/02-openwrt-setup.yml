@@ -33,6 +33,45 @@
       failed_when: false
       changed_when: "'Installing' in opkg_qol.stdout"
 
+    # =========================================================================
+    # Transição de rede: da rede plana para a VLAN de gerência tagueada
+    # =========================================================================
+    # ⚠️ ESTE TRECHO PODE DEIXAR O AP INALCANÇÁVEL, e é por isso que existe um
+    # failsafe em vez de só cuidado. A gerência sai da rede plana e vai para
+    # uma VLAN tagueada no trunk; se a VLAN não chegar do outro lado do cabo,
+    # o equipamento some da rede e só volta por console ou modo failsafe.
+    #
+    # PRÉ-REQUISITO ENTRE EQUIPAMENTOS: o OPNsense precisa estar tagueando
+    # estas VLANs na porta que recebe o cabo do AP. Aplicar o AP primeiro
+    # isola o AP.
+    - name: Fazer backup persistente das configurações antes de trocar a rede
+      ansible.builtin.raw: |
+        mkdir -p {{ openwrt_failsafe_backup_dir }}
+        for f in {{ openwrt_failsafe_files | join(' ') }}; do
+          [ -f /etc/config/$f ] && cp /etc/config/$f {{ openwrt_failsafe_backup_dir }}/$f
+        done
+        rm -f {{ openwrt_failsafe_confirm_file }}
+        ls {{ openwrt_failsafe_backup_dir }}
+      changed_when: true
+
+    # O failsafe é armado ANTES de qualquer escrita: se o playbook morrer no
+    # meio, o equipamento se recupera sozinho.
+    - name: Armar o failsafe de rede do OpenWrt
+      ansible.builtin.raw: |
+        cat << 'EOF' > /usr/bin/iac-net-failsafe
+        {{ lookup('template', '../../templates/network/openwrt_failsafe.sh.j2') }}
+        EOF
+        chmod +x /usr/bin/iac-net-failsafe
+        start-stop-daemon -S -b -m -p /tmp/iac-net-failsafe.pid -x /bin/sh -- /usr/bin/iac-net-failsafe
+      changed_when: true
+
+    - name: Aplicar arquivo de Rede padronizado em /etc/config/network
+      ansible.builtin.raw: |
+        cat << 'EOF' > /etc/config/network
+        {{ lookup('template', '../../templates/network/openwrt_network.j2') }}
+        EOF
+      changed_when: true
+
     - name: Aplicar arquivo de Sistema & Syslog padronizado em /etc/config/system
       ansible.builtin.raw: |
         cat << 'EOF' > /etc/config/system
@@ -62,6 +101,84 @@
         {{ lookup('template', '../../templates/network/openwrt_dhcp.j2') }}
         EOF
       changed_when: true
+
+    # A troca roda DESTACADA da sessão SSH: reiniciar a rede derruba a conexão
+    # que está executando o comando, e um `raw` síncrono ficaria pendurado até
+    # o timeout, reportando falha de uma coisa que deu certo.
+    - name: Disparar a troca de rede do OpenWrt de forma destacada
+      ansible.builtin.raw: |
+        cat << 'EOF' > /tmp/iac-apply-net.sh
+        #!/bin/sh
+        sleep 3
+        /etc/init.d/network restart
+        sleep 5
+        /etc/init.d/dropbear restart
+        EOF
+        chmod +x /tmp/iac-apply-net.sh
+        start-stop-daemon -S -b -m -p /tmp/iac-apply-net.pid -x /bin/sh -- /tmp/iac-apply-net.sh
+      changed_when: true
+      when: ansible_host != openwrt_mgmt_ip
+
+    - name: Reconectar o AP no endereço e porta novos
+      when: ansible_host != openwrt_mgmt_ip
+      block:
+        # ⚠️ A CONFIRMAÇÃO TEM DE VIR DE CONEXÃO NOVA. Uma sessão SSH já
+        # estabelecida continua fluindo mesmo depois de a interface mudar de
+        # VLAN — confirmar por ela provaria que o socket antigo sobreviveu,
+        # não que o endereço novo funciona.
+        - name: Encerrar a conexão antiga com o AP
+          ansible.builtin.meta: reset_connection
+
+        - name: Apontar o inventário em memória para o endereço novo
+          ansible.builtin.set_fact:
+            ansible_host: "{{ openwrt_mgmt_ip }}"
+            ansible_port: "{{ openwrt_ssh_port }}"
+
+        # Do nó de controle, não do AP: prova que o caminho de rede inteiro
+        # funciona, inclusive o roteamento do firewall até a VLAN nova.
+        - name: Esperar o AP atender no endereço da VLAN de gerência
+          ansible.builtin.wait_for:
+            host: "{{ openwrt_mgmt_ip }}"
+            port: "{{ openwrt_ssh_port }}"
+            timeout: "{{ (openwrt_failsafe_seconds | int) - 30 }}"
+            delay: 10
+          delegate_to: localhost
+
+        - name: Confirmar o acesso e cancelar o failsafe do OpenWrt
+          ansible.builtin.raw: |
+            touch {{ openwrt_failsafe_confirm_file }}
+            start-stop-daemon -K -p /tmp/iac-net-failsafe.pid 2>/dev/null
+            ip -4 addr show br-lan.{{ openwrt_mgmt_vlan }} | grep inet
+          changed_when: true
+
+      rescue:
+        - name: Avisar que o failsafe vai restaurar o AP sozinho
+          ansible.builtin.debug:
+            msg: >-
+              ⚠️ O AP não respondeu em {{ openwrt_mgmt_ip }}:{{ openwrt_ssh_port }}.
+              O failsafe NÃO foi cancelado, então ele restaura a configuração
+              anterior e reinicia o equipamento dentro da janela de
+              {{ openwrt_failsafe_seconds }}s contada a partir do momento em que
+              foi armado. Causa mais provável: a VLAN {{ openwrt_mgmt_vlan }} não
+              está tagueada na porta do switch/firewall que recebe o cabo do AP.
+              Verifique o outro lado do trunk antes de repetir.
+
+        - name: Esperar o AP voltar no endereço anterior depois do failsafe
+          ansible.builtin.wait_for:
+            host: "{{ hostvars[inventory_hostname]['ansible_host'] | default(inventory_hostname) }}"
+            port: 22
+            timeout: "{{ (openwrt_failsafe_seconds | int) + 180 }}"
+            delay: 15
+          delegate_to: localhost
+          failed_when: false
+
+        - name: Falhar informando que a transição foi revertida
+          ansible.builtin.fail:
+            msg: >-
+              Transição de rede revertida pelo failsafe. O AP deve estar de volta
+              no endereço anterior. Nada foi perdido — o backup em
+              {{ openwrt_failsafe_backup_dir }} foi restaurado e o equipamento
+              reiniciado.
 
     - name: Desativar daemons dnsmasq e odhcpd no inicialização do OpenWrt
       ansible.builtin.raw: "/etc/init.d/dnsmasq disable && /etc/init.d/odhcpd disable && /etc/init.d/dnsmasq stop && /etc/init.d/odhcpd stop"

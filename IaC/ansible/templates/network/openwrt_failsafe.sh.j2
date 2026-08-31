@@ -1,0 +1,57 @@
+#!/bin/sh
+# =============================================================================
+# Failsafe de rede do AP OpenWrt. RENDERIZADO POR ANSIBLE -- nao editar.
+# =============================================================================
+# Armado ANTES de a configuracao de rede ser trocada, roda destacado da sessao
+# SSH e sobrevive a ela. Se ninguem confirmar dentro da janela, restaura os
+# arquivos e reinicia.
+#
+# ⚠️ A CONFIRMACAO TEM DE VIR DE UMA CONEXAO NOVA, NO ENDERECO NOVO. Confirmar
+# pela sessao SSH que ja estava aberta prova apenas que a sessao antiga
+# sobreviveu -- que e justamente o que costuma sobreviver, porque conexao TCP
+# estabelecida continua fluindo mesmo depois de a interface mudar de nome ou
+# de VLAN. Provaria o que e facil, nao o que interessa.
+#
+# ⚠️ O BACKUP FICA EM CAMINHO PERSISTENTE, nao em /tmp. Se alguem reiniciar o
+# equipamento no meio da janela, /tmp evapora junto com a unica rota de volta,
+# e o AP sobe com a configuracao nova quebrada e sem como desfazer.
+#
+# ⚠️ SEM ACENTO: o console do OpenWrt nao e garantidamente UTF-8.
+# =============================================================================
+
+BACKUP_DIR="{{ openwrt_failsafe_backup_dir | default('/root/iac-failsafe') }}"
+CONFIRMACAO="{{ openwrt_failsafe_confirm_file | default('/tmp/openwrt-net-ok') }}"
+JANELA={{ openwrt_failsafe_seconds | default(120) }}
+ARQUIVOS="{{ openwrt_failsafe_files | default(['network', 'system', 'wireless', 'firewall', 'dhcp']) | join(' ') }}"
+
+logger -t net-failsafe "armado; janela de ${JANELA}s, backup em ${BACKUP_DIR}"
+
+sleep "$JANELA"
+
+if [ -f "$CONFIRMACAO" ]; then
+  logger -t net-failsafe "confirmado por conexao nova; mantendo a configuracao aplicada"
+  exit 0
+fi
+
+logger -t net-failsafe "SEM confirmacao em ${JANELA}s -- restaurando e reiniciando"
+
+for f in $ARQUIVOS; do
+  if [ -f "$BACKUP_DIR/$f" ]; then
+    cp "$BACKUP_DIR/$f" "/etc/config/$f"
+    logger -t net-failsafe "restaurado /etc/config/$f"
+  fi
+done
+
+sync
+
+# Reboot em vez de `network reload`: um reload parcial pode deixar bridge
+# meio montada e VLAN meio aplicada, e o estado intermediario e mais dificil
+# de diagnosticar do que noventa segundos de indisponibilidade.
+reboot
+
+# Se o reboot limpo travar -- e ele trava quando a rede esta inconsistente --
+# forca depois de meio minuto. Sem isto o AP fica pendurado com a
+# configuracao quebrada e o failsafe teria falhado em silencio.
+sleep 30
+logger -t net-failsafe "reboot limpo nao concluiu; forcando"
+reboot -f

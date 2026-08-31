@@ -235,7 +235,7 @@ checar", aplicada ao campo individual de um template de reconciliação.
 │   │   │                       #   detect/elect_nut_primary (07), node_exporter (00-proxmox),
 │   │   │                       #   omv_mount_filesystems + mergerfs_pools (00-omv),
 │   │   │                       #   windows_oem_smb (convidado Windows; sem playbook ainda)
-│   │   ├── templates/network/  # openwrt_{system,dhcp,firewall,wireless}.j2, led_health.sh.j2 + led_health_init.j2 (sinalização de saúde nos LEDs do AP) + opnsense/: config.xml.j2 (esqueleto de includes) e 10 partials orientados a dado — ver IaC/ansible/README.md
+│   │   ├── templates/network/  # openwrt_{system,network,dhcp,firewall,wireless}.j2, failsafe.sh.j2 (rollback da troca de rede), led_health.sh.j2 + led_health_init.j2 (sinalização de saúde nos LEDs do AP) + opnsense/: config.xml.j2 (esqueleto de includes) e 10 partials orientados a dado — ver IaC/ansible/README.md
 │   │   ├── templates/nut/      # ups.conf, upsd.{conf,users}, upsmon.conf, nut.conf, udev, tmpfiles (07-nut-ups)
 │   │   ├── templates/omv/      # mergerfs-cache-mover.{sh,service,timer}.j2 (00-omv)
 │   │   ├── templates/proxmox/  # proxmox_{datacenter,interfaces,storage}.j2

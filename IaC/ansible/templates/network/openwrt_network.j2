@@ -1,0 +1,75 @@
+{#
+  /etc/config/network do AP OpenWrt.
+
+  ⚠️ ESTE ARQUIVO DECIDE SE O EQUIPAMENTO CONTINUA ALCANÇÁVEL. Ele move a
+  gerência para uma VLAN tagueada; se a VLAN não chegar tagueada no outro
+  lado do cabo, o AP some da rede. O playbook arma um failsafe antes de
+  aplicar — ver `openwrt_failsafe.sh.j2` e as tarefas de bloco/resgate em
+  `02-openwrt-setup.yml`. Não aplique este template por fora do playbook.
+
+  ORDEM ENTRE EQUIPAMENTOS: o OPNsense precisa estar tagueando estas VLANs
+  na porta que recebe o cabo do AP ANTES de isto ser aplicado. Ele é o outro
+  lado do trunk.
+#}
+config interface 'loopback'
+	option device 'lo'
+	option proto 'static'
+	option ipaddr '127.0.0.1'
+	option netmask '255.0.0.0'
+
+config globals 'globals'
+	option ula_prefix '{{ openwrt_ula_prefix }}'
+
+{#
+  O bridge recebe SÓ a porta de uplink. As demais ficam de fora de propósito
+  (`openwrt_unused_ports`): porta física num bridge com VLAN de gerência é
+  acesso privilegiado para quem alcançar o aparelho fisicamente.
+
+  ⚠️ O nome da porta é convenção do device tree do OpenWrt, NÃO marcação do
+  gabinete — este modelo não tem nenhuma. A correspondência entre a posição
+  física e este nome está no inventário; sem ela ninguém reproduz a
+  instalação com o cabo na mão.
+#}
+config device
+	option name 'br-lan'
+	option type 'bridge'
+	list ports '{{ openwrt_uplink_port }}'
+	option ipv6 '0'
+
+{% for tag in openwrt_trunk_vlans %}
+config bridge-vlan
+	option device 'br-lan'
+	option vlan '{{ tag }}'
+	list ports '{{ openwrt_uplink_port }}:t'
+
+{% endfor %}
+{#
+  Gerência. É a interface que o dropbear referencia em openwrt_system.j2, e
+  o nome `vlan{{ openwrt_mgmt_vlan }}` precisa bater com o que está lá.
+#}
+config interface 'vlan{{ openwrt_mgmt_vlan }}'
+	option device 'br-lan.{{ openwrt_mgmt_vlan }}'
+	option proto 'static'
+	option ipaddr '{{ openwrt_mgmt_ip }}'
+	option netmask '{{ openwrt_mgmt_netmask | default('255.255.255.0') }}'
+	option gateway '{{ openwrt_mgmt_gateway }}'
+{% for d in openwrt_mgmt_dns %}
+	list dns '{{ d }}'
+{% endfor %}
+	option delegate '0'
+
+{#
+  As VLANs de SSID não recebem endereço: o AP é bridge puro, quem roteia e
+  distribui DHCP é o firewall. `proto 'none'` cria a interface para o
+  `option network` do wireless referenciar, sem pilha IP nenhuma.
+
+  Não existe bloco PPPoE aqui, e a ausência é deliberada: quem faz a conexão
+  com o provedor é o OPNsense. Manter PPPoE no AP significaria guardar a
+  credencial do provedor num arquivo renderizado, sem ganho nenhum.
+#}
+{% for tag in openwrt_trunk_vlans if tag != openwrt_mgmt_vlan %}
+config interface 'vlan{{ tag }}'
+	option device 'br-lan.{{ tag }}'
+	option proto 'none'
+
+{% endfor %}

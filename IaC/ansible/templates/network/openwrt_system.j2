@@ -20,12 +20,24 @@ config timeserver 'ntp'
 	list server '{{ ntp }}'
 {% endfor %}
 
+{#
+  ⚠️ `Interface` AQUI TRANCA O SSH SE A INTERFACE NÃO EXISTIR. Verificado em
+  `/etc/init.d/dropbear:145-152`: o `network_get_ipaddrs_all` falha, a função
+  faz `return 1` ANTES do `procd_open_instance`, e nenhuma instância nasce —
+  não há listener em porta nenhuma. Não é "ignora e escuta em tudo".
+
+  Por isso o nome vem de variável e casa com a interface que o
+  `openwrt_network.j2` cria. Mudar um sem o outro é o modo de falha.
+  O `procd_add_interface_trigger` do dropbear religa sozinho quando a
+  interface aparece, então a ordem entre os dois templates não é crítica —
+  a EXISTÊNCIA da interface é.
+#}
 config dropbear
-	option PasswordAuth 'off'
-	option RootPasswordAuth 'off'
-	option Port '2222'
-	option Interface 'vlan10'
-	option RootKeyOnly '1'
+	option PasswordAuth '{{ openwrt_ssh_password_auth | default('off') }}'
+	option RootPasswordAuth '{{ openwrt_ssh_root_password_auth | default('off') }}'
+	option Port '{{ openwrt_ssh_port | default('2222') }}'
+	option Interface 'vlan{{ openwrt_mgmt_vlan | default(10) }}'
+	option RootKeyOnly '{{ openwrt_ssh_root_key_only | default('1') }}'
 
 config uhttpd 'main'
 	list listen_http '0.0.0.0:80'

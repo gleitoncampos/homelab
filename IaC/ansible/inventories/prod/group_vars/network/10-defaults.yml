@@ -211,3 +211,66 @@ openwrt_led_blink_net_ms: 600
 # mudanca deixa o painel sequestravel por qualquer ator externo: o daemon
 # acha que ja escreveu e nunca corrige.
 openwrt_led_reaffirm_cycles: 20
+
+# =============================================================================
+# Rede do AP OpenWrt — trunk, VLANs e transição de gerência
+# =============================================================================
+# ⚠️ ESTE BLOCO DECIDE SE O AP CONTINUA ALCANÇÁVEL. A gerência sai da rede
+# plana e vai para uma VLAN tagueada; se ela não chegar tagueada no outro lado
+# do cabo, o equipamento some. O playbook arma um failsafe antes de aplicar.
+#
+# ORDEM ENTRE EQUIPAMENTOS: o OPNsense precisa estar tagueando estas VLANs na
+# porta que recebe o cabo do AP ANTES de isto ser aplicado — ele é o outro
+# lado do trunk. Aplicar o AP primeiro isola o AP.
+
+# Porta física que recebe o cabo do switch/firewall, como trunk 802.1q.
+# ⚠️ `wan` é NOME DE DEVICE TREE, não marcação de gabinete: este modelo não
+# tem marcação nenhuma, e o firmware original descobre a WAN sozinho. As
+# quatro portas são do mesmo switch DSA (p0..p3), então a escolha é de
+# convenção, não de capacidade. A correspondência entre este nome e a posição
+# física do conector está no INVENTARIO (seção 2.0) — sem ela ninguém reproduz
+# a instalação com o cabo na mão: `wan` = p0 = a primeira porta da esquerda
+# para a direita, olhando o roteador POR TRÁS.
+openwrt_uplink_port: "wan"
+
+# Portas deixadas FORA do bridge. Porta física dentro de um bridge que carrega
+# a VLAN de gerência é acesso privilegiado para quem alcançar o aparelho
+# fisicamente.
+openwrt_unused_ports:
+  - "lan2"
+  - "lan3"
+
+# VLANs tagueadas no trunk. A 20 (HOMELAB) não entra: o AP não a consome.
+# 10 é gerência; 30/40/50/60 são as quatro SSIDs de openwrt_wireless.j2.
+openwrt_trunk_vlans: [10, 30, 40, 50, 60]
+openwrt_mgmt_vlan: 10
+
+# ⚠️ Endereços FICTÍCIOS, como todo o resto deste arquivo. O real vive no
+# 99-local.yml ao lado.
+openwrt_mgmt_ip: "198.18.10.2"
+openwrt_mgmt_netmask: "255.255.255.0"
+openwrt_mgmt_gateway: "198.18.10.1"
+openwrt_mgmt_dns:
+  - "198.18.10.1"
+
+# ULA gerado por equipamento. Fictício aqui; o real está no 99-local.yml.
+openwrt_ula_prefix: "fd00:db8:1::/48"
+
+# SSH do AP depois da transição. A porta e a interface do dropbear são
+# variáveis porque a transição precisa saber para ONDE reconectar — e porque
+# `Interface` apontando para uma interface inexistente não deixa o dropbear
+# subir listener nenhum (/etc/init.d/dropbear:145-152).
+openwrt_ssh_port: "2222"
+openwrt_ssh_password_auth: "off"
+openwrt_ssh_root_password_auth: "off"
+openwrt_ssh_root_key_only: "1"
+
+# Failsafe da transição de rede.
+# ⚠️ A janela precisa caber a reconexão inteira: o AP reiniciar a rede, o
+# firewall aprender o novo vizinho, e o nó de controle abrir uma conexão NOVA.
+# 120s é folgado para isso e curto o bastante para não deixar o equipamento
+# inalcançável por muito tempo se der errado.
+openwrt_failsafe_seconds: 120
+openwrt_failsafe_backup_dir: "/root/iac-failsafe"
+openwrt_failsafe_confirm_file: "/tmp/openwrt-net-ok"
+openwrt_failsafe_files: ["network", "system", "wireless", "firewall", "dhcp"]
