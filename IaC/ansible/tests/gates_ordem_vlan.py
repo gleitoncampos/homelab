@@ -58,6 +58,13 @@ GATE_ORFA = "Abortar se uma regra de filtro citar interface que o config não cr
 GATE_PASSAGEM = "Abortar se uma VLAN não declarar política de passagem completa"
 GATE_MGMT = "Abortar se a VLAN de gerência ainda não existe ou não é alcançável"
 SONDA_MGMT = "Sondar o gateway da VLAN de gerência a partir do nó de controle"
+ESCRITA_REDE = "Aplicar arquivo de Rede padronizado em /etc/config/network"
+RECONEXAO = "Reconectar o AP no endereço e porta novos"
+SONDA_LOCAL = "Localizar o AP — sondar o endereço da VLAN de gerência"
+APONTA_LOCAL = "Apontar o inventário para a VLAN de gerência se o AP já estiver lá"
+GATE_SSID = "Abortar se a rede do AP ainda não declara as VLANs dos SSIDs"
+ESCRITA_WIFI = ("Aplicar configuração de Wi-Fi e SSIDs Segregados "
+                "em /etc/config/wireless")
 
 falhas = []
 
@@ -286,6 +293,73 @@ def verifica_render_cria_as_vlans():
     return raiz, vlans
 
 
+def verifica_split_do_ap():
+    """Prova que a fase do AP continua partida em `rede` e `wifi`.
+
+    As duas juntas mudavam, no mesmo instante, o endereço do AP e a rede de
+    todo cliente sem fio — e uma queda não distinguia trunk quebrado de
+    política de firewall errada. A separação existe para tornar as duas causas
+    distinguíveis, e some com uma edição descuidada de tags.
+    """
+    print("\n== CAMADA 1c: a fase do AP está partida em `rede` e `wifi` ==")
+
+    tarefas = _tasks(PB_OPENWRT)
+    if not tarefas:
+        checar(False, "playbook do AP tem tarefas")
+        return
+
+    def tags(task):
+        v = task.get("tags")
+        return [v] if isinstance(v, str) else (v or [])
+
+    # ⚠️ pre_task sem `tags: always` é pulada numa execução com `--tags`, e as
+    # pre_tasks daqui são gate e localização. Tag não pode desarmar gate.
+    for secao, task in tarefas:
+        if secao == "pre_tasks":
+            checar("always" in tags(task),
+                   f"pre_task com `tags: always`: {task.get('name')!r}")
+
+    nomes = [task.get("name") for _s, task in tarefas]
+    porta = {task.get("name"): tags(task) for _s, task in tarefas}
+
+    # A localização do AP também é `always`, e vive em `tasks` por vir depois
+    # do gate: sem ela, `--tags wifi` depois da etapa `rede` tentaria conectar
+    # no endereço antigo do inventário, onde não há mais ninguém.
+    for nome in (SONDA_LOCAL, APONTA_LOCAL):
+        checar(nome in nomes, f"tarefa de localização presente: {nome!r}")
+        if nome in nomes:
+            checar("always" in porta[nome], f"[always] marca {nome!r}")
+    if SONDA_LOCAL in nomes and ESCRITA_REDE in nomes:
+        checar(nomes.index(SONDA_LOCAL) < nomes.index(ESCRITA_REDE),
+               "a localização vem ANTES de qualquer escrita")
+
+    for nome, esperada in ((ESCRITA_REDE, "rede"), (RECONEXAO, "rede"),
+                           (GATE_SSID, "wifi"), (ESCRITA_WIFI, "wifi")):
+        checar(nome in nomes, f"tarefa presente: {nome!r}")
+        if nome in nomes:
+            checar(esperada in porta[nome],
+                   f"[{esperada}] marca a tarefa {nome!r}")
+
+    # A ordem no arquivo é o que vale numa execução SEM `--tags`: o wireless
+    # aponta para VLANs que a etapa `rede` acabou de criar, então escrevê-lo
+    # antes sobe rádio para rede inexistente.
+    if RECONEXAO in nomes and ESCRITA_WIFI in nomes:
+        checar(nomes.index(RECONEXAO) < nomes.index(ESCRITA_WIFI),
+               "numa execução completa, o wireless vem DEPOIS da reconexão")
+    if GATE_SSID in nomes and ESCRITA_WIFI in nomes:
+        checar(nomes.index(GATE_SSID) < nomes.index(ESCRITA_WIFI),
+               "o gate de VLAN de SSID vem ANTES de escrever o wireless")
+
+    # A etapa `wifi` NÃO pode carregar a tag `rede`: rodar `--tags rede`
+    # arrastando o wireless junto desfaz a separação sem que nada acuse.
+    if ESCRITA_WIFI in nomes:
+        checar("rede" not in porta[ESCRITA_WIFI],
+               "o wireless NÃO é arrastado por `--tags rede`")
+    if ESCRITA_REDE in nomes:
+        checar("wifi" not in porta[ESCRITA_REDE],
+               "a rede NÃO é arrastada por `--tags wifi`")
+
+
 def verifica_politica_gera_regras(raiz, vlans):
     """Prova que cada `politica` vira o conjunto de regras que ela promete.
 
@@ -382,6 +456,7 @@ def verifica_politica_gera_regras(raiz, vlans):
 def main():
     verifica_gates_opnsense()
     verifica_gate_openwrt()
+    verifica_split_do_ap()
     resultado = verifica_render_cria_as_vlans()
     if resultado:
         verifica_politica_gera_regras(*resultado)

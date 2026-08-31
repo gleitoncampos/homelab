@@ -245,7 +245,7 @@ checar", aplicada ao campo individual de um template de reconciliação.
 │   │   │   ├── render_opnsense.py  # Jinja com trim_blocks=True, igual ao Ansible; compara com baseline congelado
 │   │   │   ├── render_monitoring.py  # Render da stack de monitoramento com 2 hosts por grupo
 │   │   │   ├── render_proxmox_ifaces.py  # (1) afirma que o assert de sub-rede do 00-proxmox-setup.yml existe e tem as 3 condições; (2) renderiza proxmox_interfaces.j2 (RFC 5737). O gate EFETIVO é o assert do playbook
-│   │   │   ├── gates_ordem_vlan.py  # Gates da ORDEM da migração de VLANs: (1) afirma que os 3 asserts existem em 01-opnsense/02-openwrt e mantêm a forma; (2) renderiza e confere que o template cria uma interface por VLAN, DHCP só onde dhcp_enabled, Unbound em todas, e que cada `politica` vira as regras prometidas NA ORDEM certa. Os gates EFETIVOS são os asserts dos playbooks
+│   │   │   ├── gates_ordem_vlan.py  # Gates da ORDEM da migração de VLANs: (1) afirma que os asserts existem em 01-opnsense/02-openwrt e mantêm a forma, e que a fase do AP continua partida em --tags rede/wifi (com toda pre_task em `tags: always`); (2) renderiza e confere que o template cria uma interface por VLAN, DHCP só onde dhcp_enabled, Unbound em todas, e que cada `politica` vira as regras prometidas NA ORDEM certa. Os gates EFETIVOS são os asserts dos playbooks
 │   │   │   ├── fixtures/       # Variáveis de exemplo (RFC 5737, MAC de documentação IANA); isenção por ARQUIVO no gate, nunca por diretório
 │   │   │   ├── baseline/       # Render congelado da fase 0 — nunca regenerar
 │   │   │   └── expected/       # Diff aprovado por fase, comparado byte a byte

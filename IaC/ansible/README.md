@@ -54,7 +54,7 @@ ansible/
 │   ├── render_opnsense.py     # Jinja2 com trim_blocks=True, igual ao Ansible; nenhum inventário real (make render-opnsense)
 │   ├── render_monitoring.py   # Render da stack de monitoramento com 2 hosts por grupo (make render-monitoring)
 │   ├── render_proxmox_ifaces.py  # (1) afirma que o assert de sub-rede do playbook existe e tem as 3 condições; (2) renderiza proxmox_interfaces.j2, RFC 5737 (make render-proxmox-ifaces)
-│   ├── gates_ordem_vlan.py    # (1) afirma que os 3 gates da ORDEM da migração de VLANs seguem nos playbooks de rede; (2) renderiza e confere que o template cria uma interface por VLAN e que cada `politica` vira as regras prometidas, na ordem certa (make gates-ordem-vlan)
+│   ├── gates_ordem_vlan.py    # (1) afirma que os gates da ORDEM da migração de VLANs seguem nos playbooks de rede, e que a fase do AP continua partida em --tags rede/wifi; (2) renderiza e confere que o template cria uma interface por VLAN e que cada `politica` vira as regras prometidas, na ordem certa (make gates-ordem-vlan)
 │   ├── fixtures/opnsense.yml  # Variáveis de exemplo — RFC 5737, MAC de documentação IANA
 │   ├── baseline/opnsense-fase0.xml  # Render congelado da fase 0 deste refactor — nunca regenerar
 │   └── expected/               # Diff aprovado por fase, comparado byte a byte (ver expected/README.md)
@@ -190,6 +190,14 @@ também entram em `make check`:
   certa**. ⚠️ A ordem é o ponto: com o bloqueio do lab depois da saída para a
   internet, o conjunto de regras fica idêntico e a VLAN alcança tudo — só a
   `sequence` denuncia, e por isso o teste a compara.
+
+  A camada 1c cobre a **separação da fase do AP** em `--tags rede` e
+  `--tags wifi`. As duas juntas mudavam, no mesmo instante, o endereço do AP e
+  a rede de todo cliente sem fio — e uma queda não distinguia trunk quebrado de
+  política de firewall errada. O teste afirma que o wireless não é arrastado
+  por `--tags rede` (nem a rede por `--tags wifi`), que toda `pre_task` leva
+  `tags: always` (tag não pode desarmar gate), e que numa execução completa o
+  wireless vem depois da reconexão.
 
 - `make render-proxmox-ifaces` — [`tests/render_proxmox_ifaces.py`](./tests/render_proxmox_ifaces.py)
   protege o gate de sub-rede do Proxmox em duas camadas. O gate EFETIVO é o

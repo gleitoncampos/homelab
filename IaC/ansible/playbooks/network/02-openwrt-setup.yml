@@ -3,7 +3,11 @@
   hosts: openwrt
   gather_facts: false # Desativado pois OpenWrt não possui Python por padrão
   pre_tasks:
+    # ⚠️ `tags: always` em TODA pre_task: elas são gate e localização, e uma
+    # execução com `--tags wifi` que as pulasse escreveria a configuração sem
+    # validar segredo nenhum e no endereço errado. Tag não pode desarmar gate.
     - name: Validar segredos do Vault exigidos por este play
+      tags: always
       ansible.builtin.include_tasks: "../../tasks/validate_vault.yml"
       vars:
         required_secrets:
@@ -39,6 +43,7 @@
     # ⚠️ Roda do NÓ DE CONTROLE (delegate_to: localhost), não do AP: quem
     # precisa alcançar a VLAN de gerência depois da troca é o controlador.
     - name: Sondar o gateway da VLAN de gerência a partir do nó de controle
+      tags: always
       ansible.builtin.command:
         argv: ["ping", "-c", "2", "-W", "2", "{{ openwrt_mgmt_gateway }}"]
       delegate_to: localhost
@@ -49,6 +54,7 @@
       register: _sonda_mgmt
 
     - name: Abortar se a VLAN de gerência ainda não existe ou não é alcançável
+      tags: always
       ansible.builtin.assert:
         that:
           - _sonda_mgmt.rc == 0
@@ -65,6 +71,44 @@
           VLAN de gerência no ar e alcançável do nó de controle
           (elos 1 e 4 satisfeitos).
   tasks:
+    # =====================================================================
+    # LOCALIZAÇÃO DO AP — ele pode já estar na VLAN de gerência
+    # =====================================================================
+    # Depois que a etapa `rede` roda, o AP muda de endereço e de porta. O
+    # `hosts.ini` continua apontando para o endereço antigo, e uma execução
+    # seguinte com `--tags wifi` tentaria conectar onde não há mais ninguém.
+    #
+    # Em vez de exigir que alguém edite o inventário entre as duas etapas —
+    # passo manual, portanto passo esquecido — o play se localiza sozinho: se
+    # o endereço de gerência atender, é lá que o AP está.
+    #
+    # Vale nos dois sentidos e nas duas ordens: antes da migração o endereço
+    # novo não atende e nada muda; depois dela, o `when` da transição
+    # (`ansible_host != openwrt_mgmt_ip`) vê os dois iguais e pula a troca,
+    # que é o que torna a etapa `rede` idempotente.
+    - name: Localizar o AP — sondar o endereço da VLAN de gerência
+      tags: always
+      ansible.builtin.wait_for:
+        host: "{{ openwrt_mgmt_ip }}"
+        port: "{{ openwrt_ssh_port }}"
+        timeout: 5
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      register: _ap_na_vlan
+
+    - name: Apontar o inventário para a VLAN de gerência se o AP já estiver lá
+      tags: always
+      ansible.builtin.set_fact:
+        ansible_host: "{{ openwrt_mgmt_ip }}"
+        ansible_port: "{{ openwrt_ssh_port }}"
+      # `wait_for` devolve `state: started` só quando a porta atendeu. Com
+      # `failed_when: false` o campo `failed` fica sempre falso, então testar
+      # sucesso por ele não funciona — é `state` que distingue.
+      when: (_ap_na_vlan.state | default('')) == 'started'
+
     - name: Fazer backup da configuração /etc/config/system no OpenWrt
       ansible.builtin.raw: "cp /etc/config/system /etc/config/system.bak"
       changed_when: true
@@ -89,6 +133,7 @@
     # estas VLANs na porta que recebe o cabo do AP. Aplicar o AP primeiro
     # isola o AP.
     - name: Fazer backup persistente das configurações antes de trocar a rede
+      tags: rede
       ansible.builtin.raw: |
         mkdir -p {{ openwrt_failsafe_backup_dir }}
         for f in {{ openwrt_failsafe_files | join(' ') }}; do
@@ -101,6 +146,7 @@
     # O failsafe é armado ANTES de qualquer escrita: se o playbook morrer no
     # meio, o equipamento se recupera sozinho.
     - name: Armar o failsafe de rede do OpenWrt
+      tags: rede
       ansible.builtin.raw: |
         cat << 'EOF' > /usr/bin/iac-net-failsafe
         {{ lookup('template', '../../templates/network/openwrt_failsafe.sh.j2') }}
@@ -110,6 +156,7 @@
       changed_when: true
 
     - name: Aplicar arquivo de Rede padronizado em /etc/config/network
+      tags: rede
       ansible.builtin.raw: |
         cat << 'EOF' > /etc/config/network
         {{ lookup('template', '../../templates/network/openwrt_network.j2') }}
@@ -117,6 +164,7 @@
       changed_when: true
 
     - name: Aplicar arquivo de Sistema & Syslog padronizado em /etc/config/system
+      tags: rede
       ansible.builtin.raw: |
         cat << 'EOF' > /etc/config/system
         {{ lookup('template', '../../templates/network/openwrt_system.j2') }}
@@ -124,22 +172,15 @@
       changed_when: true
 
     - name: Aplicar arquivo de Firewall padronizado em /etc/config/firewall
+      tags: rede
       ansible.builtin.raw: |
         cat << 'EOF' > /etc/config/firewall
         {{ lookup('template', '../../templates/network/openwrt_firewall.j2') }}
         EOF
       changed_when: true
 
-    # no_log: o template renderizado contém as 4 PSKs de Wi-Fi em texto puro.
-    - name: Aplicar configuração de Wi-Fi e SSIDs Segregados em /etc/config/wireless
-      ansible.builtin.raw: |
-        cat << 'EOF' > /etc/config/wireless
-        {{ lookup('template', '../../templates/network/openwrt_wireless.j2') }}
-        EOF
-      changed_when: true
-      no_log: true
-
     - name: Aplicar desativação de DHCP/ODHCPD em /etc/config/dhcp
+      tags: rede
       ansible.builtin.raw: |
         cat << 'EOF' > /etc/config/dhcp
         {{ lookup('template', '../../templates/network/openwrt_dhcp.j2') }}
@@ -150,6 +191,7 @@
     # que está executando o comando, e um `raw` síncrono ficaria pendurado até
     # o timeout, reportando falha de uma coisa que deu certo.
     - name: Disparar a troca de rede do OpenWrt de forma destacada
+      tags: rede
       ansible.builtin.raw: |
         cat << 'EOF' > /tmp/iac-apply-net.sh
         #!/bin/sh
@@ -164,6 +206,7 @@
       when: ansible_host != openwrt_mgmt_ip
 
     - name: Reconectar o AP no endereço e porta novos
+      tags: rede
       when: ansible_host != openwrt_mgmt_ip
       block:
         # ⚠️ A CONFIRMAÇÃO TEM DE VIR DE CONEXÃO NOVA. Uma sessão SSH já
@@ -223,6 +266,64 @@
               no endereço anterior. Nada foi perdido — o backup em
               {{ openwrt_failsafe_backup_dir }} foi restaurado e o equipamento
               reiniciado.
+
+    # =====================================================================
+    # ETAPA `wifi` — move os CLIENTES, e é a segunda metade da fase do AP
+    # =====================================================================
+    # Separada de `rede` de propósito. As duas juntas mudavam, no mesmo
+    # instante, o endereço do AP e a rede de todo cliente sem fio da casa —
+    # e uma queda não distinguia trunk quebrado de política errada.
+    #
+    # ⚠️ Entre `--tags rede` e `--tags wifi` o Wi-Fi fica FORA DO AR, e isso é
+    # esperado: o `/etc/config/wireless` antigo aponta para redes que a etapa
+    # `rede` acabou de destruir (`lan` plana e `br-guest`). Rode a segunda
+    # logo depois de verificar a primeira; a janela é o tempo da verificação.
+    #
+    # Uma execução sem `--tags` faz as duas na ordem, como antes.
+    - name: Conferir quais VLANs de SSID a rede do AP já declara
+      tags: wifi
+      ansible.builtin.raw: |
+        ausentes=""
+        for t in {{ openwrt_trunk_vlans | reject('equalto', openwrt_mgmt_vlan) | join(' ') }}; do
+          uci -q get network.vlan$t >/dev/null 2>&1 || ausentes="$ausentes $t"
+        done
+        echo "AUSENTES:$ausentes"
+      register: _vlans_ssid
+      changed_when: false
+      failed_when: false
+
+    - name: Abortar se a rede do AP ainda não declara as VLANs dos SSIDs
+      tags: wifi
+      ansible.builtin.assert:
+        that:
+          # A sentinela existe porque `raw` traz banner e ruído de shell junto:
+          # procurar por lista vazia no stdout inteiro daria falso positivo.
+          - "'AUSENTES:' in _vlans_ssid.stdout"
+          - (_vlans_ssid.stdout.split('AUSENTES:')[1] | trim) == ''
+        fail_msg: >-
+          A rede do AP não declara as VLANs
+          {{ (_vlans_ssid.stdout.split('AUSENTES:')[1] | default('?')) | trim }}.
+          Os SSIDs apontam para elas com `option network`; escrever o
+          wireless agora sobe rádio apontando para rede inexistente — o SSID
+          aparece, o cliente associa e não recebe endereço, que é o modo de
+          falha mais caro de diagnosticar. Rode antes a etapa `rede`
+          (`--tags rede`). Ver .local/docs/TODO-E-ROADMAP.md, item 1.1.8.
+        success_msg: "A rede do AP declara todas as VLANs dos SSIDs."
+
+    # no_log: o template renderizado contém as 4 PSKs de Wi-Fi em texto puro.
+    - name: Aplicar configuração de Wi-Fi e SSIDs Segregados em /etc/config/wireless
+      tags: wifi
+      ansible.builtin.raw: |
+        cat << 'EOF' > /etc/config/wireless
+        {{ lookup('template', '../../templates/network/openwrt_wireless.j2') }}
+        EOF
+      changed_when: true
+      no_log: true
+
+    - name: Recarregar o Wi-Fi do OpenWrt
+      tags: wifi
+      ansible.builtin.raw: "wifi reload"
+      changed_when: true
 
     - name: Desativar daemons dnsmasq e odhcpd no inicialização do OpenWrt
       ansible.builtin.raw: "/etc/init.d/dnsmasq disable && /etc/init.d/odhcpd disable && /etc/init.d/dnsmasq stop && /etc/init.d/odhcpd stop"
@@ -285,8 +386,11 @@
       changed_when: true
       when: not (openwrt_led_health_enabled | default(true) | bool)
 
-    - name: Recarregar serviços de Log, Wi-Fi e Firewall do OpenWrt
-      ansible.builtin.raw: "/etc/init.d/log restart && wifi reload && reload_config"
+    # O `wifi reload` saiu daqui: ele pertence à etapa `wifi`, que é quem
+    # escreve o wireless. Mantê-lo nos dois lugares fazia o rádio recarregar
+    # duas vezes numa execução completa, sem ganho.
+    - name: Recarregar serviços de Log e Firewall do OpenWrt
+      ansible.builtin.raw: "/etc/init.d/log restart && reload_config"
       changed_when: true
 
     - name: Exibir confirmação do OpenWrt
