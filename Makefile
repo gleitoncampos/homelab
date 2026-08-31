@@ -25,7 +25,8 @@ PLAYBOOKS   := $(wildcard $(ANSIBLE_DIR)/playbooks/*.yml $(ANSIBLE_DIR)/playbook
 .PHONY: help hooks check lint lint-yaml lint-ansible lint-shell lint-tf ssh-keys \
         validate-compose validate-ansible validate-patterns check-common-copies \
         secrets links snapshot omv-fs discover clean render-opnsense render-monitoring \
-        render-proxmox-ifaces render-openwrt-led render-openwrt-network
+        render-proxmox-ifaces render-openwrt-led render-openwrt-network \
+        gates-ordem-vlan
 
 help: ## Lista os alvos
 	@echo "Alvos disponíveis:"
@@ -54,7 +55,7 @@ ssh-keys: ## Instala a chave gerada pelo bootstrap em todo host do inventário (
 test-bootstrap: ## Testa os renderizadores do bootstrap contra os consumidores reais
 	@python3 IaC/bootstrap/test_render.py
 
-check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network ## Tudo que a CI roda
+check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network gates-ordem-vlan ## Tudo que a CI roda
 	@echo
 	@echo "✓ check completo"
 
@@ -170,6 +171,9 @@ render-opnsense: ## Renderiza o template do OPNsense e compara com o baseline co
 	    { echo "✗ diff difere do aprovado em expected/"; exit 1; }; \
 	fi; \
 	echo "✓ render-opnsense"
+
+gates-ordem-vlan: ## Confere os gates da ordem de aplicação da migração de VLANs
+	@python3 $(ANSIBLE_DIR)/tests/gates_ordem_vlan.py
 
 secrets: ## Varre a árvore inteira, não só o índice (o hook cobre o índice)
 	@bash .githooks/scan-tree.sh

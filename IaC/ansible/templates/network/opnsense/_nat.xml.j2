@@ -22,7 +22,13 @@
       <sequence>100</sequence>
       <disabled>{{ 0 if opnsense_dns_redirect_enabled | default(true) else 1 }}</disabled>
       <nordr>0</nordr>
-      <interface>lan</interface>
+      {# Mesma lista de interfaces da regra de filtro companheira
+         (uuid 3aacd6cd, "LAN > Redireciona DNS para o FW"): é o NAT que
+         captura a porta 53, e a regra de filtro que a deixa passar. As duas
+         precisam cobrir o MESMO conjunto — o filtro já citava as VLANs, este
+         NAT não, então o redirecionamento valia só para a LAN e um cliente de
+         VLAN escapava para o resolvedor externo que quisesse. #}
+      <interface>lan{% for vlan in vlans %},vlan{{ vlan.tag }}{% endfor %}</interface>
       <ipprotocol>inet</ipprotocol>
       <protocol>tcp/udp</protocol>
       <source>

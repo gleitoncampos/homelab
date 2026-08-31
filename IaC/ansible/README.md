@@ -50,10 +50,11 @@ ansible/
 │   │   └── openwrt_*.j2       # 6 templates do AP/roteador Wi-Fi: 4 de config UCI, ainda monolíticos
 │   │                          # (fora deste refactor), mais o daemon led-health e seu init procd
 │   └── proxmox/                # datacenter.cfg, interfaces e storage.cfg do host Proxmox VE
-├── tests/                     # Render de templates fora da caixa: OPNsense, monitoring e proxmox_interfaces — ver "make render-*" abaixo
+├── tests/                     # Render de templates e gates de playbook fora da caixa — ver "make render-*" e "make gates-ordem-vlan" abaixo
 │   ├── render_opnsense.py     # Jinja2 com trim_blocks=True, igual ao Ansible; nenhum inventário real (make render-opnsense)
 │   ├── render_monitoring.py   # Render da stack de monitoramento com 2 hosts por grupo (make render-monitoring)
 │   ├── render_proxmox_ifaces.py  # (1) afirma que o assert de sub-rede do playbook existe e tem as 3 condições; (2) renderiza proxmox_interfaces.j2, RFC 5737 (make render-proxmox-ifaces)
+│   ├── gates_ordem_vlan.py    # (1) afirma que os 3 gates da ORDEM da migração de VLANs seguem nos playbooks de rede; (2) renderiza e confere que o template cria uma interface por VLAN (make gates-ordem-vlan)
 │   ├── fixtures/opnsense.yml  # Variáveis de exemplo — RFC 5737, MAC de documentação IANA
 │   ├── baseline/opnsense-fase0.xml  # Render congelado da fase 0 deste refactor — nunca regenerar
 │   └── expected/               # Diff aprovado por fase, comparado byte a byte (ver expected/README.md)
@@ -171,6 +172,24 @@ também entram em `make check`:
 - `make render-monitoring` — [`tests/render_monitoring.py`](./tests/render_monitoring.py)
   renderiza os templates da stack de monitoramento com 2 hosts por grupo, provando
   que o template lida com mais de um alvo.
+- `make gates-ordem-vlan` — [`tests/gates_ordem_vlan.py`](./tests/gates_ordem_vlan.py)
+  protege a **ordem de aplicação** da migração de VLANs, na mesma forma de duas
+  camadas. Os gates EFETIVOS são três `assert` em `pre_tasks`: dois em
+  [`playbooks/network/01-opnsense-setup.yml`](./playbooks/network/01-opnsense-setup.yml)
+  (regra de filtro citando interface que o config não cria; interface de VLAN
+  sem regra `pass` de porta irrestrita) e um em
+  [`playbooks/network/02-openwrt-setup.yml`](./playbooks/network/02-openwrt-setup.yml)
+  (sonda o gateway da VLAN de gerência **do nó de controle** e recusa o play se
+  ele não responder). Camada 1 abre os dois playbooks, localiza cada task pelo
+  `name` e afirma a forma do gate — inclusive a exigência de `destination_port`
+  vazio, que é o que impede o `pass` de DNS na porta 53 de passar por regra de
+  passagem. Camada 2 renderiza o config do OPNsense e confere que o template de
+  fato cria uma `<vlan<tag>>` por entrada de `vlans`, DHCP só onde
+  `dhcp_enabled`, e o Unbound escutando em todas — sem ela o gate do playbook
+  compararia contra `vlans` e passaria a mentir no dia em que o template
+  parasse de emitir. ⚠️ Os dois gates do OPNsense **falham hoje**, de propósito:
+  nenhuma VLAN tem política de passagem escrita.
+
 - `make render-proxmox-ifaces` — [`tests/render_proxmox_ifaces.py`](./tests/render_proxmox_ifaces.py)
   protege o gate de sub-rede do Proxmox em duas camadas. O gate EFETIVO é o
   `assert` da task "Abortar se o gateway e o endereço do nó caírem em /24

@@ -7,7 +7,7 @@
        <type/>
        <subscription/>
        <reboot/>
-@@ -426,6 +410,15 @@
+@@ -426,6 +410,31 @@
        <ipaddrv6>pppoev6</ipaddrv6>
        <mss>1420</mss>
      </wan>
@@ -20,12 +20,44 @@
 +      <ipaddr>dhcp</ipaddr>
 +      <ipaddrv6>dhcp6</ipaddrv6>
 +    </opt1>
++    <vlan10>
++      <if>vtnet0.10</if>
++      <descr>MGMT</descr>
++      <enable>1</enable>
++      <spoofmac/>
++      <ipaddr>198.51.100.1</ipaddr>
++      <subnet>24</subnet>
++    </vlan10>
++    <vlan20>
++      <if>vtnet0.20</if>
++      <descr>HOMELAB</descr>
++      <enable>1</enable>
++      <spoofmac/>
++      <ipaddr>203.0.113.1</ipaddr>
++      <subnet>24</subnet>
++    </vlan20>
    </interfaces>
    <dhcpd>
      <lan>
-@@ -464,11 +457,6 @@
+@@ -463,12 +472,22 @@
+         <ntpserver/>
        </staticmap>
      </lan>
++    <vlan20>
++      <enable>1</enable>
++      <gateway>203.0.113.1</gateway>
++      <ddnsdomainalgorithm>hmac-md5</ddnsdomainalgorithm>
++      <numberoptions>
++        <item/>
++      </numberoptions>
++      <range>
++        <from>203.0.113.100</from>
++        <to>203.0.113.200</to>
++      </range>
++      <winsserver/>
++      <dnsserver>203.0.113.1</dnsserver>
++      <ntpserver/>
++    </vlan20>
    </dhcpd>
 -  <snmpd>
 -    <syslocation/>

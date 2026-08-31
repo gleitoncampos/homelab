@@ -20,6 +20,50 @@
           - wifi_iot_ssid
           - wifi_media_ssid
           - wifi_guest_ssid
+
+    # =====================================================================
+    # GATE DA ORDEM DE APLICAÇÃO — elo 5 da migração de VLANs
+    # =====================================================================
+    # Este play move a gerência do AP para a VLAN 10 e põe o uplink em trunk
+    # 802.1q. Ele só pode rodar depois que o firewall tiver a VLAN 10 no ar
+    # (elo 1) e que o nó de controle alcançar essa VLAN (elo 4). Rodar antes
+    # isola o AP: o failsafe o resgata em
+    # {{ openwrt_failsafe_seconds | default(120) }}s, mas o equipamento passa
+    # esse tempo inalcançável para descobrir algo que este ping já sabia.
+    #
+    # O ping cobre os DOIS elos de uma vez, e é por isso que ele é o gate
+    # certo em vez de um asserto sobre variável: uma resposta prova que a
+    # interface existe no firewall E que este nó de controle chega nela. Um
+    # dos dois faltando, não há resposta.
+    #
+    # ⚠️ Roda do NÓ DE CONTROLE (delegate_to: localhost), não do AP: quem
+    # precisa alcançar a VLAN de gerência depois da troca é o controlador.
+    - name: Sondar o gateway da VLAN de gerência a partir do nó de controle
+      ansible.builtin.command:
+        argv: ["ping", "-c", "2", "-W", "2", "{{ openwrt_mgmt_gateway }}"]
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      register: _sonda_mgmt
+
+    - name: Abortar se a VLAN de gerência ainda não existe ou não é alcançável
+      ansible.builtin.assert:
+        that:
+          - _sonda_mgmt.rc == 0
+        fail_msg: >-
+          O gateway da VLAN de gerência não respondeu. Este play põe o uplink
+          do AP em trunk e move a gerência para a VLAN
+          {{ openwrt_mgmt_vlan | default(10) }} — sem essa VLAN roteando do
+          outro lado, o AP fica isolado e só volta pelo failsafe. Aplique
+          antes o elo 1+2 (playbooks/network/01-opnsense-setup.yml, que cria
+          as interfaces de VLAN e a política de passagem delas) e confira que
+          ESTE nó de controle alcança a VLAN de gerência. Ver
+          .local/docs/TODO-E-ROADMAP.md, item 1.1.8.
+        success_msg: >-
+          VLAN de gerência no ar e alcançável do nó de controle
+          (elos 1 e 4 satisfeitos).
   tasks:
     - name: Fazer backup da configuração /etc/config/system no OpenWrt
       ansible.builtin.raw: "cp /etc/config/system /etc/config/system.bak"

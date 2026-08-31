@@ -1,0 +1,9 @@
+@@ -477,7 +496,7 @@
+       <sequence>100</sequence>
+       <disabled>0</disabled>
+       <nordr>0</nordr>
+-      <interface>lan</interface>
++      <interface>lan,vlan10,vlan20</interface>
+       <ipprotocol>inet</ipprotocol>
+       <protocol>tcp/udp</protocol>
+       <source>

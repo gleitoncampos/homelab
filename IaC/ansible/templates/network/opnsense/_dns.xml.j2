@@ -27,7 +27,12 @@
         <enabled>1</enabled>
         <port>53</port>
         <stats>1</stats>
-        <active_interface>lan</active_interface>
+        {# Unbound escuta na LAN e em TODA VLAN. Estava só em `lan`, e isso
+           passou despercebido porque hoje não existe VLAN nenhuma: no
+           primeiro apply da segmentação, o cliente receberia por DHCP o
+           gateway da sua VLAN como resolvedor e ninguém atenderia na porta
+           53 — resolução morta em quatro redes, e sem erro em log nenhum. #}
+        <active_interface>lan{% for vlan in vlans %},vlan{{ vlan.tag }}{% endfor %}</active_interface>
         <dnssec>1</dnssec>
         <dns64>0</dns64>
         <dns64prefix/>

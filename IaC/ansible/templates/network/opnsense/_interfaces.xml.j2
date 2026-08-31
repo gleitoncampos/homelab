@@ -1,5 +1,12 @@
-{# Interfaces físicas: lan, loopback e wan (PPPoE). lo0 e o corpo de wan são
-   estáticos em qualquer instalação; só o IP da LAN é topologia. #}
+{# Interfaces: as físicas (lan, lo0, wan, opt1) e uma por VLAN.
+
+   lo0 e o corpo de wan são estáticos em qualquer instalação; só o IP da LAN é
+   topologia.
+
+   ⚠️ A `lan` nativa (vtnet0 sem tag) SOBREVIVE à migração de propósito: ela é
+   a rede de resgate enquanto os elos da segmentação sobem, e é por ela que o
+   nó de controle continua alcançando o parque se uma VLAN nascer errada.
+   Aposentá-la é o último passo da migração, num apply próprio — não aqui. #}
   <interfaces>
     <lan>
       <if>vtnet0</if>
@@ -49,4 +56,28 @@
       <ipaddr>dhcp</ipaddr>
       <ipaddrv6>dhcp6</ipaddrv6>
     </opt1>
+    {# Uma interface por entrada de `vlans`. O nome do elemento é o
+       IDENTIFICADOR da interface no OPNsense, e é ele que `opnsense_rules`,
+       `<dhcpd>` e o Unbound referenciam — por isso `vlan<tag>` e não `optN`:
+       `opt1` já é a segunda WAN, e renumerar aqui quebraria as 13 regras de
+       filtro de uma vez, sem erro nenhum no apply.
+
+       O device `vtnet0.<tag>` é o mesmo que a seção <vlans> de config.xml.j2
+       cria; as duas leem `parent_interface`, então não podem divergir.
+
+       Sem IPv6 nesta fase: `track6` exige um `track6-prefix-id` único por
+       interface e um prefixo delegado que a WAN ainda não distribui para seis
+       redes. IPv4 primeiro, IPv6 quando a delegação estiver resolvida — meia
+       pilha configurada é pior que nenhuma, porque o cliente prefere IPv6 e
+       falha no escuro. #}
+{% for vlan in vlans %}
+    <vlan{{ vlan.tag }}>
+      <if>{{ parent_interface | default("vtnet0") }}.{{ vlan.tag }}</if>
+      <descr>{{ vlan.name | e }}</descr>
+      <enable>1</enable>
+      <spoofmac/>
+      <ipaddr>{{ vlan.ip }}</ipaddr>
+      <subnet>{{ vlan.subnet }}</subnet>
+    </vlan{{ vlan.tag }}>
+{% endfor %}
   </interfaces>

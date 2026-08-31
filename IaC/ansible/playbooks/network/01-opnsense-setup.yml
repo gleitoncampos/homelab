@@ -90,6 +90,86 @@
           — restaure-o do backup (ele fica junto do vault e do hosts.ini) antes
           de aplicar. Ver IaC/ansible/README.md.
         success_msg: "Topologia real carregada."
+
+    # =====================================================================
+    # GATE DA ORDEM DE APLICAÇÃO — elo 1+2 da migração de VLANs
+    # =====================================================================
+    # O apply do firewall é o PRIMEIRO elo da migração, e os dois assertos
+    # abaixo existem porque criar as interfaces de VLAN e escrever a política
+    # de passagem delas NÃO podem ser dois passos: entre um e outro a rede
+    # segmentada fica no chão, e a queda é silenciosa dos dois lados.
+    #
+    # Um asserto para cada metade do buraco, e eles são simétricos:
+    #   regra citando interface que o config não cria  -> regra sem efeito
+    #   interface criada sem regra de passagem         -> rede sem tráfego
+    #
+    # ⚠️ Os dois falham HOJE, e é o comportamento correto: `opnsense_rules`
+    # cita `vlan10`..`vlan50`, `_interfaces.xml.j2` não cria VLAN nenhuma, e
+    # nenhuma VLAN tem regra de passagem irrestrita. O gate transforma um
+    # apply que sairia calado numa recusa antes da primeira escrita.
+
+    - name: Abortar se uma regra de filtro citar interface que o config não cria
+      vars:
+        # Interfaces que `_interfaces.xml.j2` de fato emite: as fixas mais uma
+        # por VLAN. O nome da interface de VLAN é `vlan<tag>` e NÃO `optN` —
+        # `opt1` já é a segunda WAN, e as regras referenciam `vlan10`..`vlan60`
+        # como identificador. Trocar a convenção aqui quebra as 13 regras.
+        _ifaces_do_config: >-
+          {{ ['lan', 'wan', 'lo0', 'opt1']
+             + (vlans | map(attribute='tag') | map('string')
+                      | map('regex_replace', '^', 'vlan') | list) }}
+        # `interface` é lista separada por vírgula no config do OPNsense.
+        # regex_findall em vez de `.split(',')`: filtro do Ansible, sem
+        # encadear método de string num `>-` multilinha.
+        _ifaces_das_regras: >-
+          {{ opnsense_rules | selectattr('interface', 'defined')
+                            | map(attribute='interface') | select()
+                            | join(',') | regex_findall('[^,]+')
+                            | unique | list }}
+      ansible.builtin.assert:
+        that:
+          - _ifaces_das_regras | difference(_ifaces_do_config) | length == 0
+        fail_msg: >-
+          Regra de filtro cita interface inexistente no config:
+          {{ _ifaces_das_regras | difference(_ifaces_do_config) | sort | join(', ') }}.
+          O OPNsense NÃO recusa isso — ele grava a regra e ela nunca casa
+          pacote nenhum, então a política some sem erro. Crie a interface em
+          templates/network/opnsense/_interfaces.xml.j2 (uma por entrada de
+          `vlans`, nomeada `vlan<tag>`) ou corrija o campo `interface` da
+          regra. Ver .local/docs/TODO-E-ROADMAP.md, item 1.1.8, elo 1+2.
+        success_msg: "Toda regra de filtro aponta para interface que o config cria."
+
+    - name: Abortar se uma VLAN subir sem nenhuma regra de passagem irrestrita
+      vars:
+        _vlans_do_config: >-
+          {{ vlans | map(attribute='tag') | map('string')
+                   | map('regex_replace', '^', 'vlan') | list }}
+        # Só conta como passagem a regra `pass` SEM restrição de porta de
+        # destino. A distinção não é preciosismo: `LAN > Redireciona DNS para
+        # o FW` é um `pass` que cobre vlan10..vlan50 na porta 53 e mais nada.
+        # Aceitá-lo daria a VLAN por liberada enquanto ela segue sem rota para
+        # o resto — o modo de falha que este asserto existe para pegar.
+        _ifaces_com_passagem: >-
+          {{ opnsense_rules | selectattr('interface', 'defined')
+                            | selectattr('action', 'equalto', 'pass')
+                            | selectattr('destination_port', 'defined')
+                            | selectattr('destination_port', 'equalto', '')
+                            | map(attribute='interface') | select()
+                            | join(',') | regex_findall('[^,]+')
+                            | unique | list }}
+      ansible.builtin.assert:
+        that:
+          - _vlans_do_config | difference(_ifaces_com_passagem) | length == 0
+        fail_msg: >-
+          VLAN sem regra de passagem:
+          {{ _vlans_do_config | difference(_ifaces_com_passagem) | sort | join(', ') }}.
+          O OPNsense nega por padrão, então a interface sobe, o DHCP entrega
+          endereço e o cliente não fala com nada — parece problema de
+          equipamento, não de firewall. Acrescente a política de passagem
+          dessas VLANs a `opnsense_rules` em inventories/_common/opnsense.yml
+          no MESMO apply que cria as interfaces. Ver
+          .local/docs/TODO-E-ROADMAP.md, item 1.1.8, elo 1+2.
+        success_msg: "Toda VLAN do config tem ao menos uma regra de passagem irrestrita."
   tasks:
     # Sem ignore_errors: se o backup falhar, ABORTA. A task seguinte sobrescreve
     # o /conf/config.xml inteiro — seguir sem cópia de segurança deixaria o
