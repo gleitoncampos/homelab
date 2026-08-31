@@ -1,0 +1,173 @@
+#!/bin/sh
+# =============================================================================
+# led-health -- sinaliza a saude do AP nos LEDs frontais
+# =============================================================================
+# RENDERIZADO POR ANSIBLE (playbooks/network/02-openwrt-setup.yml). Nao editar
+# no equipamento: a proxima execucao sobrescreve.
+#
+# O vocabulario completo, INCLUINDO os estados de fabrica que nao sao deste
+# script:
+#
+#   laranja piscando <=200ms  fabrica: boot (100ms), failsafe (50ms) ou
+#                             GRAVANDO FIRMWARE (200ms) -- /etc/diag.sh
+#   azul fixo                 sistema no ar, este daemon NAO esta reportando
+#   branco fixo               2.4G ok, 5G ok e internet ok
+#   azul piscando 1000ms      algum radio desligado ou sem interface
+#   laranja piscando 600ms    sem internet ha mais de NET_GRACE segundos
+#
+# Os dois LEDs de status dividem o mesmo difusor: acesos juntos a luz sai
+# esbranquicada. E dai que sai o "branco" -- nao existe um LED branco aqui.
+#
+# ⚠️ OS RITMOS SAO LENTOS DE PROPOSITO. O OpenWrt de fabrica pisca o MESMO LED
+# amarelo em 50, 100 e 200ms. Um ritmo nosso perto de 200ms faria "gravando
+# firmware" e "internet caiu" parecerem iguais -- e confundir os dois faz
+# desligar o aparelho na hora errada. Regra: fabrica e rapido (<=200ms), este
+# daemon e lento (>=600ms). Nao encoste nessa faixa ao ajustar as variaveis.
+#
+# ⚠️ SEM ACENTO NO CORPO DO SCRIPT: o console do OpenWrt nao e garantidamente
+# UTF-8. Os avisos deste cabecalho sao a unica excecao tolerada.
+# =============================================================================
+
+LED_BLUE="/sys/class/leds/{{ openwrt_led_blue | default('blue:status') }}"
+LED_YELLOW="/sys/class/leds/{{ openwrt_led_yellow | default('yellow:status') }}"
+
+# LEDs que devem permanecer MUDOS. Sem isto o trigger de fabrica (phy0tpt/
+# phy1tpt) volta no reboot e a atividade wifi polui a cor do sinal.
+LED_MUDOS="{% for l in openwrt_led_silenced | default(['mt76-phy0', 'mt76-phy1']) %}/sys/class/leds/{{ l }} {% endfor %}"
+
+RADIOS="{{ openwrt_led_radios | default(['radio0', 'radio1']) | join(' ') }}"
+PING_TARGETS="{{ openwrt_led_ping_targets | default(['1.1.1.1', '8.8.8.8']) | join(' ') }}"
+PING_TIMEOUT={{ openwrt_led_ping_timeout | default(2) }}
+POLL_INTERVAL={{ openwrt_led_poll_interval | default(3) }}
+NET_GRACE={{ openwrt_led_net_grace | default(10) }}
+BLINK_RADIO_MS={{ openwrt_led_blink_radio_ms | default(1000) }}
+BLINK_NET_MS={{ openwrt_led_blink_net_ms | default(600) }}
+
+# De quantos em quantos ciclos o estado e reescrito no sysfs mesmo sem mudar.
+# NAO e enfeite: escrever so na mudanca deixa o painel sequestravel para
+# sempre por qualquer ator externo (um `echo` manual, outro processo) -- o
+# daemon acha que ja escreveu e nunca corrige. Aconteceu no teste de
+# 30/08/2026 e passou despercebido por um minuto.
+REAFIRMAR_A_CADA={{ openwrt_led_reaffirm_cycles | default(20) }}
+
+log() { logger -t led-health "$1"; }
+
+# Falha ALTO se o hardware nao for o esperado. Sem isto, um AP com outros
+# nomes de LED roda o daemon para sempre sem acender nada, e o painel apagado
+# passa por "normal".
+for l in "$LED_BLUE" "$LED_YELLOW"; do
+  [ -d "$l" ] || { log "FATAL: $l nao existe; hardware incompativel"; exit 1; }
+done
+
+led_silenciar_mudos() {
+  for l in $LED_MUDOS; do
+    [ -d "$l" ] || continue
+    echo none > "$l/trigger" 2>/dev/null
+    echo 0 > "$l/brightness" 2>/dev/null
+  done
+}
+
+led_fixo() {  # $1=caminho $2=0|1
+  echo none > "$1/trigger" 2>/dev/null
+  echo "$2" > "$1/brightness" 2>/dev/null
+}
+
+led_piscar() {  # $1=caminho $2=ms
+  echo timer > "$1/trigger" 2>/dev/null
+  # delay_on/delay_off so passam a existir DEPOIS que o trigger vira timer.
+  echo "$2" > "$1/delay_on" 2>/dev/null
+  echo "$2" > "$1/delay_off" 2>/dev/null
+}
+
+aplicar_estado() {
+  case "$1" in
+    OK)      led_fixo "$LED_BLUE" 1;                   led_fixo "$LED_YELLOW" 1 ;;
+    RADIO)   led_piscar "$LED_BLUE" $BLINK_RADIO_MS;   led_fixo "$LED_YELLOW" 0 ;;
+    NET)     led_fixo "$LED_BLUE" 0;                   led_piscar "$LED_YELLOW" $BLINK_NET_MS ;;
+    FABRICA) led_fixo "$LED_BLUE" 1;                   led_fixo "$LED_YELLOW" 0 ;;
+  esac
+}
+
+# Um radio so conta como no ar se o ubus diz up=true E ele tem ao menos uma
+# interface. `up` sozinho MENTE: fica true com o radio habilitado e nenhuma
+# SSID subida.
+radios_ok() {
+  _st=$(ubus call network.wireless status 2>/dev/null) || return 1
+  [ -n "$_st" ] || return 1
+  for r in $RADIOS; do
+    [ "$(echo "$_st" | jsonfilter -e "@.$r.up" 2>/dev/null)" = "true" ] || return 1
+    [ -n "$(echo "$_st" | jsonfilter -e "@.$r.interfaces[*].ifname" 2>/dev/null)" ] || return 1
+  done
+  return 0
+}
+
+# Dois alvos: um deles parar de responder ICMP nao pode virar alarme falso.
+# Sai no primeiro que responder -- o custo de PING_TIMEOUT por alvo mudo so
+# aparece quando a internet esta realmente fora.
+#
+# NAO usar DNS aqui: falha de resolucao nao e falha de internet, e viraria
+# falso positivo toda vez que o resolvedor tossir.
+net_ok() {
+  for t in $PING_TARGETS; do
+    ping -c1 -W$PING_TIMEOUT "$t" >/dev/null 2>&1 && return 0
+  done
+  return 1
+}
+
+# No encerramento, restaura o AZUL FIXO -- que e o `led-running` do device
+# tree, o mesmo que o /etc/init.d/done acende no fim do boot. Devolve a
+# semantica de fabrica ("sistema no ar") sem afirmar saude nenhuma. Apagar
+# tudo seria pior: painel escuro parece aparelho DESLIGADO.
+trap 'log "encerrando; restaurando o azul fixo de fabrica"; aplicar_estado FABRICA; exit 0' INT TERM
+
+led_silenciar_mudos
+estado_atual=""
+primeira_falha_net=0
+ciclos=0
+
+log "iniciado (poll=${POLL_INTERVAL}s grace=${NET_GRACE}s alvos='${PING_TARGETS}')"
+
+while :; do
+  if net_ok; then
+    primeira_falha_net=0
+    net_caiu=0
+  else
+    agora=$(date +%s)
+    [ "$primeira_falha_net" -eq 0 ] && primeira_falha_net=$agora
+    # Dentro da carencia a internet conta como no ar: e a janela do failover
+    # da segunda WAN no firewall, e alarmar nela seria ruido garantido a cada
+    # troca de operadora.
+    if [ $((agora - primeira_falha_net)) -ge $NET_GRACE ]; then
+      net_caiu=1
+    else
+      net_caiu=0
+    fi
+  fi
+
+  # PRECEDENCIA: internet vence radio. Caindo os dois juntos mostra laranja --
+  # sem internet a casa inteira para, enquanto radio fora ainda deixa o
+  # cabeado funcionando. Inverter e trocar a ordem destes dois ramos.
+  if [ "$net_caiu" -eq 1 ]; then
+    novo=NET
+  elif radios_ok; then
+    novo=OK
+  else
+    novo=RADIO
+  fi
+
+  ciclos=$((ciclos + 1))
+  if [ "$novo" != "$estado_atual" ]; then
+    log "estado: ${estado_atual:-<inicial>} -> $novo"
+    aplicar_estado "$novo"
+    estado_atual="$novo"
+    ciclos=0
+  elif [ "$ciclos" -ge "$REAFIRMAR_A_CADA" ]; then
+    # Reescreve o mesmo estado. Em OK/FABRICA e idempotente; no piscando
+    # reinicia a fase, o que a esta altura (um minuto) ninguem percebe.
+    led_silenciar_mudos
+    aplicar_estado "$novo"
+    ciclos=0
+  fi
+
+  sleep $POLL_INTERVAL
+done

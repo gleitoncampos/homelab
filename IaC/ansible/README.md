@@ -47,7 +47,8 @@ ansible/
 ├── templates/
 │   ├── network/
 │   │   ├── opnsense/          # Esqueleto (config.xml.j2) + 10 partials orientados a dado — ver seção abaixo
-│   │   └── openwrt_*.j2       # 4 templates do AP/roteador Wi-Fi, ainda monolíticos (fora deste refactor)
+│   │   └── openwrt_*.j2       # 6 templates do AP/roteador Wi-Fi: 4 de config UCI, ainda monolíticos
+│   │                          # (fora deste refactor), mais o daemon led-health e seu init procd
 │   └── proxmox/                # datacenter.cfg, interfaces e storage.cfg do host Proxmox VE
 ├── tests/                     # Render de templates fora da caixa: OPNsense, monitoring e proxmox_interfaces — ver "make render-*" abaixo
 │   ├── render_opnsense.py     # Jinja2 com trim_blocks=True, igual ao Ansible; nenhum inventário real (make render-opnsense)

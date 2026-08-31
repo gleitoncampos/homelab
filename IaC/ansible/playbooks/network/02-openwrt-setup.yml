@@ -79,6 +79,51 @@
         net.core.wmem_max=16777216 net.core.netdev_max_backlog=10000 && sysctl -p
       changed_when: true
 
+    # -------------------------------------------------------------------------
+    # Sinalização de saúde nos LEDs frontais (led-health)
+    # -------------------------------------------------------------------------
+    # ⚠️ A ORDEM DESTAS TAREFAS IMPORTA, e a razão está no boot do OpenWrt:
+    # `/etc/init.d/done` (START=95) acende o `led-running` do device tree,
+    # `/etc/init.d/led` (START=96) aplica as seções `config led` escritas no
+    # `/etc/config/system` mais acima, e só então o led-health (START=97)
+    # assume o painel. Reiniciar o init de LED antes de subir o daemon
+    # reproduz essa ordem sem exigir reboot.
+    - name: Instalar o daemon de sinalização de saúde nos LEDs do OpenWrt
+      ansible.builtin.raw: |
+        cat << 'EOF' > {{ openwrt_led_health_path | default('/usr/bin/led-health') }}
+        {{ lookup('template', '../../templates/network/openwrt_led_health.sh.j2') }}
+        EOF
+        chmod +x {{ openwrt_led_health_path | default('/usr/bin/led-health') }}
+      changed_when: true
+      when: openwrt_led_health_enabled | default(true) | bool
+
+    - name: Instalar o init procd do led-health no OpenWrt
+      ansible.builtin.raw: |
+        cat << 'EOF' > /etc/init.d/led-health
+        {{ lookup('template', '../../templates/network/openwrt_led_health_init.j2') }}
+        EOF
+        chmod +x /etc/init.d/led-health
+      changed_when: true
+      when: openwrt_led_health_enabled | default(true) | bool
+
+    - name: Aplicar as seções config led e ativar o led-health no OpenWrt
+      ansible.builtin.raw: >-
+        /etc/init.d/led restart
+        && /etc/init.d/led-health enable
+        && /etc/init.d/led-health restart
+      changed_when: true
+      when: openwrt_led_health_enabled | default(true) | bool
+
+    # Desativar é um estado suportado, não um esquecimento: o trap do daemon
+    # restaura o azul fixo de fábrica ao parar, então o painel não fica escuro.
+    - name: Desativar o led-health no OpenWrt quando pedido
+      ansible.builtin.raw: >-
+        /etc/init.d/led-health stop 2>/dev/null;
+        /etc/init.d/led-health disable 2>/dev/null;
+        rm -f /etc/init.d/led-health
+      changed_when: true
+      when: not (openwrt_led_health_enabled | default(true) | bool)
+
     - name: Recarregar serviços de Log, Wi-Fi e Firewall do OpenWrt
       ansible.builtin.raw: "/etc/init.d/log restart && wifi reload && reload_config"
       changed_when: true

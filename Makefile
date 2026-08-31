@@ -25,7 +25,7 @@ PLAYBOOKS   := $(wildcard $(ANSIBLE_DIR)/playbooks/*.yml $(ANSIBLE_DIR)/playbook
 .PHONY: help hooks check lint lint-yaml lint-ansible lint-shell lint-tf ssh-keys \
         validate-compose validate-ansible validate-patterns check-common-copies \
         secrets links snapshot omv-fs discover clean render-opnsense render-monitoring \
-        render-proxmox-ifaces
+        render-proxmox-ifaces render-openwrt-led
 
 help: ## Lista os alvos
 	@echo "Alvos disponíveis:"
@@ -54,7 +54,7 @@ ssh-keys: ## Instala a chave gerada pelo bootstrap em todo host do inventário (
 test-bootstrap: ## Testa os renderizadores do bootstrap contra os consumidores reais
 	@python3 IaC/bootstrap/test_render.py
 
-check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces ## Tudo que a CI roda
+check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led ## Tudo que a CI roda
 	@echo
 	@echo "✓ check completo"
 
@@ -134,6 +134,9 @@ render-monitoring: ## Renderiza os templates da stack de monitoramento com 2 hos
 
 render-proxmox-ifaces: ## Renderiza proxmox_interfaces.j2 e valida o gate de sub-rede (gateway na /24 do address)
 	@python3 $(ANSIBLE_DIR)/tests/render_proxmox_ifaces.py
+
+render-openwrt-led: ## Renderiza o daemon led-health do AP e trava START e ritmos de piscada
+	@python3 $(ANSIBLE_DIR)/tests/render_openwrt_led.py
 
 render-opnsense: ## Renderiza o template do OPNsense e compara com o baseline congelado
 	@set -euo pipefail; \

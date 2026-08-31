@@ -33,3 +33,20 @@ config uhttpd 'main'
 	option redirect_https '1'
 	option cert '/etc/uhttpd.crt'
 	option key '/etc/uhttpd.key'
+
+{#
+  Mantem MUDOS os LEDs de atividade wifi. Sem estas seccoes o trigger de
+  fabrica (phy0tpt/phy1tpt) volta a cada reboot, e a atividade wifi passa a
+  poluir a cor do sinal de saude -- os LEDs de status dividem o difusor com
+  eles, entao "piscar com o trafego" vira ruido em cima do sinal.
+
+  Quem aplica isto e o /etc/init.d/led (START=96), antes do led-health
+  (START=97). A ordem esta documentada no init do daemon.
+#}
+{% for l in openwrt_led_silenced | default(['mt76-phy0', 'mt76-phy1']) %}
+config led 'led_mudo_{{ loop.index }}'
+	option name 'Silenciado pelo led-health ({{ l }})'
+	option sysfs '{{ l }}'
+	option trigger 'none'
+	option default '0'
+{% endfor %}

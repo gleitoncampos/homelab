@@ -25,3 +25,67 @@ vlans:
     ip: "198.18.20.1"
     subnet: 24
     dhcp_enabled: false
+
+# =============================================================================
+# Sinalizacao de saude nos LEDs do AP OpenWrt (led-health)
+# =============================================================================
+# Consumido por templates/network/openwrt_led_health.sh.j2 e pelo
+# openwrt_system.j2 (as seccoes `config led` que silenciam os LEDs de
+# atividade wifi).
+#
+# NAO ha dado sensivel aqui, e por isso este bloco fica na camada versionada
+# inteira: nomes de LED sao nomenclatura de hardware, e os alvos de ping sao
+# anycast publico -- mesmo criterio ja aplicado aos monitores de WAN acima.
+#
+# O vocabulario resultante, incluindo os estados de FABRICA que este daemon
+# nao controla:
+#   laranja piscando <=200ms  boot / failsafe / GRAVANDO FIRMWARE (/etc/diag.sh)
+#   azul fixo                 sistema no ar, daemon nao reportando
+#   branco fixo               2.4G ok, 5G ok e internet ok
+#   azul piscando             algum radio fora
+#   laranja piscando          sem internet alem da carencia
+openwrt_led_health_enabled: true
+openwrt_led_health_path: "/usr/bin/led-health"
+
+# Os dois LEDs de status dividem o MESMO difusor: acesos juntos a luz sai
+# esbranquicada, e e dai que sai o "branco". Nao existe um LED branco.
+openwrt_led_blue: "blue:status"
+openwrt_led_yellow: "yellow:status"
+
+# LEDs mantidos mudos. Sem isto o trigger de fabrica volta no reboot e a
+# atividade wifi pisca em cima do sinal de saude, no mesmo difusor.
+openwrt_led_silenced:
+  - "mt76-phy0"
+  - "mt76-phy1"
+
+openwrt_led_radios:
+  - "radio0"
+  - "radio1"
+
+# Dois alvos para que um deles parar de responder ICMP nao vire alarme falso.
+# Anycast publico, nao topologia. NAO usar nome DNS: falha de resolucao nao e
+# falha de internet e viraria falso positivo.
+openwrt_led_ping_targets:
+  - "1.1.1.1"
+  - "8.8.8.8"
+openwrt_led_ping_timeout: 2
+
+openwrt_led_poll_interval: 3
+
+# Carencia antes de acusar internet fora. Dimensionada para a janela do
+# failover da segunda WAN no firewall: alarmar dentro dela seria ruido
+# garantido a cada troca de operadora.
+openwrt_led_net_grace: 10
+
+# ⚠️ RITMOS LENTOS DE PROPOSITO. O OpenWrt de fabrica pisca o MESMO LED
+# amarelo em 50ms (failsafe), 100ms (preinit) e 200ms (upgrade). Um valor
+# nosso perto de 200ms faria "gravando firmware" e "internet caiu" parecerem
+# iguais, e confundir os dois faz desligar o aparelho na hora errada.
+# Regra: fabrica e rapido (<=200ms), este daemon e lento (>=600ms).
+openwrt_led_blink_radio_ms: 1000
+openwrt_led_blink_net_ms: 600
+
+# Reescreve o estado mesmo sem mudanca, a cada N ciclos. Escrever so na
+# mudanca deixa o painel sequestravel por qualquer ator externo: o daemon
+# acha que ja escreveu e nunca corrige.
+openwrt_led_reaffirm_cycles: 20
