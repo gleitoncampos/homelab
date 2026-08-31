@@ -54,7 +54,7 @@ ansible/
 │   ├── render_opnsense.py     # Jinja2 com trim_blocks=True, igual ao Ansible; nenhum inventário real (make render-opnsense)
 │   ├── render_monitoring.py   # Render da stack de monitoramento com 2 hosts por grupo (make render-monitoring)
 │   ├── render_proxmox_ifaces.py  # (1) afirma que o assert de sub-rede do playbook existe e tem as 3 condições; (2) renderiza proxmox_interfaces.j2, RFC 5737 (make render-proxmox-ifaces)
-│   ├── gates_ordem_vlan.py    # (1) afirma que os 3 gates da ORDEM da migração de VLANs seguem nos playbooks de rede; (2) renderiza e confere que o template cria uma interface por VLAN (make gates-ordem-vlan)
+│   ├── gates_ordem_vlan.py    # (1) afirma que os 3 gates da ORDEM da migração de VLANs seguem nos playbooks de rede; (2) renderiza e confere que o template cria uma interface por VLAN e que cada `politica` vira as regras prometidas, na ordem certa (make gates-ordem-vlan)
 │   ├── fixtures/opnsense.yml  # Variáveis de exemplo — RFC 5737, MAC de documentação IANA
 │   ├── baseline/opnsense-fase0.xml  # Render congelado da fase 0 deste refactor — nunca regenerar
 │   └── expected/               # Diff aprovado por fase, comparado byte a byte (ver expected/README.md)
@@ -181,14 +181,15 @@ também entram em `make check`:
   [`playbooks/network/02-openwrt-setup.yml`](./playbooks/network/02-openwrt-setup.yml)
   (sonda o gateway da VLAN de gerência **do nó de controle** e recusa o play se
   ele não responder). Camada 1 abre os dois playbooks, localiza cada task pelo
-  `name` e afirma a forma do gate — inclusive a exigência de `destination_port`
-  vazio, que é o que impede o `pass` de DNS na porta 53 de passar por regra de
-  passagem. Camada 2 renderiza o config do OPNsense e confere que o template de
-  fato cria uma `<vlan<tag>>` por entrada de `vlans`, DHCP só onde
-  `dhcp_enabled`, e o Unbound escutando em todas — sem ela o gate do playbook
-  compararia contra `vlans` e passaria a mentir no dia em que o template
-  parasse de emitir. ⚠️ Os dois gates do OPNsense **falham hoje**, de propósito:
-  nenhuma VLAN tem política de passagem escrita.
+  `name` e afirma a forma do gate. Camada 2 renderiza o config do OPNsense e
+  confere que o template de fato cria uma `<vlan<tag>>` por entrada de `vlans`,
+  DHCP só onde `dhcp_enabled`, e o Unbound escutando em todas — sem ela o gate
+  do playbook compararia contra `vlans` e passaria a mentir no dia em que o
+  template parasse de emitir. Camada 2b faz o mesmo pela política: confere no
+  XML renderizado que cada `politica` produz as regras que promete **e na ordem
+  certa**. ⚠️ A ordem é o ponto: com o bloqueio do lab depois da saída para a
+  internet, o conjunto de regras fica idêntico e a VLAN alcança tudo — só a
+  `sequence` denuncia, e por isso o teste a compara.
 
 - `make render-proxmox-ifaces` — [`tests/render_proxmox_ifaces.py`](./tests/render_proxmox_ifaces.py)
   protege o gate de sub-rede do Proxmox em duas camadas. O gate EFETIVO é o

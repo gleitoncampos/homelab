@@ -82,6 +82,16 @@ vlans:
     descr: "Gerenciamento"
     ip: "198.51.100.1"
     subnet: 24
+    # As duas fixtures cobrem os dois lados de cada ramo do gerador. Esta
+    # alcança a `lan` e bloqueia a outra VLAN: precisa das DUAS coisas ao
+    # mesmo tempo, senão as checagens de ORDEM (liberação antes de bloqueio,
+    # bloqueio antes da saída para a internet) não têm o que comparar e passam
+    # sem testar nada. A de baixo é o extremo oposto: sem alcance, sem
+    # internet, sem gerência.
+    politica:
+      internet: true
+      alcanca: [lan]
+      gerencia: true
   - tag: 20
     name: "HOMELAB"
     descr: "Servidores"
@@ -93,6 +103,10 @@ vlans:
     dhcp_enabled: true
     dhcp_start: "203.0.113.100"
     dhcp_end: "203.0.113.200"
+    politica:
+      internet: false
+      alcanca: []
+      gerencia: false
 
 dhcp_static_maps:
   - mac: "00:00:5e:00:53:01"

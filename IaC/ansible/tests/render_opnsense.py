@@ -10,6 +10,7 @@ byte comparado com outro de zero byte produz diff vazio, que se lê como verde.
 """
 import argparse
 import sys
+import uuid
 from pathlib import Path
 
 try:
@@ -17,6 +18,10 @@ try:
     from jinja2 import Environment, FileSystemLoader, StrictUndefined
 except ImportError as exc:
     sys.exit(f"dependência ausente: {exc}. Instale PyYAML e Jinja2.")
+
+# Namespace fixo do ansible.builtin.to_uuid (UUID_NAMESPACE_ANSIBLE).
+# Copiado literalmente: mudar este valor muda TODOS os UUIDs gerados.
+NAMESPACE_ANSIBLE = "361e6d51-faec-444a-9079-341386da8e2e"
 
 
 def main() -> int:
@@ -57,6 +62,18 @@ def main() -> int:
         lstrip_blocks=False,         # idem: o módulo NÃO sobrescreve lstrip_blocks, default é no
         keep_trailing_newline=True,
     )
+    # `to_uuid` é filtro do ansible.builtin, não do Jinja puro — mesmo caso do
+    # `regex_escape` em render_monitoring.py e do test `match` em
+    # render_proxmox_ifaces.py. _filter.xml.j2 o usa para dar UUID ESTÁVEL às
+    # regras geradas a partir de `politica`: UUIDv5 sobre o namespace fixo do
+    # Ansible, então a mesma entrada devolve o mesmo UUID em todo render. Sem
+    # registrá-lo aqui o teste falharia por um motivo que não existe na
+    # execução real; registrá-lo com outra semântica seria pior, porque o
+    # render passaria e o firewall receberia UUID diferente do testado.
+    env.filters["to_uuid"] = lambda valor: str(
+        uuid.uuid5(uuid.UUID(NAMESPACE_ANSIBLE), str(valor))
+    )
+
     try:
         saida = env.get_template(args.template.name).render(**variaveis)
     except Exception as exc:                        # noqa: BLE001 — queremos toda falha

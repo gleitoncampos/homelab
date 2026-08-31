@@ -104,6 +104,14 @@ vlans:
     ip: "198.18.10.1"
     subnet: 24
     dhcp_enabled: false
+    # ---- política de passagem ----
+    # Rede do administrador: alcança tudo, inclusive as portas de
+    # gerência dos gateways. É a única com `gerencia: true` por
+    # necessidade — as outras que a tenham, têm por conveniência.
+    politica:
+      internet: true
+      alcanca: [lan, 20, 30, 40, 50, 60]
+      gerencia: true
 
   - tag: 20
     name: "HOMELAB"
@@ -111,6 +119,17 @@ vlans:
     ip: "198.18.20.1"
     subnet: 24
     dhcp_enabled: false
+    # ---- política de passagem ----
+    # Servidor RESPONDE, não inicia — para rede de USUÁRIO. Tráfego entre
+    # nós do Swarm e para o NAS é intra-VLAN e nem chega ao firewall.
+    # A 40 é a exceção, e é de mão única: automação hospedada aqui (Home
+    # Assistant e afins) precisa DESCOBRIR e COMANDAR o dispositivo, então
+    # quem abre a conexão é o servidor. O inverso continua fechado — um
+    # dispositivo IoT comprometido não alcança o Swarm.
+    politica:
+      internet: true
+      alcanca: [40]
+      gerencia: false
 
   - tag: 30
     name: "MAIN"
@@ -120,6 +139,19 @@ vlans:
     dhcp_enabled: true
     dhcp_start: "198.18.30.100"
     dhcp_end: "198.18.30.254"
+    # ---- política de passagem ----
+    # Onde as pessoas estão. Alcança os serviços do homelab (20) e os
+    # dispositivos inteligentes (40) — app de automação roda no próprio
+    # aparelho, então quem abre a conexão é o celular.
+    # ⚠️ `alcanca` NÃO inclui a 10: como está, um PC daqui não abre a GUI do
+    # Proxmox nem a do firewall, e `gerencia: true` não resolve isso — ele
+    # libera as PORTAS de gerência, não a rede onde os gateways estão. Quem
+    # administra hoje está na `lan` de resgate; quando ela for aposentada
+    # (elo 6), ou a 10 entra aqui, ou o administrador ganha rede própria.
+    politica:
+      internet: true
+      alcanca: [20, 40]
+      gerencia: true
 
   - tag: 40
     name: "IOT"
@@ -129,6 +161,13 @@ vlans:
     dhcp_enabled: true
     dhcp_start: "198.18.40.100"
     dhcp_end: "198.18.40.254"
+    # ---- política de passagem ----
+    # Só internet. Os blocos que já existem em opnsense_rules (SMTP,
+    # portscan, WebGUI dos gateways) continuam valendo por cima.
+    politica:
+      internet: true
+      alcanca: []
+      gerencia: false
 
   - tag: 50
     name: "GUEST"
@@ -138,6 +177,13 @@ vlans:
     dhcp_enabled: true
     dhcp_start: "198.18.50.100"
     dhcp_end: "198.18.50.254"
+    # ---- política de passagem ----
+    # Visitante: internet e nada mais. É a política mais simples do
+    # conjunto, e a única em que não há caso de exceção a discutir.
+    politica:
+      internet: true
+      alcanca: []
+      gerencia: false
 
   - tag: 60
     name: "MEDIA"
@@ -147,6 +193,14 @@ vlans:
     dhcp_enabled: true
     dhcp_start: "198.18.60.100"
     dhcp_end: "198.18.60.254"
+    # ---- política de passagem ----
+    # TV alcança os serviços de mídia, que vivem na HOMELAB. Rede
+    # inteira por ora, não porta a porta — restringir por porta exige
+    # saber quais serviços, e isso ainda não está levantado.
+    politica:
+      internet: true
+      alcanca: [20]
+      gerencia: false
 
 # =============================================================================
 # Sinalizacao de saude nos LEDs do AP OpenWrt (led-health)

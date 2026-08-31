@@ -139,37 +139,45 @@
           regra. Ver .local/docs/TODO-E-ROADMAP.md, item 1.1.8, elo 1+2.
         success_msg: "Toda regra de filtro aponta para interface que o config cria."
 
-    - name: Abortar se uma VLAN subir sem nenhuma regra de passagem irrestrita
+    - name: Abortar se uma VLAN não declarar política de passagem completa
       vars:
-        _vlans_do_config: >-
-          {{ vlans | map(attribute='tag') | map('string')
-                   | map('regex_replace', '^', 'vlan') | list }}
-        # Só conta como passagem a regra `pass` SEM restrição de porta de
-        # destino. A distinção não é preciosismo: `LAN > Redireciona DNS para
-        # o FW` é um `pass` que cobre vlan10..vlan50 na porta 53 e mais nada.
-        # Aceitá-lo daria a VLAN por liberada enquanto ela segue sem rota para
-        # o resto — o modo de falha que este asserto existe para pegar.
-        _ifaces_com_passagem: >-
-          {{ opnsense_rules | selectattr('interface', 'defined')
-                            | selectattr('action', 'equalto', 'pass')
-                            | selectattr('destination_port', 'defined')
-                            | selectattr('destination_port', 'equalto', '')
-                            | map(attribute='interface') | select()
-                            | join(',') | regex_findall('[^,]+')
-                            | unique | list }}
+        # A passagem NÃO vem mais de `opnsense_rules`: ela é derivada de
+        # `politica` por _filter.xml.j2. Por isso o gate mudou de alvo — antes
+        # ele procurava a regra, e a regra passou a ser consequência. Procurar
+        # a consequência daria verde no dia em que a política sumisse e as
+        # regras ficassem de uma execução anterior.
+        _chaves_exigidas: ['internet', 'alcanca', 'gerencia']
+        _sem_politica: >-
+          {{ vlans | rejectattr('politica', 'defined')
+                   | map(attribute='tag') | list }}
+        # Uma união por chave exigida, em vez de comparar o conjunto de
+        # chaves: `rejectattr` só aceita caminho de atributo, não expressão —
+        # `politica.keys() | list | sort` vira nome de atributo literal e
+        # estoura com "dict object has no attribute". Custou uma execução.
+        _politica_incompleta: >-
+          {{ (vlans | selectattr('politica', 'defined')
+                    | rejectattr('politica.internet', 'defined') | list
+              + vlans | selectattr('politica', 'defined')
+                      | rejectattr('politica.alcanca', 'defined') | list
+              + vlans | selectattr('politica', 'defined')
+                      | rejectattr('politica.gerencia', 'defined') | list)
+             | map(attribute='tag') | unique | list }}
       ansible.builtin.assert:
         that:
-          - _vlans_do_config | difference(_ifaces_com_passagem) | length == 0
+          - _sem_politica | length == 0
+          - _politica_incompleta | length == 0
         fail_msg: >-
-          VLAN sem regra de passagem:
-          {{ _vlans_do_config | difference(_ifaces_com_passagem) | sort | join(', ') }}.
-          O OPNsense nega por padrão, então a interface sobe, o DHCP entrega
-          endereço e o cliente não fala com nada — parece problema de
-          equipamento, não de firewall. Acrescente a política de passagem
-          dessas VLANs a `opnsense_rules` em inventories/_common/opnsense.yml
-          no MESMO apply que cria as interfaces. Ver
-          .local/docs/TODO-E-ROADMAP.md, item 1.1.8, elo 1+2.
-        success_msg: "Toda VLAN do config tem ao menos uma regra de passagem irrestrita."
+          VLAN sem política de passagem declarada.
+          Sem `politica`: {{ _sem_politica | sort | join(', ') or 'nenhuma' }}.
+          Com `politica` incompleta (exige {{ _chaves_exigidas | join(', ') }}):
+          {{ _politica_incompleta | sort | join(', ') or 'nenhuma' }}.
+          O OPNsense nega por padrão, então uma VLAN sem política sobe, o DHCP
+          entrega endereço e o cliente não fala com nada — parece problema de
+          equipamento, não de firewall. Declare `politica` na entrada da VLAN
+          em group_vars/network/. Isolamento total é uma resposta legítima
+          (`internet: false`, `alcanca: []`), desde que ESCRITA. Ver
+          .local/docs/TODO-E-ROADMAP.md, item 1.1.6.
+        success_msg: "Toda VLAN declara política de passagem completa."
   tasks:
     # Sem ignore_errors: se o backup falhar, ABORTA. A task seguinte sobrescreve
     # o /conf/config.xml inteiro — seguir sem cópia de segurança deixaria o

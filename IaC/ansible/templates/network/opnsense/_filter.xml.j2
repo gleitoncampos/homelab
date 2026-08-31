@@ -16,6 +16,134 @@
 {% endfor %}
           </rule>
 {% endfor %}
+{#
+  ===========================================================================
+  REGRAS GERADAS A PARTIR DE `politica`
+  ===========================================================================
+  As regras acima são escritas à mão em `opnsense_rules` e são POLÍTICA de
+  segurança genérica (blocklists, anti-portscan, evasão de DNS). As de baixo
+  são derivadas da topologia: quem alcança quem. Misturar as duas na mesma
+  lista seria pedir que alguém mantivesse à mão N regras por VLAN e as
+  mantivesse coerentes entre si — foi assim que as seis VLANs ficaram sem
+  NENHUMA regra de passagem enquanto oito regras de bloqueio as citavam.
+
+  Cada VLAN vira, nesta ordem de `sequence` (o `quick` faz a primeira que
+  casar decidir):
+
+    35  block  portas de gerência no PRÓPRIO firewall   (se gerencia: false)
+    40  pass   cada rede do lab em `alcanca`
+    50  block  cada outra rede do lab
+    60  pass   qualquer destino                         (se internet: true)
+
+  A ordem é o desenho inteiro: 40 antes de 50 é o que faz a exceção valer, e
+  50 antes de 60 é o que impede a saída para a internet de virar saída para o
+  lab. Inverter qualquer par transforma a matriz em "todo mundo alcança todo
+  mundo" sem que nada acuse.
+
+  ⚠️ `alcanca` é DIRECIONAL. O pf é com estado: liberar 30 -> 20 já traz a
+  resposta de volta. Não existe, e não deve existir, regra no sentido inverso.
+
+  UUID vem de `to_uuid` sobre uma chave estável (a VLAN, o tipo e o destino),
+  e NÃO de sorteio: UUID é identidade neste config, e um novo a cada render
+  faria o OPNsense ver regra nova toda vez.
+#}
+{% macro regra_politica(chave, seq, acao, iface, destino, porta, descricao) %}
+          <rule uuid="{{ ('politica:' ~ chave) | to_uuid }}">
+            <enabled>1</enabled>
+            <statetype>keep</statetype>
+            <state-policy/>
+            <sequence>{{ seq }}</sequence>
+            <action>{{ acao }}</action>
+            <quick>1</quick>
+            <interfacenot>0</interfacenot>
+            <interface>{{ iface }}</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>{{ 'tcp' if porta else 'any' }}</protocol>
+            <icmptype/>
+            <icmp6type/>
+            <source_net>{{ iface }}</source_net>
+            <source_not>0</source_not>
+            <source_port/>
+            <destination_net>{{ destino }}</destination_net>
+            <destination_not>0</destination_not>
+            <destination_port>{{ porta }}</destination_port>
+            <divert-to/>
+            <gateway/>
+            <replyto/>
+            <disablereplyto>0</disablereplyto>
+            <log>{{ 1 if acao == 'block' else 0 }}</log>
+            <allowopts>0</allowopts>
+            <nosync>0</nosync>
+            <nopfsync>0</nopfsync>
+            <statetimeout/>
+            <udp-first/>
+            <udp-multiple/>
+            <udp-single/>
+            <max-src-nodes/>
+            <max-src-states/>
+            <max-src-conn/>
+            <max/>
+            <max-src-conn-rate/>
+            <max-src-conn-rates/>
+            <overload/>
+            <adaptivestart/>
+            <adaptiveend/>
+            <prio/>
+            <set-prio/>
+            <set-prio-low/>
+            <tag/>
+            <tagged/>
+            <tcpflags1/>
+            <tcpflags2/>
+            <tcpflags_any>0</tcpflags_any>
+            <categories/>
+            <sched/>
+            <tos/>
+            <shaper1/>
+            <shaper2/>
+            <description>{{ descricao | e }}</description>
+          </rule>
+{% endmacro %}
+{# `todas_lab` é o universo de destinos internos: a rede plana de resgate mais
+   uma por VLAN. Sai de `vlans`, então uma VLAN nova entra no bloqueio das
+   outras SOZINHA — o modo de falha oposto (VLAN nova nascer alcançável por
+   todo mundo porque ninguém lembrou de acrescentá-la a uma lista) é o que
+   esta derivação existe para impedir. #}
+{% set todas_lab = ['lan'] %}
+{% for v in vlans %}
+{% set _ = todas_lab.append('vlan' ~ v.tag) %}
+{% endfor %}
+{% for vlan in vlans %}
+{% set eu = 'vlan' ~ vlan.tag %}
+{% set pol = vlan.politica %}
+{% set permitidas = [] %}
+{% for d in pol.alcanca %}
+{% set _ = permitidas.append('lan' if d == 'lan' else 'vlan' ~ d) %}
+{% endfor %}
+{% set bloqueadas = todas_lab | reject('equalto', eu) | reject('in', permitidas) | list %}
+{% if not pol.gerencia %}
+{#   ⚠️ destino é `(self)`, o PRÓPRIO firewall — e não `any`. Management_Ports
+     contém 80 e 443: com destino `any` esta regra tiraria a web inteira da
+     VLAN, não o acesso à GUI. É o defeito que a regra manual equivalente
+     (uuid e8d7c6b5, sobre vlan40 e vlan50) tem hoje. #}
+{{ regra_politica(eu ~ ':block-gerencia', 35, 'block', eu, '(self)',
+                  'Management_Ports',
+                  vlan.name ~ ' > bloqueia portas de gerencia do firewall') }}
+{% endif %}
+{% for destino in permitidas %}
+{{ regra_politica(eu ~ ':pass-lab:' ~ destino, 40, 'pass', eu, destino, '',
+                  vlan.name ~ ' > alcanca ' ~ destino) }}
+{% endfor %}
+{% for destino in bloqueadas %}
+{{ regra_politica(eu ~ ':block-lab:' ~ destino, 50, 'block', eu, destino, '',
+                  vlan.name ~ ' > bloqueia ' ~ destino) }}
+{% endfor %}
+{% if pol.internet %}
+{{ regra_politica(eu ~ ':pass-internet', 60, 'pass', eu, 'any', '',
+                  vlan.name ~ ' > internet') }}
+{% endif %}
+{% endfor %}
         </rules>
         <snatrules/>
         <npt/>

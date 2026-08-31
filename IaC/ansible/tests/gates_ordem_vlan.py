@@ -55,7 +55,7 @@ RENDER = ANSIBLE / "tests" / "render_opnsense.py"
 # `name` exato de cada task de gate. Renomear a task derruba este teste — de
 # propósito: é o ponto onde a Camada 1 se prende ao alvo real.
 GATE_ORFA = "Abortar se uma regra de filtro citar interface que o config não cria"
-GATE_PASSAGEM = "Abortar se uma VLAN subir sem nenhuma regra de passagem irrestrita"
+GATE_PASSAGEM = "Abortar se uma VLAN não declarar política de passagem completa"
 GATE_MGMT = "Abortar se a VLAN de gerência ainda não existe ou não é alcançável"
 SONDA_MGMT = "Sondar o gateway da VLAN de gerência a partir do nó de controle"
 
@@ -153,20 +153,20 @@ def verifica_gates_opnsense():
         corpo = _corpo_assert(task)
         checar(corpo is not None, "gate 2 é um assert com bloco `that:`")
         if corpo:
-            checar("difference" in corpo
-                   and "_vlans_do_config" in corpo
-                   and "_ifaces_com_passagem" in corpo
-                   and "length == 0" in corpo,
-                   "gate 2 exige que toda VLAN apareça entre as que têm passagem")
+            checar("_sem_politica" in corpo
+                   and "_politica_incompleta" in corpo
+                   and corpo.count("length == 0") >= 2,
+                   "gate 2 exige as duas listas vazias (sem política e incompleta)")
         v = _normalizar(str(task.get("vars", {})))
-        # A invariante FINA do gate 2, e a razão de ele existir: só conta como
-        # passagem a regra `pass` SEM restrição de porta de destino. Aceitar
-        # qualquer `pass` deixaria o redirecionamento de DNS (porta 53) dar a
-        # VLAN por liberada enquanto ela segue sem rota para o resto.
-        checar("'action', 'equalto', 'pass'" in v,
-               "gate 2 filtra por action == pass")
-        checar("'destination_port', 'equalto', ''" in v,
-               "gate 2 exige porta de destino VAZIA (não aceita o pass de DNS)")
+        # A invariante do gate 2 mudou de alvo quando a passagem passou a ser
+        # DERIVADA de `politica`: procurar a regra daria verde no dia em que a
+        # política sumisse e as regras ficassem de uma execução anterior. O
+        # gate agora exige o CAMPO, e as três chaves dele.
+        for chave in ("internet", "alcanca", "gerencia"):
+            checar(f"'politica.{chave}', 'defined'" in v,
+                   f"gate 2 exige a chave `{chave}` na política")
+        checar("rejectattr('politica', 'defined')" in v,
+               "gate 2 pega também a VLAN sem `politica` nenhuma")
 
 
 def verifica_gate_openwrt():
@@ -283,18 +283,97 @@ def verifica_render_cria_as_vlans():
            f"Unbound escuta em toda VLAN (faltando: {faltando or 'nenhuma'})")
     checar("lan" in escutando, "Unbound continua escutando na lan (rede de resgate)")
 
+    return raiz, vlans
+
+
+def verifica_politica_gera_regras(raiz, vlans):
+    """Prova que cada `politica` vira o conjunto de regras que ela promete.
+
+    Esta camada existe porque o gate 2 do playbook, depois de reescrito, só
+    exige que o CAMPO exista. Quem garante que o campo tem EFEITO é aqui — sem
+    isto, apagar o gerador de `_filter.xml.j2` deixaria o gate verde e as seis
+    VLANs mudas, que é exatamente o estado que a migração inteira existe para
+    sair.
+
+    Não reimplementa o template: lê a política declarada e confere, no XML
+    RENDERIZADO, a consequência prometida por ela.
+    """
+    print("\n== CAMADA 2b: `politica` vira regra ==")
+
+    regras = [r for r in raiz.iter("rule")
+              if (r.findtext("description") or "").count(" > ")]
+    por_iface = {}
+    for r in regras:
+        por_iface.setdefault(r.findtext("interface"), []).append(r)
+
+    universo = ["lan"] + [f"vlan{v['tag']}" for v in vlans]
+
+    for vlan in vlans:
+        eu = f"vlan{vlan['tag']}"
+        pol = vlan["politica"]
+        minhas = por_iface.get(eu, [])
+        checar(bool(minhas), f"[{eu}] gerou regra de política")
+        if not minhas:
+            continue
+
+        def alvos(acao, porta=""):
+            return {r.findtext("destination_net") for r in minhas
+                    if r.findtext("action") == acao
+                    and (r.findtext("destination_port") or "") == porta}
+
+        permitidas = {"lan" if d == "lan" else f"vlan{d}" for d in pol["alcanca"]}
+        esperado_bloqueio = set(universo) - {eu} - permitidas
+
+        checar(alvos("pass") >= permitidas,
+               f"[{eu}] passa para tudo que `alcanca` declara: {sorted(permitidas)}")
+        # As duas direções: bloqueia o que não foi liberado, E não bloqueia o
+        # que foi. A segunda metade é a que pega um `reject` invertido, que
+        # produziria um conjunto plausível e errado.
+        checar(alvos("block") >= esperado_bloqueio,
+               f"[{eu}] bloqueia o resto do lab: {sorted(esperado_bloqueio)}")
+        checar(not (alvos("block") & permitidas),
+               f"[{eu}] NÃO bloqueia o que `alcanca` liberou")
+
+        checar(("any" in alvos("pass")) == bool(pol["internet"]),
+               f"[{eu}] saída para a internet == internet:{pol['internet']}")
+        checar(("(self)" in alvos("block", "Management_Ports"))
+               == (not pol["gerencia"]),
+               f"[{eu}] bloqueio de portas de gerência == not gerencia:"
+               f"{pol['gerencia']}")
+
+        # ⚠️ A ORDEM é o desenho inteiro, e ela não aparece em nenhuma das
+        # checagens acima: com o bloqueio do lab DEPOIS da saída para a
+        # internet, o `quick` faz a saída casar primeiro e a VLAN alcança tudo.
+        # O conjunto de regras seria idêntico; só a `sequence` denuncia.
+        def seqs(acao, destino):
+            return [int(r.findtext("sequence")) for r in minhas
+                    if r.findtext("action") == acao
+                    and r.findtext("destination_net") == destino]
+
+        seq_pass_lab = [s for d in permitidas for s in seqs("pass", d)]
+        seq_block_lab = [s for d in esperado_bloqueio for s in seqs("block", d)]
+        seq_any = seqs("pass", "any")
+        if seq_pass_lab and seq_block_lab:
+            checar(max(seq_pass_lab) < min(seq_block_lab),
+                   f"[{eu}] liberação do lab vem ANTES do bloqueio do lab")
+        if seq_block_lab and seq_any:
+            checar(max(seq_block_lab) < min(seq_any),
+                   f"[{eu}] bloqueio do lab vem ANTES da saída para a internet")
+
 
 def main():
     verifica_gates_opnsense()
     verifica_gate_openwrt()
-    verifica_render_cria_as_vlans()
+    resultado = verifica_render_cria_as_vlans()
+    if resultado:
+        verifica_politica_gera_regras(*resultado)
 
     print()
     if falhas:
         print(f"  {len(falhas)} FALHA(S)")
         return 1
     print("  GATES DA ORDEM DE APLICAÇÃO OK "
-          "(asserts presentes nos playbooks; template cria as VLANs)")
+          "(asserts nos playbooks; template cria as VLANs e aplica a política)")
     return 0
 
 
