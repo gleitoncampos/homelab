@@ -34,7 +34,6 @@ TEMPLATES = RAIZ / "IaC" / "ansible" / "templates" / "network"
 CONTEXTO = {
     "openwrt_led_blue": "blue:status",
     "openwrt_led_yellow": "yellow:status",
-    "openwrt_led_silenced": ["mt76-phy0", "mt76-phy1"],
     "openwrt_led_radios": ["radio0", "radio1"],
     "openwrt_led_ping_targets": ["192.0.2.53", "198.51.100.53"],
     "openwrt_led_ping_timeout": 2,
@@ -120,6 +119,21 @@ checar(
 checar(
     "REAFIRMAR_A_CADA" in daemon,
     "reafirma o estado periodicamente (painel não fica sequestrável)",
+)
+# ⚠️ Invariante negativa, e ela vale mais que as positivas: o daemon NÃO pode
+# escrever nos LEDs mt76-phy*. São acionados pelo chip MediaTek, e escrever no
+# trigger deles é a única coisa aqui que alcança registrador do rádio. Numa
+# investigação de 31/08/2026 essa escrita não pôde ser descartada como causa
+# de uma queda de Wi-Fi, e não há ganho que a justifique.
+# A checagem ignora comentários de propósito: a invariante é sobre CÓDIGO
+# executável. O cabeçalho do template cita `mt76-phy*` justamente para
+# explicar por que não se deve escrever nele.
+codigo = "\n".join(
+    ln for ln in daemon.splitlines() if not ln.lstrip().startswith("#")
+)
+checar(
+    "mt76" not in codigo,
+    "nenhuma linha executável do daemon referencia mt76-phy*",
 )
 checar(
     "interfaces[*].ifname" in daemon,

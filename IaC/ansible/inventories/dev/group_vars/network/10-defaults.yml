@@ -52,12 +52,6 @@ openwrt_led_health_path: "/usr/bin/led-health"
 openwrt_led_blue: "blue:status"
 openwrt_led_yellow: "yellow:status"
 
-# LEDs mantidos mudos. Sem isto o trigger de fabrica volta no reboot e a
-# atividade wifi pisca em cima do sinal de saude, no mesmo difusor.
-openwrt_led_silenced:
-  - "mt76-phy0"
-  - "mt76-phy1"
-
 openwrt_led_radios:
   - "radio0"
   - "radio1"

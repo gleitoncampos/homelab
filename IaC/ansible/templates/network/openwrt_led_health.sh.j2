@@ -31,10 +31,12 @@
 LED_BLUE="/sys/class/leds/{{ openwrt_led_blue | default('blue:status') }}"
 LED_YELLOW="/sys/class/leds/{{ openwrt_led_yellow | default('yellow:status') }}"
 
-# LEDs que devem permanecer MUDOS. Sem isto o trigger de fabrica (phy0tpt/
-# phy1tpt) volta no reboot e a atividade wifi polui a cor do sinal.
-LED_MUDOS="{% for l in openwrt_led_silenced | default(['mt76-phy0', 'mt76-phy1']) %}/sys/class/leds/{{ l }} {% endfor %}"
-
+# ⚠️ ESTE DAEMON NAO TOCA NOS LEDs mt76-phy*, e a omissao e deliberada.
+# Eles sao acionados pelo proprio chip MediaTek; escrever no trigger deles e
+# a unica coisa aqui que alcanca registrador do radio. Uma investigacao de
+# 31/08/2026, com o wifi fora do ar, nao conseguiu descartar essa escrita
+# como causa -- e nao ha ganho que justifique o risco, porque a atividade
+# wifi nos LEDs nunca foi usada neste equipamento. Nao acrescente.
 RADIOS="{{ openwrt_led_radios | default(['radio0', 'radio1']) | join(' ') }}"
 PING_TARGETS="{{ openwrt_led_ping_targets | default(['1.1.1.1', '8.8.8.8']) | join(' ') }}"
 PING_TIMEOUT={{ openwrt_led_ping_timeout | default(2) }}
@@ -58,14 +60,6 @@ log() { logger -t led-health "$1"; }
 for l in "$LED_BLUE" "$LED_YELLOW"; do
   [ -d "$l" ] || { log "FATAL: $l nao existe; hardware incompativel"; exit 1; }
 done
-
-led_silenciar_mudos() {
-  for l in $LED_MUDOS; do
-    [ -d "$l" ] || continue
-    echo none > "$l/trigger" 2>/dev/null
-    echo 0 > "$l/brightness" 2>/dev/null
-  done
-}
 
 led_fixo() {  # $1=caminho $2=0|1
   echo none > "$1/trigger" 2>/dev/null
@@ -120,7 +114,6 @@ net_ok() {
 # tudo seria pior: painel escuro parece aparelho DESLIGADO.
 trap 'log "encerrando; restaurando o azul fixo de fabrica"; aplicar_estado FABRICA; exit 0' INT TERM
 
-led_silenciar_mudos
 estado_atual=""
 primeira_falha_net=0
 ciclos=0
@@ -164,7 +157,6 @@ while :; do
   elif [ "$ciclos" -ge "$REAFIRMAR_A_CADA" ]; then
     # Reescreve o mesmo estado. Em OK/FABRICA e idempotente; no piscando
     # reinicia a fase, o que a esta altura (um minuto) ninguem percebe.
-    led_silenciar_mudos
     aplicar_estado "$novo"
     ciclos=0
   fi
