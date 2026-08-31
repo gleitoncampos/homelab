@@ -30,15 +30,24 @@
   Cada VLAN vira, nesta ordem de `sequence` (o `quick` faz a primeira que
   casar decidir):
 
-    35  block  portas de gerência no PRÓPRIO firewall   (se gerencia: false)
     40  pass   cada rede do lab em `alcanca`
+    45  block  portas de gerência no firewall e em rede privada  (se !gerencia)
     50  block  cada outra rede do lab
     60  pass   qualquer destino                         (se internet: true)
 
-  A ordem é o desenho inteiro: 40 antes de 50 é o que faz a exceção valer, e
-  50 antes de 60 é o que impede a saída para a internet de virar saída para o
-  lab. Inverter qualquer par transforma a matriz em "todo mundo alcança todo
-  mundo" sem que nada acuse.
+  A ordem é o desenho inteiro:
+
+    40 antes de 45  — a permissão ESPECÍFICA vence a restrição genérica.
+                      Management_Ports contém 80 e 443, então um bloqueio de
+                      gerência antes das liberações mataria HTTP entre VLANs
+                      que `alcanca` liberou de propósito: o Home Assistant na
+                      20 não falaria com o dispositivo na 40, e a TV na 60 não
+                      abriria o serviço de mídia na 20.
+    40 antes de 50  — é o que faz a exceção de `alcanca` valer.
+    50 antes de 60  — impede a saída para a internet de virar saída para o lab.
+
+  Inverter qualquer par transforma a matriz em algo mais permissivo ou mais
+  quebrado, com o MESMO conjunto de regras. Só a `sequence` denuncia.
 
   ⚠️ `alcanca` é DIRECIONAL. O pf é com estado: liberar 30 -> 20 já traz a
   resposta de volta. Não existe, e não deve existir, regra no sentido inverso.
@@ -122,19 +131,28 @@
 {% set _ = permitidas.append('lan' if d == 'lan' else 'vlan' ~ d) %}
 {% endfor %}
 {% set bloqueadas = todas_lab | reject('equalto', eu) | reject('in', permitidas) | list %}
-{% if not pol.gerencia %}
-{#   ⚠️ destino é `(self)`, o PRÓPRIO firewall — e não `any`. Management_Ports
-     contém 80 e 443: com destino `any` esta regra tiraria a web inteira da
-     VLAN, não o acesso à GUI. É o defeito que a regra manual equivalente
-     (uuid e8d7c6b5, sobre vlan40 e vlan50) tem hoje. #}
-{{ regra_politica(eu ~ ':block-gerencia', 35, 'block', eu, '(self)',
-                  'Management_Ports',
-                  vlan.name ~ ' > bloqueia portas de gerencia do firewall') }}
-{% endif %}
 {% for destino in permitidas %}
 {{ regra_politica(eu ~ ':pass-lab:' ~ destino, 40, 'pass', eu, destino, '',
                   vlan.name ~ ' > alcanca ' ~ destino) }}
 {% endfor %}
+{% if not pol.gerencia %}
+{#   Dois destinos, e nenhum é `any`. Management_Ports contém 80 e 443: com
+     destino `any` esta regra tiraria a web INTEIRA da VLAN em vez do acesso à
+     GUI — era o defeito da regra manual e8d7c6b5, removida.
+
+     `(self)` é o próprio firewall, e não sai de REDES_PRIVADAS: o IP dele na
+     interface desta VLAN pode estar fora da RFC 1918 conforme o
+     endereçamento, e o bloqueio da GUI não pode depender disso.
+     REDES_PRIVADAS cobre todo o resto que seja interno — inclusive faixa
+     privada que não seja VLAN nenhuma daqui, que os bloqueios de rede do lab
+     (sequence 50) não alcançam. #}
+{{ regra_politica(eu ~ ':block-gerencia-self', 45, 'block', eu, '(self)',
+                  'Management_Ports',
+                  vlan.name ~ ' > bloqueia gerencia do firewall') }}
+{{ regra_politica(eu ~ ':block-gerencia-privadas', 45, 'block', eu,
+                  'REDES_PRIVADAS', 'Management_Ports',
+                  vlan.name ~ ' > bloqueia gerencia em rede privada') }}
+{% endif %}
 {% for destino in bloqueadas %}
 {{ regra_politica(eu ~ ':block-lab:' ~ destino, 50, 'block', eu, destino, '',
                   vlan.name ~ ' > bloqueia ' ~ destino) }}

@@ -336,10 +336,17 @@ def verifica_politica_gera_regras(raiz, vlans):
 
         checar(("any" in alvos("pass")) == bool(pol["internet"]),
                f"[{eu}] saída para a internet == internet:{pol['internet']}")
-        checar(("(self)" in alvos("block", "Management_Ports"))
-               == (not pol["gerencia"]),
-               f"[{eu}] bloqueio de portas de gerência == not gerencia:"
-               f"{pol['gerencia']}")
+        gerencia_bloqueada = alvos("block", "Management_Ports")
+        esperado_gerencia = ({"(self)", "REDES_PRIVADAS"}
+                             if not pol["gerencia"] else set())
+        checar(gerencia_bloqueada == esperado_gerencia,
+               f"[{eu}] bloqueio de gerência == {sorted(esperado_gerencia)} "
+               f"(veio {sorted(gerencia_bloqueada)})")
+        # ⚠️ `any` aqui seria o defeito da regra manual removida:
+        # Management_Ports contém 80 e 443, então bloquear a web inteira em vez
+        # da GUI. O teste afirma a ausência, não só a presença do certo.
+        checar("any" not in gerencia_bloqueada,
+               f"[{eu}] bloqueio de gerência NÃO usa destino `any`")
 
         # ⚠️ A ORDEM é o desenho inteiro, e ela não aparece em nenhuma das
         # checagens acima: com o bloqueio do lab DEPOIS da saída para a
@@ -351,6 +358,17 @@ def verifica_politica_gera_regras(raiz, vlans):
                     and r.findtext("destination_net") == destino]
 
         seq_pass_lab = [s for d in permitidas for s in seqs("pass", d)]
+        seq_gerencia = [int(r.findtext("sequence")) for r in minhas
+                        if r.findtext("action") == "block"
+                        and (r.findtext("destination_port") or "")
+                        == "Management_Ports"]
+        # ⚠️ A permissão ESPECÍFICA tem de vencer a restrição genérica.
+        # Management_Ports contém 80 e 443: bloqueio de gerência antes das
+        # liberações mataria HTTP entre VLANs que `alcanca` liberou de
+        # propósito — Home Assistant na 20 não falaria com o dispositivo na 40.
+        if seq_pass_lab and seq_gerencia:
+            checar(max(seq_pass_lab) < min(seq_gerencia),
+                   f"[{eu}] liberação do lab vem ANTES do bloqueio de gerência")
         seq_block_lab = [s for d in esperado_bloqueio for s in seqs("block", d)]
         seq_any = seqs("pass", "any")
         if seq_pass_lab and seq_block_lab:

@@ -553,6 +553,37 @@ opnsense_aliases:
     expire: ''
     categories: ''
     description: Portas DNS-over-QUIC (UDP 853)
+  # Espaço de endereçamento privado da RFC 1918. É CONSTANTE de protocolo, não
+  # topologia: vale igual em prod, em dev e em qualquer rede do mundo, por isso
+  # fica aqui e não em group_vars/network/.
+  #
+  # ⚠️ NÃO confundir com bogons. Bogon é endereço que não deveria aparecer na
+  # internet pública, e é o que o `blockbogons` da WAN usa. Aqui o alvo é o
+  # oposto: o que é INTERNO. As duas listas se sobrepõem e não são a mesma.
+  #
+  # Não reaproveita `opnsense_unbound_privateaddress`: aquela lista existe para
+  # a proteção contra rebind do Unbound e carrega faixas de documentação,
+  # loopback e IPv6 que não têm o que fazer numa regra de filtro.
+  - uuid: c4f1a8e2-6b30-4d57-9a1c-7e05d2b83f41
+    enabled: '1'
+    name: REDES_PRIVADAS
+    type: network
+    path_expression: ''
+    proto: ''
+    interface: ''
+    counters: '0'
+    updatefreq: ''
+    content: '10.0.0.0/8
+
+      172.16.0.0/12
+
+      192.168.0.0/16'
+    password: ''
+    username: ''
+    authtype: ''
+    expire: ''
+    categories: ''
+    description: Espaco de enderecamento privado (RFC 1918)
   - uuid: d8c7b6a5-f4e3-2109-8765-443322110099
     enabled: '1'
     name: Management_Ports
@@ -594,36 +625,23 @@ opnsense_aliases:
 # política. _filter.xml.j2 faz o caso especial por uuid; o campo
 # destination_net abaixo fica vazio de propósito.
 opnsense_rules:
-  - uuid: e8d7c6b5-a4f3-2109-8765-554433221188
-    enabled: '1'
-    statetype: keep
-    state-policy: ''
-    sequence: '0'
-    action: block
-    quick: '1'
-    interfacenot: '0'
-    interface: vlan40,vlan50
-    direction: in
-    ipprotocol: inet
-    protocol: tcp
-    icmptype: ''
-    icmp6type: ''
-    source_net: any
-    source_not: '0'
-    source_port: ''
-    destination_net: any
-    destination_not: '0'
-    destination_port: Management_Ports
-    divert-to: ''
-    gateway: ''
-    replyto: ''
-    disablereplyto: '0'
-    log: '1'
-    allowopts: '0'
-    nosync: '0'
-    nopfsync: '0'
-    statetimeout: ''
-    description: Bloqueio de Acesso IoT e Visitantes as WebGUIs e SSH dos Gateways
+  # ⚠️ REMOVIDA em 31/08/2026: `Bloqueio de Acesso IoT e Visitantes as WebGUIs e
+  # SSH dos Gateways` (uuid e8d7c6b5). Dois motivos, e o segundo é o que decide.
+  #
+  # 1. Estava errada. `destination_net: any` com `destination_port:
+  #    Management_Ports` — alias que contém 80 e 443 — não bloqueava a GUI dos
+  #    gateways: bloqueava a web inteira de IOT e GUEST. Nunca foi exercida,
+  #    porque foi escrita à mão para VLANs que não existem.
+  # 2. Mesmo corrigida, ela é uma ARMADILHA de ordem. `sequence: 0` + `quick`
+  #    faz dela a primeira de todas, e o alias de porta inclui 80/443 — então
+  #    ela venceria qualquer liberação futura de `alcanca` naquelas VLANs, em
+  #    silêncio. Duas fontes de verdade para a mesma decisão, que é o defeito
+  #    que a derivação por `politica` existe para acabar.
+  #
+  # O gerador de _filter.xml.j2 cobre isto por `gerencia: false`, para as
+  # QUATRO VLANs que a declaram (20, 40, 50, 60) e não só duas, com destino
+  # `(self)` + REDES_PRIVADAS e em `sequence: 45` — DEPOIS das liberações de
+  # `alcanca`, para que a permissão específica vença a restrição genérica.
   - uuid: b9a8c7d6-e5f4-3210-9876-001122334455
     enabled: '1'
     statetype: keep

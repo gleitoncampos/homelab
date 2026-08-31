@@ -1,4 +1,4 @@
-@@ -1458,7 +1526,7 @@
+@@ -1458,7 +1514,7 @@
              <quick>1</quick>
              <interfacenot>0</interfacenot>
              <interface>wan</interface>
@@ -7,7 +7,7 @@
              <ipprotocol>inet</ipprotocol>
              <protocol>any</protocol>
              <icmptype/>
-@@ -1505,6 +1573,342 @@
+@@ -1505,6 +1561,398 @@
              <shaper2/>
              <description/>
            </rule>
@@ -179,11 +179,67 @@
 +            <shaper2/>
 +            <description>MGMT &gt; internet</description>
 +          </rule>
-+          <rule uuid="08a867d7-93a5-5c85-8e01-8cec04796844">
++          <rule uuid="6549a389-d121-58b3-b9a7-b9f0213b7131">
 +            <enabled>1</enabled>
 +            <statetype>keep</statetype>
 +            <state-policy/>
-+            <sequence>35</sequence>
++            <sequence>40</sequence>
++            <action>pass</action>
++            <quick>1</quick>
++            <interfacenot>0</interfacenot>
++            <interface>vlan20</interface>
++            <direction>in</direction>
++            <ipprotocol>inet</ipprotocol>
++            <protocol>any</protocol>
++            <icmptype/>
++            <icmp6type/>
++            <source_net>vlan20</source_net>
++            <source_not>0</source_not>
++            <source_port/>
++            <destination_net>lan</destination_net>
++            <destination_not>0</destination_not>
++            <destination_port/>
++            <divert-to/>
++            <gateway/>
++            <replyto/>
++            <disablereplyto>0</disablereplyto>
++            <log>0</log>
++            <allowopts>0</allowopts>
++            <nosync>0</nosync>
++            <nopfsync>0</nopfsync>
++            <statetimeout/>
++            <udp-first/>
++            <udp-multiple/>
++            <udp-single/>
++            <max-src-nodes/>
++            <max-src-states/>
++            <max-src-conn/>
++            <max/>
++            <max-src-conn-rate/>
++            <max-src-conn-rates/>
++            <overload/>
++            <adaptivestart/>
++            <adaptiveend/>
++            <prio/>
++            <set-prio/>
++            <set-prio-low/>
++            <tag/>
++            <tagged/>
++            <tcpflags1/>
++            <tcpflags2/>
++            <tcpflags_any>0</tcpflags_any>
++            <categories/>
++            <sched/>
++            <tos/>
++            <shaper1/>
++            <shaper2/>
++            <description>HOMELAB &gt; alcanca lan</description>
++          </rule>
++          <rule uuid="5b41daa7-3d43-5d4b-8819-94d0e1e67844">
++            <enabled>1</enabled>
++            <statetype>keep</statetype>
++            <state-policy/>
++            <sequence>45</sequence>
 +            <action>block</action>
 +            <quick>1</quick>
 +            <interfacenot>0</interfacenot>
@@ -233,28 +289,28 @@
 +            <tos/>
 +            <shaper1/>
 +            <shaper2/>
-+            <description>HOMELAB &gt; bloqueia portas de gerencia do firewall</description>
++            <description>HOMELAB &gt; bloqueia gerencia do firewall</description>
 +          </rule>
-+          <rule uuid="ee20f301-04a3-5b0b-b558-214c548ec841">
++          <rule uuid="f3341bb0-89eb-5e2d-af74-61ecb8407ada">
 +            <enabled>1</enabled>
 +            <statetype>keep</statetype>
 +            <state-policy/>
-+            <sequence>50</sequence>
++            <sequence>45</sequence>
 +            <action>block</action>
 +            <quick>1</quick>
 +            <interfacenot>0</interfacenot>
 +            <interface>vlan20</interface>
 +            <direction>in</direction>
 +            <ipprotocol>inet</ipprotocol>
-+            <protocol>any</protocol>
++            <protocol>tcp</protocol>
 +            <icmptype/>
 +            <icmp6type/>
 +            <source_net>vlan20</source_net>
 +            <source_not>0</source_not>
 +            <source_port/>
-+            <destination_net>lan</destination_net>
++            <destination_net>REDES_PRIVADAS</destination_net>
 +            <destination_not>0</destination_not>
-+            <destination_port/>
++            <destination_port>Management_Ports</destination_port>
 +            <divert-to/>
 +            <gateway/>
 +            <replyto/>
@@ -289,7 +345,7 @@
 +            <tos/>
 +            <shaper1/>
 +            <shaper2/>
-+            <description>HOMELAB &gt; bloqueia lan</description>
++            <description>HOMELAB &gt; bloqueia gerencia em rede privada</description>
 +          </rule>
 +          <rule uuid="f98d0113-56cc-5cd0-a689-852eb6205745">
 +            <enabled>1</enabled>

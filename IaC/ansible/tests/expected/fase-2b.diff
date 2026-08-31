@@ -56,12 +56,70 @@
          <geoip>
            <url/>
          </geoip>
-@@ -1031,7 +1043,7 @@
+@@ -1004,6 +1016,25 @@
+             <categories/>
+             <description>Portas DNS-over-QUIC (UDP 853)</description>
+           </alias>
++          <alias uuid="c4f1a8e2-6b30-4d57-9a1c-7e05d2b83f41">
++            <enabled>1</enabled>
++            <name>REDES_PRIVADAS</name>
++            <type>network</type>
++            <path_expression/>
++            <proto/>
++            <interface/>
++            <counters>0</counters>
++            <updatefreq/>
++            <content>10.0.0.0/8
++172.16.0.0/12
++192.168.0.0/16</content>
++            <password/>
++            <username/>
++            <authtype/>
++            <expire/>
++            <categories/>
++            <description>Espaco de enderecamento privado (RFC 1918)</description>
++          </alias>
+           <alias uuid="d8c7b6a5-f4e3-2109-8765-443322110099">
+             <enabled>1</enabled>
+             <name>Management_Ports</name>
+@@ -1031,39 +1062,8 @@
        <Category version="1.0.0">
          <categories/>
        </Category>
 -      <Filter description="Firewall rules (new)" persisted_at="1784915020.70" version="1.0.4">
 +      <Filter description="Firewall rules (new)" version="1.0.4">
          <rules>
-           <rule uuid="e8d7c6b5-a4f3-2109-8765-554433221188">
+-          <rule uuid="e8d7c6b5-a4f3-2109-8765-554433221188">
+-            <enabled>1</enabled>
+-            <statetype>keep</statetype>
+-            <state-policy/>
+-            <sequence>0</sequence>
+-            <action>block</action>
+-            <quick>1</quick>
+-            <interfacenot>0</interfacenot>
+-            <interface>vlan40,vlan50</interface>
+-            <direction>in</direction>
+-            <ipprotocol>inet</ipprotocol>
+-            <protocol>tcp</protocol>
+-            <icmptype/>
+-            <icmp6type/>
+-            <source_net>any</source_net>
+-            <source_not>0</source_not>
+-            <source_port/>
+-            <destination_net>any</destination_net>
+-            <destination_not>0</destination_not>
+-            <destination_port>Management_Ports</destination_port>
+-            <divert-to/>
+-            <gateway/>
+-            <replyto/>
+-            <disablereplyto>0</disablereplyto>
+-            <log>1</log>
+-            <allowopts>0</allowopts>
+-            <nosync>0</nosync>
+-            <nopfsync>0</nopfsync>
+-            <statetimeout/>
+-            <description>Bloqueio de Acesso IoT e Visitantes as WebGUIs e SSH dos Gateways</description>
+-          </rule>
+           <rule uuid="b9a8c7d6-e5f4-3210-9876-001122334455">
              <enabled>1</enabled>
+             <statetype>keep</statetype>

@@ -103,9 +103,14 @@ vlans:
     dhcp_enabled: true
     dhcp_start: "203.0.113.100"
     dhcp_end: "203.0.113.200"
+    # `alcanca` NÃO vazio junto de `gerencia: false` é o par que exercita a
+    # checagem de ordem entre os dois: Management_Ports contém 80 e 443, então
+    # um bloqueio de gerência antes da liberação mataria HTTP para onde
+    # `alcanca` liberou de propósito. Sem esta fixture, a checagem passa sem
+    # ter o que comparar.
     politica:
       internet: false
-      alcanca: []
+      alcanca: [lan]
       gerencia: false
 
 dhcp_static_maps:
