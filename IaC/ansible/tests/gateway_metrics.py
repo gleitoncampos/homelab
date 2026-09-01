@@ -176,6 +176,19 @@ def camada_3_grupos_concordam(variaveis, config_xml):
            f"(faltando {sorted(esperado - no_script)}, "
            f"sobrando {sorted(no_script - esperado)})")
 
+    # O tier sai DUAS vezes: rótulo em `group_info` e VALOR em
+    # `opnsense_gateway_tier`. Não é redundância — o PromQL não converte
+    # rótulo em valor, e "qual WAN está ativa" é um `min by (group)` do tier.
+    # As duas formas precisam concordar, senão o painel mostra uma prioridade
+    # e o firewall obedece outra.
+    como_valor = {(m.group(1), m.group(2), m.group(3)) for m in re.finditer(
+        r'opnsense_gateway_tier\{group="([^"]+)",gateway="([^"]+)"\}\s+(\d+)',
+        script)}
+    checar(como_valor == esperado,
+           f"o tier como VALOR bate com o tier como rótulo "
+           f"(faltando {sorted(esperado - como_valor)}, "
+           f"sobrando {sorted(como_valor - esperado)})")
+
     # O script é escrito num arquivo e executado pelo cron; sintaxe quebrada
     # falha silenciosamente uma vez por minuto, no log do configd.
     with tempfile.NamedTemporaryFile("w", suffix=".sh", delete=False) as fh:

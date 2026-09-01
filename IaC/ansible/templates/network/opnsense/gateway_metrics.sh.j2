@@ -86,6 +86,19 @@ emitir() {
 {% endfor %}
 {% endfor %}
 
+	# O MESMO tier, agora como VALOR e nao como rotulo. Nao e redundancia: o
+	# PromQL nao converte rotulo em valor, entao "qual WAN esta ativa" — que e
+	# `min by (group)` do tier entre os gateways alcancaveis — precisa do tier
+	# como numero. Com so o rotulo, o painel exigiria label_replace e ainda
+	# assim nao daria para agregar.
+	echo "# HELP opnsense_gateway_tier Prioridade do gateway no grupo, como valor."
+	echo "# TYPE opnsense_gateway_tier gauge"
+{% for g in opnsense_gateway_groups %}
+{% for m in g.membros %}
+	echo 'opnsense_gateway_tier{group="{{ g.name }}",gateway="{{ m.gateway }}"} {{ m.tier }}'
+{% endfor %}
+{% endfor %}
+
 	# Quando este arquivo foi gerado. Existe para tornar dado VELHO detectavel:
 	# o coletor textfile serve o que estiver no disco sem saber a idade, entao
 	# um cron que parou de rodar publica numeros congelados que se leem como
