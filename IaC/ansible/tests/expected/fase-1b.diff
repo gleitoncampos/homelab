@@ -1,4 +1,4 @@
-@@ -368,7 +352,7 @@
+@@ -368,7 +353,7 @@
      <firmware version="1.0.1">
        <mirror/>
        <flavour/>
@@ -7,7 +7,7 @@
        <type/>
        <subscription/>
        <reboot/>
-@@ -426,6 +410,31 @@
+@@ -426,6 +411,31 @@
        <ipaddrv6>pppoev6</ipaddrv6>
        <mss>1420</mss>
      </wan>
@@ -39,7 +39,7 @@
    </interfaces>
    <dhcpd>
      <lan>
-@@ -463,12 +472,22 @@
+@@ -463,12 +473,22 @@
          <ntpserver/>
        </staticmap>
      </lan>

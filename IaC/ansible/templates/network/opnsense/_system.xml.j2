@@ -73,6 +73,38 @@
     <logdefaultblock>1</logdefaultblock>
     <pf_share_forward>1</pf_share_forward>
     <lb_use_sticky>1</lb_use_sticky>
+{# Troca da rota default quando o gateway de tier 1 cai (GUI: System >
+   Settings > General > "Gateway switching").
+
+   ⚠️ Sem isto o failover multi-WAN NAO acontece para a rota default, e o
+   sintoma nao e "cai para a WAN2": e ficar SEM rota default nenhuma. Foi o que
+   aconteceu em 01/09/2026 — o PPPoE caiu, a CLARO estava viva com 0% de perda,
+   e a tabela de rotas nao tinha linha `default`. Nada navegava pelo firewall.
+
+   Por que so isto resolve, confirmado na fonte da caixa:
+     - system.inc:690 so popula `$down_gateways` se este campo existir; sem ele
+       a lista vai vazia para `getDefaultGW()`;
+     - Routing/Gateways.php:486 `getDefaultGW($skip, $ipproto)` devolve o
+       PRIMEIRO gateway do protocolo que nao esteja em `$skip`. Com a lista
+       vazia ele devolve o WAN_GW morto, e o roteador se recusa a instalar a
+       rota — daí a ausencia total.
+   Com o campo presente, WAN_GW entra em `$skip` e a CLARO assume nos dois
+   protocolos: a ordenacao de `newKey()` poe `defaultgw=1` na frente, entao a
+   WAN1 volta a ser default sozinha quando o link retorna.
+
+   ⚠️ O elemento e OMITIDO quando desligado, nunca escrito como 0. Os dois
+   leitores discordam sobre o valor: system.inc e gateway_watcher.php usam
+   `isset()` — para os quais `0` e LIGADO — enquanto o SettingsController usa
+   `!empty((string))`, para o qual `0` e desligado. Escrever 0 produziria um
+   estado em que a rota troca mas a GUI e a API dizem que nao. Presenca e o
+   unico sinal coerente, e e por isso que isto e um `{% if %}` e nao um valor.
+
+   Grupo de gateway (`opnsense_gateway_groups`) NAO substitui isto: grupo so
+   age em pacote que casa uma regra de filtro que o cite como gateway, e
+   trafego originado pelo proprio firewall nao passa por regra de filtro. #}
+{% if opnsense_gateway_switching | default(true) %}
+    <gw_switch_default>1</gw_switch_default>
+{% endif %}
     <state_policy>if-bound</state_policy>
     <ssh>
       <group>admins</group>

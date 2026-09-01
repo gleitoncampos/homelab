@@ -160,7 +160,13 @@ render-opnsense: ## Renderiza o template do OPNsense e compara com o baseline co
 	base=$(ANSIBLE_DIR)/tests/baseline/opnsense-fase0.xml; \
 	[ -s "$$base" ] || { echo "✗ baseline ausente ou vazio: $$base"; exit 1; }; \
 	diff -u --label baseline --label novo "$$base" "$$tmp/novo.xml" > "$$tmp/obtido.diff" || true; \
-	esperado=$$(cat $(ANSIBLE_DIR)/tests/expected/*.diff 2>/dev/null || true); \
+	: 'A ordem de concatenacao decide a ordem dos hunks, e ela NAO pode vir do'; \
+	: 'glob: a collation de locale ignora pontuacao, e sob en_US.UTF-8 um'; \
+	: 'fase-1a2.diff ordena ANTES de fase-1a.diff — observado nesta base. O'; \
+	: 'sintoma e a comparacao falhar sem que nenhum fragmento esteja errado.'; \
+	: 'Nao adianta prefixar LC_ALL=C no cat: quem expande o glob e o SHELL,'; \
+	: 'antes de o cat existir. Por isso a ordem sai de um sort byte a byte.'; \
+	esperado=$$(for f in $$(ls $(ANSIBLE_DIR)/tests/expected/*.diff 2>/dev/null | LC_ALL=C sort); do cat "$$f"; done); \
 	if [ -z "$$esperado" ]; then \
 	  if [ -s "$$tmp/obtido.diff" ]; then \
 	    echo "✗ diff inesperado (nenhum expected/*.diff registrado):"; \

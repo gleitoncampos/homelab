@@ -53,3 +53,11 @@
      <item uuid="02b84301-167e-4db4-8e73-8d3edef6b198">
        <tunable>net.inet.tcp.tso</tunable>
        <value/>
+@@ -330,6 +314,7 @@
+     <logdefaultblock>1</logdefaultblock>
+     <pf_share_forward>1</pf_share_forward>
+     <lb_use_sticky>1</lb_use_sticky>
++    <gw_switch_default>1</gw_switch_default>
+     <state_policy>if-bound</state_policy>
+     <ssh>
+       <group>admins</group>
