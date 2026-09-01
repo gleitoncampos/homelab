@@ -494,6 +494,29 @@
       </test>
     </monit>
     <Gateways version="1.0.0">
+      {# ⚠️ monitor_killstates ("Failover States" na GUI) LIGADO só nos gateways
+         de tier 1, e o motivo esta no state_policy desta caixa: `if-bound`.
+         Estado ligado a interface nao migra quando a rota default troca — ele
+         fica preso na interface morta ate o timeout do cliente, entao o
+         failover "funciona" e a conexao existente trava em silencio. Matar os
+         estados na queda faz o cliente reconectar na hora.
+
+         Quem executa: /usr/local/etc/rc.syshook.d/monitor/20-recover, chamado
+         por rc.routing_configure em modo alarme. Ele so mata quando o gateway
+         esta na lista de afetados DAQUELA transicao, entao ligar isto nao mata
+         estado em varredura periodica.
+
+         ⚠️ Depende de gw_switch_default, que so passou a existir em 01/09/2026
+         (ver _system.xml.j2). Antes disso este campo seria inerte.
+
+         O par `monitor_killstates_priority` ("Failback States") fica em 0 de
+         proposito nos quatro. Ele mata o estado do gateway metered quando um de
+         prioridade melhor volta, e a comparacao de 20-recover e
+         `$status['priority'] > $metered_found_prio` — ESTRITA. Com WAN_GW e
+         CLARO_DHCP ambos em 255 ela nunca e verdadeira, e no IPv6 as
+         prioridades estao invertidas (CLARO_DHCP6=253 contra WAN_PPPOEV6=254,
+         e menor e mais prioritario). Liga-lo hoje escreveria um campo inerte,
+         que se le como protecao existente. Ver 1.1.15 no roadmap. #}
       <gateway_item uuid="f42ac827-3c2e-4237-998d-603930653b98">
         <disabled>0</disabled>
         <name>WAN_GW</name>
@@ -505,7 +528,7 @@
         <fargw>0</fargw>
         <monitor_disable>0</monitor_disable>
         <monitor_noroute>0</monitor_noroute>
-        <monitor_killstates>0</monitor_killstates>
+        <monitor_killstates>1</monitor_killstates>
         <monitor_killstates_priority>0</monitor_killstates_priority>
         <monitor>{{ opnsense_wan_monitor_ipv4 }}</monitor>
         <force_down>0</force_down>
@@ -563,7 +586,7 @@
         <fargw>0</fargw>
         <monitor_disable>0</monitor_disable>
         <monitor_noroute>0</monitor_noroute>
-        <monitor_killstates>0</monitor_killstates>
+        <monitor_killstates>1</monitor_killstates>
         <monitor_killstates_priority>0</monitor_killstates_priority>
         <monitor>{{ opnsense_wan_monitor_ipv6 }}</monitor>
         <force_down>0</force_down>
