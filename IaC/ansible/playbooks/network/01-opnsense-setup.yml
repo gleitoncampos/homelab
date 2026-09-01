@@ -276,17 +276,54 @@
     # =====================================================================
     # MÉTRICAS DE GATEWAY (dpinger) PARA O PROMETHEUS
     # =====================================================================
-    # ⚠️ ORDEM: as duas tarefas abaixo vêm ANTES do apply do config.xml, e não
-    # é detalhe de arrumação. O `<job>` de cron que o config instala nomeia a
-    # AÇÃO `gatewaymetrics collect`; sem o arquivo de actions.d registrando
-    # essa ação, o job existe, aparece na GUI e nunca roda. Falha silenciosa,
-    # do tipo que só se descobre olhando o painel vazio dias depois.
+    # =====================================================================
+    # ELEVAÇÃO DO USUÁRIO DO ANSIBLE
+    # =====================================================================
+    # Sem isto, TODO este play falha em `Missing sudo password` antes de tocar
+    # em nada: o `ansible.cfg` tem `become_ask_pass = False` e não existe
+    # `ansible_become_password` em vault nenhum.
+    #
+    # Escopado a UMA conta, e não ao grupo `wheel` inteiro via
+    # `<sudo_allow_wheel>2</sudo_allow_wheel>` no config. A capacidade efetiva
+    # é a mesma — quem escreve /conf/config.xml é root de fato — mas a
+    # superfície é menor e o arquivo é greppável.
+    #
+    # ⚠️ `validate` não é zelo: sudoers com erro de sintaxe tranca o sudo do
+    # firewall, e recuperar exige console. O `visudo -cf` roda ANTES de o
+    # arquivo entrar no lugar.
+    #
+    # ⚠️ OVO E GALINHA: esta tarefa precisa de sudo para rodar. O primeiro
+    # arquivo foi instalado fora de banda em 31/08/2026, pelo qemu-guest-agent
+    # a partir do hipervisor (`qm guest exec 100`, que executa como root sem
+    # senha). Daqui em diante o playbook o mantém. Num firewall novo, o mesmo
+    # caminho serve de bootstrap — está no roadmap, item 1.1.2.
+    - name: Manter a elevação sem senha do usuário do Ansible
+      tags: always
+      ansible.builtin.copy:
+        dest: /usr/local/etc/sudoers.d/30-ansible
+        content: |
+          # Gerado pelo Ansible (01-opnsense-setup.yml). NAO editar a mao.
+          {{ ansible_user }} ALL=(ALL) NOPASSWD: ALL
+        owner: root
+        group: wheel
+        mode: '0440'
+        validate: 'visudo -cf %s'
+
+    # ⚠️ Nada aqui depende do apply do config.xml, e é deliberado. A primeira
+    # versão agendava a coleta como `<job>` no config — caminho nativo do
+    # OPNsense e visível na GUI — mas isso faz um coletor de métricas depender
+    # da reescrita COMPLETA do firewall para subir ou mudar de intervalo. Nesta
+    # base o apply completo está travado por outros itens, então o coletor
+    # nasceria morto. O drop-in de `/usr/local/etc/cron.d/` desacopla.
+    #
+    # O preço é real e vale dizer: o job não aparece na página de cron da GUI.
     #
     # O caminho inteiro reaproveita o que já está de pé: o coletor `textfile`
     # do node_exporter (já ligado nesta caixa) lê o diretório, e o job
     # `opnsense` do Prometheus já raspa a porta 9100. Nenhum serviço novo,
     # nenhuma porta nova, nenhuma chave de API.
     - name: Instalar o coletor de métricas de gateway  # noqa: no-relative-paths
+      tags: metricas
       ansible.builtin.template:
         src: "../../templates/network/opnsense/gateway_metrics.sh.j2"
         dest: "{{ opnsense_gateway_metrics_script | default('/usr/local/bin/gateway-metrics') }}"
@@ -294,22 +331,23 @@
         group: wheel
         mode: '0755'
 
-    # O nome da AÇÃO sai do nome do arquivo: actions_gatewaymetrics.conf dá
-    # `gatewaymetrics`, e a seção [collect] completa para
-    # `gatewaymetrics collect` — o mesmo texto que vai no `<command>` do job.
-    - name: Registrar a ação de coleta no configd do OPNsense  # noqa: no-relative-paths
+    # O cron do OPNsense lê este diretório além do crontab do root — mesmo
+    # mecanismo que crowdsec e etpro-telemetry usam. Formato do /etc/crontab do
+    # FreeBSD, com a coluna `who`.
+    - name: Agendar a coleta de métricas de gateway  # noqa: no-relative-paths
+      tags: metricas
       ansible.builtin.template:
-        src: "../../templates/network/opnsense/actions_gatewaymetrics.conf.j2"
-        dest: /usr/local/opnsense/service/conf/actions.d/actions_gatewaymetrics.conf
+        src: "../../templates/network/opnsense/gateway_metrics.cron.j2"
+        dest: /usr/local/etc/cron.d/gateway-metrics
         owner: root
         group: wheel
         mode: '0644'
-      notify: Recarregar o configd do OPNsense
 
     # O diretório é do node_exporter e nasce com ele; garantir aqui evita que a
     # primeira coleta caia num diretório inexistente e saia em silêncio (o
     # script tem `[ -d "$DIR" ] || exit 0` justamente para não escrever fora).
     - name: Garantir o diretório do coletor textfile do node_exporter
+      tags: metricas
       ansible.builtin.file:
         path: "{{ opnsense_gateway_metrics_dir | default('/var/tmp/node_exporter') }}"
         state: directory
@@ -350,9 +388,3 @@
           🛡️ OPNsense atualizado: plugins essenciais instalados, sensores térmicos
           carregados, config.xml aplicado e serviços recarregados.
 
-  handlers:
-    # Sem isto o configd não enxerga a ação nova até o próximo reinício, e o
-    # job de cron falha com "action not found" a cada minuto.
-    - name: Recarregar o configd do OPNsense
-      ansible.builtin.command: /usr/local/etc/rc.d/configd restart
-      changed_when: true

@@ -175,11 +175,12 @@ também entram em `make check`:
   que o template lida com mais de um alvo.
 - `make gateway-metrics` — [`tests/gateway_metrics.py`](./tests/gateway_metrics.py)
   protege a publicação do estado dos gateways (dpinger) como métrica do
-  Prometheus. Três camadas. A primeira afirma que o arquivo de `actions.d` é
-  escrito ANTES do `config.xml`: o `<job>` de cron nomeia a ação
-  `gatewaymetrics collect`, e sem a ação registrada o job existe, aparece na
-  GUI e nunca roda. A segunda confere que o nome da ação casa entre o nome do
-  arquivo de `actions.d`, a seção dentro dele e o `<command>` do job. A
+  Prometheus. Três camadas. A primeira afirma que o agendamento NÃO voltou para
+  dentro do `config.xml`: agendar como `<job>` seria o caminho nativo e
+  visível na GUI, mas faria um coletor de métricas depender da reescrita
+  completa do firewall para subir ou mudar de intervalo — o drop-in de
+  `/usr/local/etc/cron.d/` desacopla, ao preço de o job não aparecer na GUI. A
+  segunda confere que o cron chama o mesmo caminho que o playbook instala. A
   terceira é a que mais importa: `opnsense_gateway_groups` tem dois
   consumidores — o `config.xml.j2`, que escreve os `<gateway_group>` do
   failover, e o `gateway_metrics.sh.j2`, que publica o rótulo de grupo — e o

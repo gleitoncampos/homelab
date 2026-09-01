@@ -1,0 +1,30 @@
+{# /usr/local/etc/cron.d/gateway-metrics
+   Gerado pelo Ansible (01-opnsense-setup.yml). NAO editar a mao.
+
+   ⚠️ Por que aqui e NAO como `<job>` no config.xml, que seria o caminho nativo
+   do OPNsense e apareceria na GUI:
+
+   O cron do OPNsense nao executa comando de shell — o `<command>` de um job
+   nomeia uma ACAO registrada em actions.d, o que exigiria um segundo arquivo
+   so para registrar a acao. Pior: o `<job>` vive no config.xml, e nesta base o
+   config.xml e SUBSTITUIDO INTEIRO a cada apply. Um coletor de metricas
+   passaria a depender da reescrita completa do firewall para subir ou mudar de
+   intervalo — acoplamento caro, e hoje impraticavel, porque o apply completo
+   esta travado por outros itens.
+
+   `/usr/local/etc/cron.d/` e diretorio de drop-in que o cron do OPNsense ja le
+   (confirmado no cabecalho do crontab do root e no uso por crowdsec e
+   etpro-telemetry). Independente do config.xml, instalavel sozinho.
+
+   O preco, e ele e real: este job NAO aparece na pagina de cron da GUI. Quem
+   for procurar por que a metrica parou nao vai encontra-lo la.
+
+   Formato identico ao /etc/crontab do FreeBSD — tem a coluna `who`, que o
+   crontab de usuario nao tem.
+#}
+#minute	hour	mday	month	wday	who	command
+{# A cada minuto e a granularidade mais fina do cron. A metrica pode ficar ate
+   60s velha, o que basta para painel de WAN — e a idade e publicada em
+   `opnsense_gateway_metrics_generated_seconds`, entao dado velho e detectavel
+   em vez de se ler como saudavel. #}
+*	*	*	*	*	root	{{ opnsense_gateway_metrics_script | default('/usr/local/bin/gateway-metrics') }}

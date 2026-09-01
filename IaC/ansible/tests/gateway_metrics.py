@@ -10,16 +10,16 @@ Divergir aqui não dá erro em lugar nenhum: o firewall segue fazendo failover
 pelo config, e o painel segue desenhando com o rótulo antigo. O gráfico fica
 plausível e errado, que é o pior resultado possível para um painel.
 
-CAMADA 1 — ORDEM no playbook.
-  O `<job>` de cron que o config instala nomeia a AÇÃO `gatewaymetrics
-  collect`. Se o arquivo de actions.d não for escrito ANTES do apply do
-  config, o job existe, aparece na GUI e nunca roda. Falha silenciosa. Este
-  teste afirma a ordem das tarefas no playbook.
+CAMADA 1 — o agendamento NÃO depende do config.xml.
+  A primeira versão agendava a coleta como `<job>` no config.xml — caminho
+  nativo do OPNsense e visível na GUI — e isso fazia um coletor de métricas
+  depender da reescrita COMPLETA do firewall para subir ou mudar de intervalo.
+  O drop-in de `/usr/local/etc/cron.d/` desacopla. Este teste afirma que o
+  desacoplamento continua: nenhuma menção ao coletor no config renderizado.
 
-CAMADA 2 — o NOME DA AÇÃO casa entre os dois arquivos.
-  O configd deriva o nome da ação do NOME DO ARQUIVO de actions.d, e a
-  subcomando da seção `[...]` dentro dele. Renomear qualquer um dos dois
-  quebra o job sem aviso.
+CAMADA 2 — o cron chama o script que o playbook instala.
+  Caminho divergente entre o `dest` da tarefa e o comando do cron roda um
+  arquivo que não existe, uma vez por minuto, calado.
 
 CAMADA 3 — os grupos rendem IGUAIS nos dois consumidores.
   Cada par (grupo, gateway, tier) tem de aparecer como `<item>GW|TIER</item>`
@@ -49,9 +49,7 @@ RENDER = ANSIBLE / "tests" / "render_opnsense.py"
 PLAYBOOK = ANSIBLE / "playbooks" / "network" / "01-opnsense-setup.yml"
 
 TAREFA_SCRIPT = "Instalar o coletor de métricas de gateway"
-TAREFA_ACAO = "Registrar a ação de coleta no configd do OPNsense"
-TAREFA_CONFIG = ("Aplicar novo arquivo /conf/config.xml a partir do "
-                 "Template Jinja2")
+TAREFA_CRON = "Agendar a coleta de métricas de gateway"
 
 falhas = []
 
@@ -98,56 +96,51 @@ def _tasks(playbook_path):
 
 
 # ---------------------------------------------------------------------------
-def camada_1_ordem():
-    print("== CAMADA 1: a ação é registrada ANTES do apply do config ==")
+def camada_1_desacoplado(config_xml):
+    print("== CAMADA 1: o agendamento não depende do config.xml ==")
     nomes = [t.get("name") for t in _tasks(PLAYBOOK)]
-    for alvo in (TAREFA_SCRIPT, TAREFA_ACAO, TAREFA_CONFIG):
+    for alvo in (TAREFA_SCRIPT, TAREFA_CRON):
         checar(alvo in nomes, f"tarefa presente: {alvo!r}")
-    if not all(a in nomes for a in (TAREFA_SCRIPT, TAREFA_ACAO, TAREFA_CONFIG)):
-        return
-    # Sem esta ordem o job de cron nomeia uma ação que ainda não existe. O
-    # OPNsense não recusa: grava o job e falha a cada minuto, no log.
-    checar(nomes.index(TAREFA_ACAO) < nomes.index(TAREFA_CONFIG),
-           "actions.d é escrito ANTES do config.xml")
-    checar(nomes.index(TAREFA_SCRIPT) < nomes.index(TAREFA_CONFIG),
-           "o script é instalado ANTES do config.xml")
+
+    # ⚠️ A invariante inteira desta camada. Um `<job>` de cron no config faria
+    # o coletor renascer acoplado ao apply completo — que é o que o desenho
+    # atual existe para evitar, e que nesta base está travado por outros itens.
+    texto = ElementTree.tostring(config_xml, encoding="unicode")
+    for marca in ("gatewaymetrics", "gateway-metrics", "gateway_metrics"):
+        checar(marca not in texto,
+               f"o config.xml renderizado NÃO menciona {marca!r}")
 
 
 # ---------------------------------------------------------------------------
-def camada_2_nome_da_acao(variaveis, config_xml):
-    print("\n== CAMADA 2: o nome da ação casa entre actions.d e o cron ==")
+def camada_2_cron(variaveis):
+    print("\n== CAMADA 2: o cron chama o script instalado ==")
 
-    # O configd deriva o nome da ação do NOME DO ARQUIVO: o template se chama
-    # actions_<acao>.conf.j2, então a ação é o miolo.
-    arquivos = list(TPL_DIR.glob("actions_*.conf.j2"))
-    checar(len(arquivos) == 1,
-           f"exatamente um template de actions.d (achados: "
-           f"{[a.name for a in arquivos]})")
-    if len(arquivos) != 1:
-        return
-    acao = arquivos[0].name[len("actions_"):-len(".conf.j2")]
-
-    corpo = render(arquivos[0].name, variaveis)
-    secoes = re.findall(r"^\[([^\]]+)\]", corpo, re.M)
-    checar(len(secoes) >= 1, f"actions.d declara ao menos uma seção {secoes}")
-    if not secoes:
-        return
-    esperados = {f"{acao} {s}" for s in secoes}
-
-    comandos = {j.findtext("command")
-                for j in config_xml.iter("job")
-                if (j.findtext("origin") or "") == acao}
-    checar(bool(comandos), f"o config tem job com origin {acao!r}")
-    checar(comandos <= esperados,
-           f"o `command` do job está entre as ações registradas "
-           f"{sorted(esperados)} (veio {sorted(comandos)})")
-
-    # O `command:` do actions.d precisa apontar para o script que o playbook
-    # instala; um caminho divergente roda um arquivo que não existe.
     alvo = variaveis.get("opnsense_gateway_metrics_script",
                          "/usr/local/bin/gateway-metrics")
-    checar(f"command:{alvo}" in corpo,
-           f"actions.d executa o script instalado ({alvo})")
+    cron = render("gateway_metrics.cron.j2", variaveis)
+
+    linhas = [ln for ln in cron.splitlines()
+              if ln.strip() and not ln.lstrip().startswith("#")]
+    checar(len(linhas) == 1, f"o drop-in tem uma linha de job (achadas {len(linhas)})")
+    if not linhas:
+        return
+    campos = linhas[0].split()
+    # minuto hora dia mes semana quem comando — a coluna `who` existe no
+    # formato do /etc/crontab e NÃO no crontab de usuário. Errar isso faz o
+    # cron interpretar `root` como o comando.
+    checar(len(campos) >= 7, f"formato com coluna `who` (campos: {len(campos)})")
+    if len(campos) >= 7:
+        checar(campos[5] == "root", f"roda como root (veio {campos[5]!r})")
+        checar(campos[6] == alvo,
+               f"o comando é o script instalado {alvo!r} (veio {campos[6]!r})")
+
+    # O `dest` da tarefa do playbook tem de ser o mesmo caminho.
+    tarefa = next((x for x in _tasks(PLAYBOOK)
+                   if x.get("name") == TAREFA_SCRIPT), None)
+    if tarefa:
+        dest = (tarefa.get("ansible.builtin.template") or {}).get("dest", "")
+        checar(alvo in dest,
+               f"o playbook instala o script em {alvo!r} (dest: {dest!r})")
 
 
 # ---------------------------------------------------------------------------
@@ -220,16 +213,16 @@ def main():
             return 1
         config_xml = ElementTree.parse(saida).getroot()
 
-    camada_1_ordem()
-    camada_2_nome_da_acao(variaveis, config_xml)
+    camada_1_desacoplado(config_xml)
+    camada_2_cron(variaveis)
     camada_3_grupos_concordam(variaveis, config_xml)
 
     print()
     if falhas:
         print(f"  {len(falhas)} FALHA(S)")
         return 1
-    print("  MÉTRICAS DE GATEWAY OK (ordem no playbook; ação casa; "
-          "config e script concordam sobre os grupos)")
+    print("  MÉTRICAS DE GATEWAY OK (agendamento desacoplado do config; "
+          "cron chama o script; config e script concordam sobre os grupos)")
     return 0
 
 
