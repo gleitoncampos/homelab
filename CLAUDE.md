@@ -247,6 +247,7 @@ checar", aplicada ao campo individual de um template de reconciliação.
 │   │   │   ├── render_proxmox_ifaces.py  # (1) afirma que o assert de sub-rede do 00-proxmox-setup.yml existe e tem as 3 condições; (2) renderiza proxmox_interfaces.j2 (RFC 5737). O gate EFETIVO é o assert do playbook
 │   │   │   ├── gates_ordem_vlan.py  # Gates da ORDEM da migração de VLANs: (1) afirma que os asserts existem em 01-opnsense/02-openwrt e mantêm a forma, e que a fase do AP continua partida em --tags rede/wifi (com toda pre_task em `tags: always`); (2) renderiza e confere que o template cria uma interface por VLAN, DHCP só onde dhcp_enabled, Unbound em todas, e que cada `politica` vira as regras prometidas NA ORDEM certa. Os gates EFETIVOS são os asserts dos playbooks
 │   │   │   ├── gateway_metrics.py  # Métricas de gateway do OPNsense: agendamento desacoplado do config.xml (o config renderizado não pode mencionar o coletor), cron chamando o mesmo caminho que o playbook instala, e config e script concordando sobre `opnsense_gateway_groups` — uma fonte, dois consumidores (make gateway-metrics)
+│   │   │   ├── inventario_diretorio.py  # ⚠️ O Ansible ignora `.ini` POR PADRÃO ao varrer um diretório de inventário: `-i inventories/prod` pulava o `hosts.ini` real e lia o `hosts.ini.example`, entregando host de exemplo com endereço-placeholder. Afirma a forma da opção em `ansible.cfg` E prova o comportamento com um inventário sintético (make inventario-diretorio)
 │   │   │   ├── fixtures/       # Variáveis de exemplo (RFC 5737, MAC de documentação IANA); isenção por ARQUIVO no gate, nunca por diretório
 │   │   │   ├── baseline/       # Render congelado da fase 0 — nunca regenerar
 │   │   │   └── expected/       # Diff aprovado por fase, comparado byte a byte
@@ -437,6 +438,14 @@ em `01-opnsense-setup.yml` e `02-openwrt-setup.yml` com a forma certa, e
 renderiza o config do OPNsense para provar que o template cria de fato uma
 interface por VLAN — sem essa segunda camada o asserto do playbook compararia
 contra `vlans` e passaria a mentir no dia em que o template parasse de emitir.
+
+⚠️ Por último vem `inventario-diretorio`, que não é sobre template: prova que
+`-i <diretório>` lê o inventário REAL. O Ansible traz `.ini` na lista de
+extensões que ignora ao varrer um diretório, então a forma diretório pulava o
+`hosts.ini` e parseava o `hosts.ini.example` — o playbook do firewall casava
+`hosts (0)`, e `node1` aparecia com o literal `<IP-DO-MANAGER>`. A correção é
+uma linha em `ansible.cfg` e é invisível: a forma ARQUIVO nunca deixou de
+funcionar, então nada no dia a dia denuncia se ela voltar ao default.
 
 `make secrets` fica de fora,
 e a CI o chama por último em passo próprio: a falha dele não é "corrija o

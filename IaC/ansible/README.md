@@ -19,7 +19,7 @@ ansible/
 │   ├── vault.yml.example      # Modelo único do Vault — copiar para cada ambiente, ver Passo 0
 │   ├── prod/
 │   │   ├── hosts.ini          # ⚠️ GITIGNORADO — inventário real (IPs internos), você cria localmente
-│   │   ├── hosts.ini.example  # Modelo rastreado, base para criar o hosts.ini real
+│   │   ├── hosts.ini.example  # Modelo rastreado, base para criar o hosts.ini real. ⚠️ Mora ao lado do real de propósito, e por isso `ansible.cfg` põe `.example` na lista de extensões ignoradas — sem isso a forma `-i inventories/prod` lê o MODELO
 │   │   └── group_vars/
 │   │       ├── all/
 │   │       │   ├── 00-common.yml  # cópia de ../../../_common/all.yml (make check-common-copies garante identidade)
@@ -287,6 +287,19 @@ ansible-vault rekey inventories/prod/group_vars/all/vault.yml   # trocar a senha
 ansible-playbook site.yml                                       # roda PROD (inventário default do ansible.cfg)
 ansible-playbook -i inventories/dev/hosts.ini site.yml          # roda DEV (sempre explícito)
 ```
+
+> ⚠️ **Aponte o `-i` para o ARQUIVO, não para o diretório** — ou pelo menos
+> saiba por que a forma diretório funciona. O Ansible traz `.ini` na lista de
+> extensões que ignora ao varrer um diretório de inventário (junto de `.bak` e
+> `.retry`). Sem ajuste, `-i inventories/prod` **pula o `hosts.ini` real** e
+> parseia o `hosts.ini.example`, que fica ao lado. Medido nesta base:
+> `--list-hosts` do playbook do firewall devolvia `hosts (0)`, e `node1`
+> aparecia com `ansible_host` = o literal `<IP-DO-MANAGER>` do modelo.
+>
+> O `ansible.cfg` corrige isso pondo `.example` na lista e tirando `.ini`, então
+> hoje as duas formas funcionam. Mas a correção é invisível — a forma arquivo
+> nunca deixou de funcionar, então nada denuncia se ela voltar ao default. É o
+> que `make inventario-diretorio` protege.
 
 > ⚠️ **Nunca reintroduza `| default('...')` em variável de segredo.** O default
 > converte "segredo ausente" em "senha pública" e o playbook reporta sucesso. Foi
