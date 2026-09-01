@@ -2,3 +2,26 @@
 # Symlink estável para o nobreak e permissão para o usuário do NUT. Sem isto o
 # driver depende da ordem de enumeração do CDC-ACM e roda como root.
 SUBSYSTEM=="tty", ATTRS{idVendor}=="{{ nut_usb_vendor_id }}", ATTRS{idProduct}=="{{ nut_usb_product_id }}", SYMLINK+="{{ nut_device_symlink | basename }}", GROUP="nut", MODE="0660"
+
+# ⚠️ Reinicia o driver quando o nobreak REAPARECE no barramento. O symlink
+# acima resolve a numeração no BOOT; não resolve re-enumeração com o driver já
+# rodando, que é outro problema e falha de um jeito pior.
+#
+# O que acontece sem esta regra, observado em 31/08/2026: o USB do nobreak
+# reconectou, o kernel criou um ttyACM NOVO, o symlink seguiu para ele — e o
+# driver continuou segurando o descritor do nó antigo, já apagado
+# (`/proc/<pid>/fd/6 -> /dev/ttyACM0 (deleted)`). O processo não morre, então
+# o `Restart=always` da unit nunca dispara e o systemd o vê saudável. O dado
+# ficou parado por três dias, e o `upsd` passou a responder `Data stale` — sem
+# alarme nenhum, porque nada estava "fora do ar".
+#
+# `restart` e não `start`: o alvo já está ativo (é justamente o problema), e
+# `start` num serviço ativo é no-op. `--no-block` porque udev não pode ficar
+# esperando o systemd — regra de udev que bloqueia trava a fila de eventos.
+#
+# ⚠️ NÃO usar `BindsTo=` numa unit `.device` para isto. Seria mais elegante,
+# mas se o nome do device unit não casar, o serviço deixa de subir — o
+# monitoramento do nobreak morre em vez de se recuperar. Aqui, nome errado no
+# `RUN+=` só registra erro no log e o estado atual continua de pé. Mesmo
+# critério do `Interface` do dropbear: preferir a falha que não tranca.
+ACTION=="add", SUBSYSTEM=="tty", ATTRS{idVendor}=="{{ nut_usb_vendor_id }}", ATTRS{idProduct}=="{{ nut_usb_product_id }}", TAG+="systemd", RUN+="/bin/systemctl restart --no-block nut-driver@{{ nut_ups_name }}.service"
