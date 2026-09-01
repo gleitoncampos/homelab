@@ -13,6 +13,28 @@
   caixa de hoje. Deixá-la ligada por padrão é mudança de comportamento
   deliberada (o desenho-alvo pressupõe DNS forçado); ponha `false` no vault
   para reproduzir o estado atual.
+  ⚠️ NÃO existe mecanismo de port forward aqui, e a ausência é DECISÃO, não
+  esquecimento. Decidido em 01/09/2026, ao varrer vivo contra alvo.
+
+  A produção carregava um `<rule>` de rdr para a porta 8477 de um cliente de
+  torrent, criada pela GUI em 25/10/2025. Três fatos decidiram por matá-la em
+  vez de garimpá-la: estava `<disabled>1</disabled>`; não tinha regra de
+  filtro companheira (`associated-rule-id` vazio, e a única regra da WAN é um
+  `block any`), portanto não funcionaria nem se fosse ligada; e o `destination`
+  estava vazio, ou seja QUALQUER destino na WAN, não o endereço da WAN. O
+  apply a remove, e isso agora é intencional.
+
+  ⚠️ Quando o primeiro port forward de verdade nascer, ele precisa dos DOIS
+  lados. Redirecionamento sozinho traduz o pacote e o filtro o descarta em
+  seguida, em silêncio — foi exatamente o estado em que aquela regra viveu por
+  dez meses. Quem construir o laço: emita o rdr E a regra de passagem na WAN,
+  ligadas por `associated-rule-id`, e prenda o `destination` ao endereço da
+  interface.
+
+  ⚠️ E antes de construir, confira contra o registro de que o Traefik é o
+  caminho único de acesso: port forward cru é uma segunda entrada vinda da
+  internet, sem passar por ele. Porta de peer de torrent é exceção defensável
+  (peer não atravessa proxy reverso); painel de administração não é.
 #}
   <nat>
     <outbound>
