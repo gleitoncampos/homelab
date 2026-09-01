@@ -235,7 +235,7 @@ checar", aplicada ao campo individual de um template de reconciliação.
 │   │   │                       #   detect/elect_nut_primary (07), node_exporter (00-proxmox),
 │   │   │                       #   omv_mount_filesystems + mergerfs_pools (00-omv),
 │   │   │                       #   windows_oem_smb (convidado Windows; sem playbook ainda)
-│   │   ├── templates/network/  # openwrt_{system,network,dhcp,firewall,wireless}.j2, failsafe.sh.j2 (rollback da troca de rede), led_health.sh.j2 + led_health_init.j2 (sinalização de saúde nos LEDs do AP) + opnsense/: config.xml.j2 (esqueleto de includes) e 10 partials orientados a dado — ver IaC/ansible/README.md
+│   │   ├── templates/network/  # openwrt_{system,network,dhcp,firewall,wireless}.j2, failsafe.sh.j2 (rollback da troca de rede), led_health.sh.j2 + led_health_init.j2 (sinalização de saúde nos LEDs do AP) + opnsense/: config.xml.j2 (esqueleto de includes) 10 partials orientados a dado, gateway_metrics.sh.j2 (coletor dpinger -> textfile do node_exporter) e actions_gatewaymetrics.conf.j2 (ação do configd que o cron chama) — ver IaC/ansible/README.md
 │   │   ├── templates/nut/      # ups.conf, upsd.{conf,users}, upsmon.conf, nut.conf, udev, tmpfiles (07-nut-ups)
 │   │   ├── templates/omv/      # mergerfs-cache-mover.{sh,service,timer}.j2 (00-omv)
 │   │   ├── templates/proxmox/  # proxmox_{datacenter,interfaces,storage}.j2
@@ -246,6 +246,7 @@ checar", aplicada ao campo individual de um template de reconciliação.
 │   │   │   ├── render_monitoring.py  # Render da stack de monitoramento com 2 hosts por grupo
 │   │   │   ├── render_proxmox_ifaces.py  # (1) afirma que o assert de sub-rede do 00-proxmox-setup.yml existe e tem as 3 condições; (2) renderiza proxmox_interfaces.j2 (RFC 5737). O gate EFETIVO é o assert do playbook
 │   │   │   ├── gates_ordem_vlan.py  # Gates da ORDEM da migração de VLANs: (1) afirma que os asserts existem em 01-opnsense/02-openwrt e mantêm a forma, e que a fase do AP continua partida em --tags rede/wifi (com toda pre_task em `tags: always`); (2) renderiza e confere que o template cria uma interface por VLAN, DHCP só onde dhcp_enabled, Unbound em todas, e que cada `politica` vira as regras prometidas NA ORDEM certa. Os gates EFETIVOS são os asserts dos playbooks
+│   │   │   ├── gateway_metrics.py  # Métricas de gateway do OPNsense: ordem no playbook (actions.d ANTES do config, senão o job de cron nomeia ação inexistente), nome da ação casando entre actions.d e o `<command>` do job, e config e script concordando sobre `opnsense_gateway_groups` — uma fonte, dois consumidores (make gateway-metrics)
 │   │   │   ├── fixtures/       # Variáveis de exemplo (RFC 5737, MAC de documentação IANA); isenção por ARQUIVO no gate, nunca por diretório
 │   │   │   ├── baseline/       # Render congelado da fase 0 — nunca regenerar
 │   │   │   └── expected/       # Diff aprovado por fase, comparado byte a byte

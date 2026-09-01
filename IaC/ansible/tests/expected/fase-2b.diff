@@ -47,7 +47,26 @@
            <minutes>0</minutes>
            <hours>0</hours>
            <days>*</days>
-@@ -660,7 +672,7 @@
+@@ -654,13 +666,26 @@
+           <parameters/>
+           <description>ids rule updates</description>
+         </job>
++        <job uuid="b7c21e94-3f5a-4d08-9c16-2ae7f0d84b31">
++          <origin>gatewaymetrics</origin>
++          <enabled>1</enabled>
++          <minutes>*</minutes>
++          <hours>*</hours>
++          <days>*</days>
++          <months>*</months>
++          <weekdays>*</weekdays>
++          <who>root</who>
++          <command>gatewaymetrics collect</command>
++          <parameters/>
++          <description>metricas de gateway para o Prometheus</description>
++        </job>
+       </jobs>
+     </cron>
+     <Firewall>
        <Lvtemplate version="0.0.1">
          <templates/>
        </Lvtemplate>
@@ -56,7 +75,7 @@
          <geoip>
            <url/>
          </geoip>
-@@ -1004,6 +1016,25 @@
+@@ -1004,6 +1029,25 @@
              <categories/>
              <description>Portas DNS-over-QUIC (UDP 853)</description>
            </alias>
@@ -82,7 +101,7 @@
            <alias uuid="d8c7b6a5-f4e3-2109-8765-443322110099">
              <enabled>1</enabled>
              <name>Management_Ports</name>
-@@ -1031,39 +1062,8 @@
+@@ -1031,39 +1075,8 @@
        <Category version="1.0.0">
          <categories/>
        </Category>

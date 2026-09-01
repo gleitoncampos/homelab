@@ -1,0 +1,104 @@
+#!/bin/sh
+# /usr/local/bin/gateway-metrics — gerado pelo Ansible (01-opnsense-setup.yml).
+# NAO editar a mao: reescrito inteiro na proxima execucao do playbook.
+#
+# Publica o estado dos gateways do dpinger como metricas do Prometheus, pelo
+# coletor `textfile` do node_exporter que JA esta ligado nesta caixa.
+#
+# Por que este caminho, e nao um exporter proprio:
+#   - o dpinger nao envia nada. Ele e um poller que guarda estado e RESPONDE
+#     num socket unix, um por gateway, em /var/run/dpinger_<NOME>.sock;
+#   - o node_exporter do OPNsense ja expoe o coletor textfile apontando para
+#     {{ opnsense_gateway_metrics_dir | default('/var/tmp/node_exporter') }};
+#   - o job `opnsense` do Prometheus ja raspa a porta 9100 desta caixa.
+# Somando os tres: nenhum servico novo, nenhuma porta nova, nenhuma chave de
+# API, e nenhum job novo no Prometheus.
+#
+# Formato de uma resposta do dpinger, campos separados por espaco:
+#   <nome> <latencia_media_us> <desvio_us> <perda_pct>
+# Exemplo real: "WAN_GW 13927 224 0"
+
+set -u
+
+DIR="{{ opnsense_gateway_metrics_dir | default('/var/tmp/node_exporter') }}"
+ALVO="$DIR/gateway.prom"
+TMP="$ALVO.$$"
+
+[ -d "$DIR" ] || exit 0
+
+# Descobre os gateways por GLOB, nao por lista fixa. Gateway novo passa a ser
+# publicado sozinho, e gateway removido para de aparecer — a mesma regra usada
+# no gerador de regras de VLAN, e pelo mesmo motivo: lista escrita a mao
+# desatualiza calada.
+emitir() {
+	echo "# HELP opnsense_gateway_rtt_seconds Latencia media medida pelo dpinger."
+	echo "# TYPE opnsense_gateway_rtt_seconds gauge"
+	echo "# HELP opnsense_gateway_rtt_stddev_seconds Desvio padrao da latencia."
+	echo "# TYPE opnsense_gateway_rtt_stddev_seconds gauge"
+	echo "# HELP opnsense_gateway_loss_ratio Perda de pacote, de 0 a 1."
+	echo "# TYPE opnsense_gateway_loss_ratio gauge"
+	echo "# HELP opnsense_gateway_up O socket do dpinger respondeu."
+	echo "# TYPE opnsense_gateway_up gauge"
+
+	for sock in /var/run/dpinger_*.sock; do
+		# Sem nenhum socket, o glob nao expande e vem o literal.
+		[ -S "$sock" ] || continue
+		nome="${sock##*/dpinger_}"
+		nome="${nome%.sock}"
+
+		# -w 2: socket sem resposta nao pode pendurar o cron.
+		linha="$(nc -U -w 2 "$sock" 2>/dev/null | head -1)"
+		if [ -z "$linha" ]; then
+			printf 'opnsense_gateway_up{gateway="%s"} 0\n' "$nome"
+			continue
+		fi
+
+		# shellcheck disable=SC2086 # a divisao em palavras e o parse aqui
+		set -- $linha
+		# Campo 1 e o nome que o proprio dpinger devolve; usamos o do socket,
+		# que e o mesmo e nao depende do formato da resposta.
+		if [ "$#" -lt 4 ]; then
+			printf 'opnsense_gateway_up{gateway="%s"} 0\n' "$nome"
+			continue
+		fi
+
+		printf 'opnsense_gateway_up{gateway="%s"} 1\n' "$nome"
+		# us -> s e pct -> razao. awk porque o sh do FreeBSD nao faz ponto
+		# flutuante, e arredondar para inteiro perderia a medida inteira: uma
+		# latencia de 13927 us viraria 0 s.
+		awk -v g="$nome" -v m="$2" -v d="$3" -v p="$4" 'BEGIN {
+			printf "opnsense_gateway_rtt_seconds{gateway=\"%s\"} %.6f\n", g, m/1000000
+			printf "opnsense_gateway_rtt_stddev_seconds{gateway=\"%s\"} %.6f\n", g, d/1000000
+			printf "opnsense_gateway_loss_ratio{gateway=\"%s\"} %.4f\n", g, p/100
+		}'
+	done
+
+	# Rotulo estatico de grupo e tier. O dpinger nao sabe o que e grupo: a
+	# associacao vive em `opnsense_gateway_groups` e chega aqui pelo render.
+	# Publicada como metrica de valor 1, para o Grafana casar por `gateway` —
+	# e o painel de "qual WAN esta ativa" sai de consulta, sem este script
+	# precisar entender failover.
+	echo "# HELP opnsense_gateway_group_info Associacao gateway/grupo/tier. Tier menor e mais prioritario."
+	echo "# TYPE opnsense_gateway_group_info gauge"
+{% for g in opnsense_gateway_groups %}
+{% for m in g.membros %}
+	echo 'opnsense_gateway_group_info{group="{{ g.name }}",gateway="{{ m.gateway }}",tier="{{ m.tier }}",ipprotocol="{{ g.ipprotocol }}"} 1'
+{% endfor %}
+{% endfor %}
+
+	# Quando este arquivo foi gerado. Existe para tornar dado VELHO detectavel:
+	# o coletor textfile serve o que estiver no disco sem saber a idade, entao
+	# um cron que parou de rodar publica numeros congelados que se leem como
+	# saudaveis. Foi exatamente assim que o nobreak ficou tres dias com dado
+	# parado sem ninguem notar (ver 1.1.10-b e 1.2.2-b no roadmap).
+	echo "# HELP opnsense_gateway_metrics_generated_seconds Unixtime da ultima geracao."
+	echo "# TYPE opnsense_gateway_metrics_generated_seconds gauge"
+	printf 'opnsense_gateway_metrics_generated_seconds %s\n' "$(date +%s)"
+}
+
+# Escrita ATOMICA. O node_exporter le este diretorio a cada raspagem; um
+# arquivo pego pela metade vira erro de parse e derruba a coleta inteira do
+# coletor textfile, nao so estas metricas.
+umask 022
+emitir > "$TMP" && mv -f "$TMP" "$ALVO"
+rm -f "$TMP"

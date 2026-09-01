@@ -1236,3 +1236,42 @@ opnsense_plugins:
   - os-speedtest-community
   - os-theme-rebellion    # substitui os-theme-cicada
   - os-upnp
+
+# =============================================================================
+# GRUPOS DE GATEWAY — failover multi-WAN
+# =============================================================================
+# Estavam escritos à mão dentro de config.xml.j2. Viraram dado em 31/08/2026
+# porque passaram a ter DOIS consumidores: o próprio config e o coletor de
+# métricas de gateway, que precisa do rótulo de grupo para o painel.
+#
+# ⚠️ O dpinger NÃO conhece grupo. Ele monitora gateway individual e só. A
+# associação grupo/tier existe apenas aqui e no config — por isso o coletor a
+# publica como métrica de rótulo (`opnsense_gateway_group_info`), em vez de
+# tentar deduzi-la do que o dpinger reporta.
+#
+# `tier` menor = mais prioritário. `trigger: down` significa que só cai para o
+# tier seguinte quando o gateway está inteiramente offline — perda ou latência
+# alta sozinhas não trocam a rota.
+#
+# Nome de gateway não é dado sensível: é rótulo de configuração, e os mesmos
+# nomes já aparecem em `opnsense_rules`.
+opnsense_gateway_groups:
+  - name: WAN_IPV4
+    descr: "Failover IPv4 (WAN -> CLARO)"
+    ipprotocol: inet
+    trigger: down
+    membros:
+      - gateway: WAN_GW
+        tier: 1
+      - gateway: CLARO_DHCP
+        tier: 2
+
+  - name: WAN_IPV6
+    descr: "Failover IPv6 (WAN -> CLARO)"
+    ipprotocol: inet6
+    trigger: down
+    membros:
+      - gateway: WAN_PPPOEV6
+        tier: 1
+      - gateway: CLARO_DHCP6
+        tier: 2

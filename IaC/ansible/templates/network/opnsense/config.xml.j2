@@ -303,22 +303,17 @@
      é GWNAME|TIER — tier menor = mais prioritário. trigger=down: só cai para o
      próximo tier quando o gateway está inteiramente offline. #}
   <gateways>
+{% for g in opnsense_gateway_groups %}
     <gateway_group>
-      <name>WAN_IPV4</name>
-      <trigger>down</trigger>
-      <descr>Failover IPv4 (WAN -> CLARO)</descr>
-      <ipprotocol>inet</ipprotocol>
-      <item>WAN_GW|1</item>
-      <item>CLARO_DHCP|2</item>
+      <name>{{ g.name }}</name>
+      <trigger>{{ g.trigger }}</trigger>
+      <descr>{{ g.descr | e }}</descr>
+      <ipprotocol>{{ g.ipprotocol }}</ipprotocol>
+{% for m in g.membros %}
+      <item>{{ m.gateway }}|{{ m.tier }}</item>
+{% endfor %}
     </gateway_group>
-    <gateway_group>
-      <name>WAN_IPV6</name>
-      <trigger>down</trigger>
-      <descr>Failover IPv6 (WAN -> CLARO)</descr>
-      <ipprotocol>inet6</ipprotocol>
-      <item>WAN_PPPOEV6|1</item>
-      <item>CLARO_DHCP6|2</item>
-    </gateway_group>
+{% endfor %}
   </gateways>
   <staticroutes version="1.0.0">
     <route/>

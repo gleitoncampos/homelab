@@ -273,6 +273,50 @@
         group: wheel
         mode: '0644'
 
+    # =====================================================================
+    # MÉTRICAS DE GATEWAY (dpinger) PARA O PROMETHEUS
+    # =====================================================================
+    # ⚠️ ORDEM: as duas tarefas abaixo vêm ANTES do apply do config.xml, e não
+    # é detalhe de arrumação. O `<job>` de cron que o config instala nomeia a
+    # AÇÃO `gatewaymetrics collect`; sem o arquivo de actions.d registrando
+    # essa ação, o job existe, aparece na GUI e nunca roda. Falha silenciosa,
+    # do tipo que só se descobre olhando o painel vazio dias depois.
+    #
+    # O caminho inteiro reaproveita o que já está de pé: o coletor `textfile`
+    # do node_exporter (já ligado nesta caixa) lê o diretório, e o job
+    # `opnsense` do Prometheus já raspa a porta 9100. Nenhum serviço novo,
+    # nenhuma porta nova, nenhuma chave de API.
+    - name: Instalar o coletor de métricas de gateway  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "../../templates/network/opnsense/gateway_metrics.sh.j2"
+        dest: "{{ opnsense_gateway_metrics_script | default('/usr/local/bin/gateway-metrics') }}"
+        owner: root
+        group: wheel
+        mode: '0755'
+
+    # O nome da AÇÃO sai do nome do arquivo: actions_gatewaymetrics.conf dá
+    # `gatewaymetrics`, e a seção [collect] completa para
+    # `gatewaymetrics collect` — o mesmo texto que vai no `<command>` do job.
+    - name: Registrar a ação de coleta no configd do OPNsense  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "../../templates/network/opnsense/actions_gatewaymetrics.conf.j2"
+        dest: /usr/local/opnsense/service/conf/actions.d/actions_gatewaymetrics.conf
+        owner: root
+        group: wheel
+        mode: '0644'
+      notify: Recarregar o configd do OPNsense
+
+    # O diretório é do node_exporter e nasce com ele; garantir aqui evita que a
+    # primeira coleta caia num diretório inexistente e saia em silêncio (o
+    # script tem `[ -d "$DIR" ] || exit 0` justamente para não escrever fora).
+    - name: Garantir o diretório do coletor textfile do node_exporter
+      ansible.builtin.file:
+        path: "{{ opnsense_gateway_metrics_dir | default('/var/tmp/node_exporter') }}"
+        state: directory
+        owner: nobody
+        group: nobody
+        mode: '1755'
+
     # no_log: o arquivo renderizado contém hashes de senha, a credencial PPPoE e
     # a chave privada TLS da GUI. validate: XML inválido aborta ANTES de escrever.
     - name: Aplicar novo arquivo /conf/config.xml a partir do Template Jinja2  # noqa: no-relative-paths
@@ -305,3 +349,10 @@
         msg: >-
           🛡️ OPNsense atualizado: plugins essenciais instalados, sensores térmicos
           carregados, config.xml aplicado e serviços recarregados.
+
+  handlers:
+    # Sem isto o configd não enxerga a ação nova até o próximo reinício, e o
+    # job de cron falha com "action not found" a cada minuto.
+    - name: Recarregar o configd do OPNsense
+      ansible.builtin.command: /usr/local/etc/rc.d/configd restart
+      changed_when: true

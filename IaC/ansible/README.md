@@ -55,6 +55,7 @@ ansible/
 │   ├── render_monitoring.py   # Render da stack de monitoramento com 2 hosts por grupo (make render-monitoring)
 │   ├── render_proxmox_ifaces.py  # (1) afirma que o assert de sub-rede do playbook existe e tem as 3 condições; (2) renderiza proxmox_interfaces.j2, RFC 5737 (make render-proxmox-ifaces)
 │   ├── gates_ordem_vlan.py    # (1) afirma que os gates da ORDEM da migração de VLANs seguem nos playbooks de rede, e que a fase do AP continua partida em --tags rede/wifi; (2) renderiza e confere que o template cria uma interface por VLAN e que cada `politica` vira as regras prometidas, na ordem certa (make gates-ordem-vlan)
+│   ├── gateway_metrics.py      # Coleta de métricas de gateway: ordem no playbook, nome da ação, e config/script concordando sobre os grupos (make gateway-metrics)
 │   ├── fixtures/opnsense.yml  # Variáveis de exemplo — RFC 5737, MAC de documentação IANA
 │   ├── baseline/opnsense-fase0.xml  # Render congelado da fase 0 deste refactor — nunca regenerar
 │   └── expected/               # Diff aprovado por fase, comparado byte a byte (ver expected/README.md)
@@ -172,6 +173,20 @@ também entram em `make check`:
 - `make render-monitoring` — [`tests/render_monitoring.py`](./tests/render_monitoring.py)
   renderiza os templates da stack de monitoramento com 2 hosts por grupo, provando
   que o template lida com mais de um alvo.
+- `make gateway-metrics` — [`tests/gateway_metrics.py`](./tests/gateway_metrics.py)
+  protege a publicação do estado dos gateways (dpinger) como métrica do
+  Prometheus. Três camadas. A primeira afirma que o arquivo de `actions.d` é
+  escrito ANTES do `config.xml`: o `<job>` de cron nomeia a ação
+  `gatewaymetrics collect`, e sem a ação registrada o job existe, aparece na
+  GUI e nunca roda. A segunda confere que o nome da ação casa entre o nome do
+  arquivo de `actions.d`, a seção dentro dele e o `<command>` do job. A
+  terceira é a que mais importa: `opnsense_gateway_groups` tem dois
+  consumidores — o `config.xml.j2`, que escreve os `<gateway_group>` do
+  failover, e o `gateway_metrics.sh.j2`, que publica o rótulo de grupo — e o
+  teste exige que os dois rendam os mesmos pares. ⚠️ Divergir ali não dá erro
+  em lugar nenhum: o firewall segue fazendo failover pelo config e o painel
+  segue desenhando com o rótulo antigo, plausível e errado.
+
 - `make gates-ordem-vlan` — [`tests/gates_ordem_vlan.py`](./tests/gates_ordem_vlan.py)
   protege a **ordem de aplicação** da migração de VLANs, na mesma forma de duas
   camadas. Os gates EFETIVOS são três `assert` em `pre_tasks`: dois em
