@@ -71,6 +71,7 @@
       loop: "{{ monitoring_sidecar_files | selectattr('src', 'search', '\\.j2$') | list }}"
       loop_control:
         label: "{{ item.dest }}"
+      register: sidecar_render
 
     - name: Copiar os arquivos de configuração que não são template  # noqa: no-relative-paths
       ansible.builtin.copy:
@@ -82,6 +83,7 @@
       loop: "{{ monitoring_sidecar_files | rejectattr('src', 'search', '\\.j2$') | list }}"
       loop_control:
         label: "{{ item.dest }}"
+      register: sidecar_copia
 
     # O diretório inteiro, não um arquivo por vez: são sete dashboards hoje e
     # a lista cresce. Enumerá-los em `monitoring_sidecar_files` faria cada
@@ -125,6 +127,57 @@
             value: "{{ nut_primary_address }}"
         portainer_endpoint_id: "{{ endpoint_id }}"
       no_log: true
+
+    # =====================================================================
+    # RECRIAR O SERVIÇO CUJO ARQUIVO DE CONFIGURAÇÃO MUDOU
+    # =====================================================================
+    # ⚠️ Sem isto, escrever a configuração NÃO a aplica, e nada acusa.
+    #
+    # O compose monta cada arquivo destes individualmente, e o Docker monta
+    # ARQUIVO POR INODE. `template` e `copy` escrevem num temporário e
+    # renomeiam — inode novo — então o container segue lendo o inode antigo,
+    # já desligado do nome. O playbook reporta `changed`, o arquivo no host
+    # está certo, e o serviço roda com a configuração de semanas atrás.
+    #
+    # Descoberto em 31/08/2026: o `prometheus.yml` do host era de 31/08 e o de
+    # dentro do container, de 23/08. Oito dias de mudanças que nunca chegaram —
+    # inclusive um `relabel_configs` corrigido que deixava um dashboard inteiro
+    # sem dados.
+    #
+    # Recriar a task é o que refaz o bind mount. Um SIGHUP não serve: o
+    # processo recarrega o MESMO inode antigo e reporta sucesso.
+    #
+    # ⚠️ Vem DEPOIS do deploy da stack de propósito: numa primeira execução o
+    # serviço ainda não existe, e a stack recém-criada já sobe com os arquivos
+    # certos. `failed_when: false` cobre exatamente esse caso.
+    - name: Recriar os serviços cujo arquivo de configuração mudou
+      ansible.builtin.command:
+        argv:
+          - docker
+          - service
+          - update
+          - --force
+          - --quiet
+          - "monitoring_{{ item }}"
+      loop: >-
+        {{ (sidecar_render.results | default([]) + sidecar_copia.results | default([]))
+           | selectattr('changed')
+           | map(attribute='item.servico')
+           | unique | list }}
+      register: recriacao
+      changed_when: recriacao.rc == 0
+      failed_when: false
+
+    - name: Avisar sobre serviço que não pôde ser recriado
+      ansible.builtin.debug:
+        msg: >-
+          O serviço monitoring_{{ item.item }} não foi recriado (rc={{ item.rc }}).
+          Se a stack acabou de ser criada, isso é esperado. Se não, o arquivo
+          novo está no host e o container ainda lê o antigo — confira com
+          `docker exec <cid> stat -c %i <caminho>` contra o inode do host.
+      loop: "{{ recriacao.results | default([]) | rejectattr('rc', 'eq', 0) | list }}"
+      loop_control:
+        label: "{{ item.item }}"
 
     - name: Deploy da Stack Statping (Status Page)
       ansible.builtin.include_tasks: "../tasks/portainer_stack.yml"

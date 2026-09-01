@@ -62,10 +62,25 @@ scrape_configs:
 {% endfor %}
     relabel_configs:
 {% for host in groups['openwrt'] %}
+{# ⚠️ O `instance` deste job PRECISA manter a porta, ao contrário dos
+outros. O dashboard do OpenWrt extrai host e porta do próprio
+`instance`, com regex:
+
+node -> /([^:]+):.*/        port -> /[^:]+:(.*)/
+
+e os 61 painéis consultam `instance=~"$node:$port"`. Com o `instance`
+reescrito só para o nome do host, os dois regex não casam nada, as
+variáveis nascem VAZIAS e o dashboard inteiro fica sem dados — sem
+erro em lugar nenhum: o alvo segue `up`, o Prometheus segue coletando
+as 890 séries, e o painel só não desenha.
+
+A porta sai de um GRUPO DE CAPTURA do endereço, e não de um literal:
+mudar a porta no `targets` acima passa a mudar o `instance` junto, em
+vez de as duas divergirem em silêncio. #}
       - source_labels: [__address__]
-        regex: {{ hostvars[host].ansible_host | regex_escape }}:9100
+        regex: {{ hostvars[host].ansible_host | regex_escape }}:(\d+)
         target_label: instance
-        replacement: "{{ host | upper }}"
+        replacement: "{{ host | upper }}:$1"
 {% endfor %}
 {% endif %}
 

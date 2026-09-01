@@ -238,28 +238,48 @@ loki_chunk_encoding: "gzip"
 
 # Arquivos de configuração dos sidecars de monitoramento que serão
 # templatados depois. `src` é relativo a `docker/monitoring/swarm/`.
+# ⚠️ `servico` existe por causa de um defeito de BIND MOUNT, não por gosto de
+# organização. O compose monta cada um destes arquivos INDIVIDUALMENTE
+# (`/srv/.../prometheus.yml:/etc/prometheus/prometheus.yml`), e o Docker
+# monta ARQUIVO POR INODE. O módulo `template` escreve num temporário e
+# renomeia — inode novo — então o container continua enxergando o inode
+# antigo, já desligado do nome.
+#
+# O sintoma é o pior possível: `ansible-playbook` reporta `changed`, o arquivo
+# no host está certo, e o serviço segue rodando com a configuração de semanas
+# atrás. Descoberto em 31/08/2026, com o arquivo do host de 31/08 e o de
+# dentro do container de 23/08 — oito dias de mudanças que nunca chegaram.
+#
+# O diretório de dashboards do Grafana NÃO sofre disso: ele é montado como
+# DIRETÓRIO, e o inode do diretório não muda quando um arquivo dentro dele é
+# trocado. É por isso que dashboard novo aparecia e configuração nova não.
 monitoring_sidecar_files:
   - src: "prometheus.yml.j2"
+    servico: "prometheus"
     dest: "/srv/containers/prometheus/prometheus.yml"
     owner: "root"
     group: "root"
     mode: "0644"
   - src: "loki-config.yml.j2"
+    servico: "loki"
     dest: "/srv/containers/loki/loki-config.yml"
     owner: "root"
     group: "root"
     mode: "0644"
   - src: "config.alloy"
+    servico: "alloy"
     dest: "/srv/containers/alloy/config.alloy"
     owner: "root"
     group: "root"
     mode: "0644"
   - src: "datasources.yml"
+    servico: "grafana"
     dest: "/srv/containers/grafana/datasources.yml"
     owner: "root"
     group: "root"
     mode: "0644"
   - src: "dashboards.yml"
+    servico: "grafana"
     dest: "/srv/containers/grafana/dashboards.yml"
     owner: "root"
     group: "root"
