@@ -143,15 +143,35 @@ vlans:
     # Onde as pessoas estão. Alcança os serviços do homelab (20) e os
     # dispositivos inteligentes (40) — app de automação roda no próprio
     # aparelho, então quem abre a conexão é o celular.
-    # ⚠️ `alcanca` NÃO inclui a 10: como está, um PC daqui não abre a GUI do
-    # Proxmox nem a do firewall, e `gerencia: true` não resolve isso — ele
-    # libera as PORTAS de gerência, não a rede onde os gateways estão. Quem
-    # administra hoje está na `lan` de resgate; quando ela for aposentada
-    # (elo 6), ou a 10 entra aqui, ou o administrador ganha rede própria.
+    #
+    # `alcanca` NÃO inclui a 10, e não deve incluir: isso daria a todo PC e
+    # celular da casa acesso à rede dos hipervisores. Quem precisa é UM host,
+    # e ele entra por `excecoes` abaixo.
     politica:
       internet: true
       alcanca: [20, 40]
       gerencia: true
+      # Exceção por HOST: origem é um endereço, não a rede. `origem` vai
+      # verbatim para o `source_net` da regra, então aceita IP, CIDR ou nome
+      # de alias — use alias quando forem mais de um endereço.
+      #
+      # ⚠️ NÃO É FRONTEIRA DE SEGURANÇA, e a distinção importa. A origem é um
+      # IP: qualquer aparelho no mesmo segmento L2 pode assumi-lo, porque o pf
+      # não filtra por MAC e nada impede um cliente de se autoconfigurar com o
+      # endereço do vizinho. O ganho é não abrir a rede inteira — que é real —
+      # e não impedir quem já está dentro da VLAN 30.
+      #
+      # Fronteira de verdade seria rede própria para o host de administração.
+      # Fica registrado como alternativa, não como pendência: a decisão de
+      # 31/08/2026 foi aceitar a exceção por host.
+      #
+      # ⚠️ Endereço FICTÍCIO, como todo o resto deste arquivo. O real vive no
+      # 99-local.yml ao lado — e ele precisa ser FIXO, senão a regra aponta
+      # para quem pegar aquele endereço no DHCP.
+      excecoes:
+        - descr: "no de controle do Ansible"
+          origem: "198.18.30.10"
+          alcanca: [10]
 
   - tag: 40
     name: "IOT"

@@ -30,6 +30,7 @@
   Cada VLAN vira, nesta ordem de `sequence` (o `quick` faz a primeira que
   casar decidir):
 
+    38  pass   exceção por HOST (`politica.excecoes`)
     40  pass   cada rede do lab em `alcanca`
     45  block  portas de gerência no firewall e em rede privada  (se !gerencia)
     50  block  cada outra rede do lab
@@ -37,6 +38,11 @@
 
   A ordem é o desenho inteiro:
 
+    38 antes de tudo — a exceção é a regra mais específica do conjunto (um
+                      host, não uma rede), então decide primeiro. Em
+                      particular ela vence o bloqueio de gerência de 45, que é
+                      o que permite `gerencia: false` na VLAN inteira com o
+                      host de administração de fora da restrição.
     40 antes de 45  — a permissão ESPECÍFICA vence a restrição genérica.
                       Management_Ports contém 80 e 443, então um bloqueio de
                       gerência antes das liberações mataria HTTP entre VLANs
@@ -56,7 +62,7 @@
   e NÃO de sorteio: UUID é identidade neste config, e um novo a cada render
   faria o OPNsense ver regra nova toda vez.
 #}
-{% macro regra_politica(chave, seq, acao, iface, destino, porta, descricao) %}
+{% macro regra_politica(chave, seq, acao, iface, destino, porta, descricao, origem=none) %}
           <rule uuid="{{ ('politica:' ~ chave) | to_uuid }}">
             <enabled>1</enabled>
             <statetype>keep</statetype>
@@ -71,7 +77,7 @@
             <protocol>{{ 'tcp' if porta else 'any' }}</protocol>
             <icmptype/>
             <icmp6type/>
-            <source_net>{{ iface }}</source_net>
+            <source_net>{{ origem | default(iface, true) }}</source_net>
             <source_not>0</source_not>
             <source_port/>
             <destination_net>{{ destino }}</destination_net>
@@ -131,6 +137,25 @@
 {% set _ = permitidas.append('lan' if d == 'lan' else 'vlan' ~ d) %}
 {% endfor %}
 {% set bloqueadas = todas_lab | reject('equalto', eu) | reject('in', permitidas) | list %}
+{#   Exceções por HOST. `origem` é passado verbatim para `source_net`, então
+     aceita IP, CIDR ou nome de alias — alias é o mais robusto quando forem
+     mais de um endereço.
+
+     ⚠️ ISTO NÃO É FRONTEIRA DE SEGURANÇA. A origem é um endereço IP, e
+     qualquer aparelho no mesmo segmento L2 pode assumi-lo: o pf não filtra
+     por MAC, e o switch não impede um cliente de se autoconfigurar com o
+     endereço do vizinho. Serve para NÃO abrir a rede inteira, que é ganho
+     real, e não para impedir quem já está dentro da VLAN de origem.
+
+     Fronteira de verdade seria rede própria para o host de administração. #}
+{% for ex in pol.excecoes | default([]) %}
+{% for destino_ex in ex.alcanca %}
+{{ regra_politica(eu ~ ':excecao:' ~ ex.origem ~ ':' ~ destino_ex, 38, 'pass',
+                  eu, 'lan' if destino_ex == 'lan' else 'vlan' ~ destino_ex,
+                  '', vlan.name ~ ' > excecao ' ~ (ex.descr | default(ex.origem)),
+                  ex.origem) }}
+{% endfor %}
+{% endfor %}
 {% for destino in permitidas %}
 {{ regra_politica(eu ~ ':pass-lab:' ~ destino, 40, 'pass', eu, destino, '',
                   vlan.name ~ ' > alcanca ' ~ destino) }}

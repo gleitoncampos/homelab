@@ -54,6 +54,7 @@ RENDER = ANSIBLE / "tests" / "render_opnsense.py"
 
 # `name` exato de cada task de gate. Renomear a task derruba este teste — de
 # propósito: é o ponto onde a Camada 1 se prende ao alvo real.
+GATE_DOC = "Recusar aplicar com endereço de documentação (99-local.yml ausente)"
 GATE_ORFA = "Abortar se uma regra de filtro citar interface que o config não cria"
 GATE_PASSAGEM = "Abortar se uma VLAN não declarar política de passagem completa"
 GATE_MGMT = "Abortar se a VLAN de gerência ainda não existe ou não é alcançável"
@@ -129,6 +130,22 @@ def verifica_gates_opnsense():
     checar(PB_OPNSENSE.is_file(), f"playbook existe: {PB_OPNSENSE.name}")
     if not PB_OPNSENSE.is_file():
         return
+
+    # --- gate de endereço de documentação ----------------------------------
+    # Não é gate de ORDEM, e está aqui porque cobre o mesmo dado: um endereço
+    # de documentação que chegue ao apply não dá erro, gera configuração que
+    # aponta para host inexistente. A `origem` das exceções por host foi
+    # acrescentada a ele depois das outras duas condições, e é a mais fácil de
+    # alguém esquecer ao criar um campo de endereço novo.
+    task = _achar(PB_OPNSENSE, GATE_DOC)
+    checar(task is not None, f"gate encontrado pelo name: {GATE_DOC!r}")
+    if task is not None:
+        corpo = _corpo_assert(task) or ""
+        checar("lan_ipaddr" in corpo, "gate de documentação cobre lan_ipaddr")
+        checar("map(attribute='ip')" in _normalizar(corpo),
+               "gate de documentação cobre o IP de cada VLAN")
+        checar("politica.excecoes" in corpo and "origem" in corpo,
+               "gate de documentação cobre a origem das exceções por host")
 
     # --- gate 1: regra citando interface que o config não cria -------------
     task = _achar(PB_OPNSENSE, GATE_ORFA)
@@ -390,9 +407,13 @@ def verifica_politica_gera_regras(raiz, vlans):
         if not minhas:
             continue
 
+        # Só as regras de REDE: a origem é a própria interface. As de
+        # exceção têm origem de host e são conferidas à parte — misturá-las
+        # aqui faria a exceção contar como liberação de rede.
         def alvos(acao, porta=""):
             return {r.findtext("destination_net") for r in minhas
                     if r.findtext("action") == acao
+                    and r.findtext("source_net") == eu
                     and (r.findtext("destination_port") or "") == porta}
 
         permitidas = {"lan" if d == "lan" else f"vlan{d}" for d in pol["alcanca"]}
@@ -429,7 +450,40 @@ def verifica_politica_gera_regras(raiz, vlans):
         def seqs(acao, destino):
             return [int(r.findtext("sequence")) for r in minhas
                     if r.findtext("action") == acao
+                    and r.findtext("source_net") == eu
                     and r.findtext("destination_net") == destino]
+
+        # --- exceções por host -------------------------------------------
+        # A regra de exceção é a única com `source_net` diferente da própria
+        # interface. É essa diferença que a torna reconhecível, e é o que
+        # prova que o template passou `origem` adiante em vez de ignorá-la.
+        excecoes = pol.get("excecoes") or []
+        por_origem = {}
+        for r in minhas:
+            origem = r.findtext("source_net")
+            if origem and origem != eu:
+                por_origem.setdefault(origem, set()).add(
+                    r.findtext("destination_net"))
+        checar(set(por_origem) == {ex["origem"] for ex in excecoes},
+               f"[{eu}] origens de exceção == {sorted({e['origem'] for e in excecoes})} "
+               f"(veio {sorted(por_origem)})")
+
+        for ex in excecoes:
+            destinos = {"lan" if d == "lan" else f"vlan{d}"
+                        for d in ex["alcanca"]}
+            checar(por_origem.get(ex["origem"], set()) == destinos,
+                   f"[{eu}] exceção {ex['origem']} alcança {sorted(destinos)}")
+            # ⚠️ A exceção só vale se decidir ANTES do bloqueio que ela
+            # contorna. Mesma regra, `sequence` maior, é regra morta: o
+            # `quick` do bloqueio decide primeiro e nada acusa.
+            seq_ex = [int(r.findtext("sequence")) for r in minhas
+                      if r.findtext("source_net") == ex["origem"]]
+            for destino in destinos:
+                seq_bloq = seqs("block", destino)
+                if seq_ex and seq_bloq:
+                    checar(max(seq_ex) < min(seq_bloq),
+                           f"[{eu}] exceção {ex['origem']} decide ANTES do "
+                           f"bloqueio de {destino}")
 
         seq_pass_lab = [s for d in permitidas for s in seqs("pass", d)]
         seq_gerencia = [int(r.findtext("sequence")) for r in minhas

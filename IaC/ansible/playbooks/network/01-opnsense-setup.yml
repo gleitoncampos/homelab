@@ -84,6 +84,17 @@
         that:
           - lan_ipaddr is not match('^(192\\.0\\.2\\.|198\\.51\\.100\\.|203\\.0\\.113\\.|198\\.1[89]\\.)')
           - vlans | map(attribute='ip') | select('match', '^(192\\.0\\.2\\.|198\\.51\\.100\\.|203\\.0\\.113\\.|198\\.1[89]\\.)') | list | length == 0
+          # A origem das exceções por host entra no mesmo gate. Ela NÃO é
+          # coberta pelas duas linhas acima — é campo novo, e um endereço de
+          # documentação aqui geraria regra apontando para um host que não
+          # existe: a exceção some sem erro, e quem depende dela descobre
+          # tentando administrar.
+          - >-
+            vlans | selectattr('politica.excecoes', 'defined')
+                  | map(attribute='politica.excecoes') | flatten
+                  | map(attribute='origem')
+                  | select('match', '^(192\\.0\\.2\\.|198\\.51\\.100\\.|203\\.0\\.113\\.|198\\.1[89]\\.)')
+                  | list | length == 0
         fail_msg: >-
           A topologia carregada é a de documentação, não a real. Falta
           inventories/{{ homelab_env | default('prod') }}/group_vars/network/99-local.yml

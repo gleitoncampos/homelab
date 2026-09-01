@@ -92,6 +92,14 @@ vlans:
       internet: true
       alcanca: [lan]
       gerencia: true
+      # Exceção por host na fixture: exercita o ramo `excecoes` e, junto com a
+      # VLAN de baixo que não tem nenhuma, os dois lados do laço. O destino é
+      # uma VLAN que `alcanca` NÃO libera — se fosse uma já liberada, a regra
+      # gerada seria indistinguível da de rede e o teste não provaria nada.
+      excecoes:
+        - descr: "host de administracao"
+          origem: "198.51.100.10"
+          alcanca: [20]
   - tag: 20
     name: "HOMELAB"
     descr: "Servidores"
