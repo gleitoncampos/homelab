@@ -1,0 +1,89 @@
+---
+# ==============================================================================
+# Exportador de métricas do ponto de acesso
+# ==============================================================================
+# ⚠️ PLAYBOOK PRÓPRIO, e não uma tag dentro de `02-openwrt-setup.yml`. O motivo
+# não é organização: aquele play tem, em `pre_tasks` com `tags: always`, o gate
+# da ordem de migração de VLANs — um ping no gateway da VLAN de gerência, que
+# ainda não existe. `always` roda mesmo com `--tags`, então NÃO há tag capaz de
+# instalar o exportador por lá enquanto a migração não acontecer.
+#
+# E não deveria haver: aquele gate protege a escrita de rede, que isola o AP se
+# rodar fora de ordem. Instalar pacote de métrica não escreve rede nenhuma e não
+# pode ficar refém de uma migração que depende de outro equipamento.
+#
+# Mesmo princípio já aplicado em `00-proxmox-setup.yml` e `00-omv-setup.yml`,
+# onde o exportador saiu para uma tag: ligar coleta não pode exigir o risco do
+# playbook inteiro. Aqui a separação precisou ser mais forte, em arquivo.
+#
+#   ansible-playbook playbooks/network/02-openwrt-exporter.yml
+- name: "OpenWrt - Exportador de métricas (sem dependência da migração de VLANs)"
+  hosts: openwrt
+  # OpenWrt não tem Python: todo comando vai por `raw`, e fact não é coletável.
+  gather_facts: false
+
+  tasks:
+    # ⚠️ LEITURA separada da ESCRITA, e não uma task só que decide por dentro.
+    # A primeira versão fazia tudo num `raw`, e em `--check` o módulo é pulado:
+    # o registro ficava sem `stdout` e a task seguinte morria com
+    # "'dict object' has no attribute 'stdout'". Pior que o erro, o efeito —
+    # `--check` deixava de servir como pré-voo justamente aqui.
+    #
+    # Separando, a leitura roda em check (`check_mode: false`, é só consulta) e
+    # o playbook passa a DIZER quais pacotes faltam sem instalar nada.
+    - name: Levantar quais pacotes do exportador faltam
+      ansible.builtin.raw: |
+        for p in {{ openwrt_exporter_packages | join(' ') }}; do
+          opkg list-installed 2>/dev/null | grep -q "^$p " || echo "$p"
+        done
+      register: openwrt_faltam
+      changed_when: false
+      check_mode: false
+
+    - name: Guardar a lista de ausentes
+      ansible.builtin.set_fact:
+        openwrt_exporter_ausentes: >-
+          {{ openwrt_faltam.stdout_lines | map('trim')
+             | select('match', '^prometheus-node-exporter-lua') | list }}
+
+    - name: Dizer o que será feito
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'Todos os %d pacotes já estão instalados.'
+             | format(openwrt_exporter_packages | length)
+             if openwrt_exporter_ausentes | length == 0
+             else 'Faltam %d: %s' | format(openwrt_exporter_ausentes | length,
+                                           openwrt_exporter_ausentes | join(', ')) }}
+
+    # ⚠️ `opkg update` só roda quando falta pacote. Ele baixa as listas para
+    # /var, que é tmpfs: repetir a cada execução gasta RAM de um equipamento com
+    # 241 MB, sem ganho nenhum quando tudo já está instalado.
+    - name: Instalar os pacotes ausentes do exportador
+      ansible.builtin.raw: >-
+        opkg update >/dev/null 2>&1 &&
+        opkg install {{ openwrt_exporter_ausentes | join(' ') }}
+      when: openwrt_exporter_ausentes | length > 0
+      register: openwrt_instalacao
+      changed_when: openwrt_instalacao.rc == 0
+
+    # ⚠️ A sonda vai contra o ENDEREÇO DO INVENTÁRIO, e não contra 127.0.0.1.
+    # No OpenWrt o exportador é um CGI do `uhttpd`, que escuta no endereço da
+    # interface e NÃO no loopback — uma sonda em 127.0.0.1 devolve zero métrica
+    # e faria este playbook falhar num equipamento perfeitamente saudável.
+    # Medido em 02/09/2026: 0 séries pelo loopback, 835 pelo endereço da LAN.
+    #
+    # É também o mesmo endereço que o Prometheus raspa, então a sonda exercita o
+    # caminho de verdade, e não um equivalente.
+    - name: Conferir que o exportador está servindo métrica
+      ansible.builtin.raw: |
+        n=$(wget -qO- "http://{{ ansible_host }}:{{ node_exporter_port | default(9100) }}/metrics" 2>/dev/null | grep -c '^node_')
+        echo "SERIES:$n"
+        [ "$n" -gt 0 ]
+      register: openwrt_sonda
+      changed_when: false
+      check_mode: false
+      failed_when: openwrt_sonda.rc != 0
+
+    - name: Dizer quantas séries o exportador publica
+      ansible.builtin.debug:
+        msg: "{{ openwrt_sonda.stdout_lines | select('search', 'SERIES') | first | default('sem resposta') }}"

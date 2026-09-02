@@ -69,14 +69,18 @@ coleta, guarda ou desenha.
 | — | idem | pacote `prometheus-node-exporter-collectors` (SMART, NVMe, apt) | ✅ mesma task |
 | `opnsense` | firewall | plugin `os-node_exporter` (FreeBSD, roda como `nobody`) | ✅ `opnsense_plugins` |
 | — | firewall | `gateway-metrics` + drop-in de cron, para o dpinger | ✅ `01-opnsense-setup.yml --tags metricas` |
-| `openwrt` | ponto de acesso | `prometheus-node-exporter-lua` + 5 módulos, servidos pelo **`uhttpd`** | ⚠️ **NÃO** |
+| `openwrt` | ponto de acesso | `prometheus-node-exporter-lua` + 5 módulos, servidos pelo **`uhttpd`** | ✅ `network/02-openwrt-exporter.yml` |
 | `pve` | hipervisores | nada no host — a stack raspa a API | ✅ n/a |
 | `nut` | nobreak | `upsd` no hipervisor primário | ✅ `07-nut-ups.yml` |
 
-⚠️ **O ponto de acesso é a lacuna.** Os seis pacotes `prometheus-node-exporter-lua*`
-foram instalados à mão e **nenhum playbook os declara**. Uma reinstalação do
-equipamento volta sem eles, e o sintoma é um alvo `down` que ninguém associa a
-pacote faltando. Ver 1.2.2-h no roadmap.
+⚠️ **O ponto de acesso tem playbook PRÓPRIO, e o motivo importa.** Os pacotes não
+podem entrar no `02-openwrt-setup.yml` porque aquele play carrega, em
+`pre_tasks` com `tags: always`, o gate da ordem de migração de VLANs — um ping
+no gateway da VLAN de gerência, que ainda não existe. `always` roda mesmo com
+`--tags`, então nenhuma tag daria conta. E o gate está certo: ele protege a
+escrita de rede, que isola o AP se rodar fora de ordem. Instalar pacote de
+métrica não escreve rede e não pode ficar refém de uma migração que depende de
+outro equipamento.
 
 ⚠️ **No ponto de acesso, quem escuta a 9100 é o `uhttpd`, não um processo de
 exporter.** Diagnóstico que procure por processo próprio não acha nada e conclui

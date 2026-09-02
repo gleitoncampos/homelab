@@ -252,7 +252,7 @@ checar", aplicada ao campo individual de um template de reconciliação.
 │   │   │   ├── fixtures/       # Variáveis de exemplo (RFC 5737, MAC de documentação IANA); isenção por ARQUIVO no gate, nunca por diretório
 │   │   │   ├── baseline/       # Render congelado da fase 0 — nunca regenerar
 │   │   │   └── expected/       # Diff aprovado por fase, comparado byte a byte
-│   │   └── playbooks/          # 00-node-bootstrap/-omv-setup/-proxmox-setup/-proxmox-api-token, 01-05 (SO, cluster, stacks), 06-backup, 07-nut-ups, network/ (OPNsense, OpenWrt)
+│   │   └── playbooks/          # 00-node-bootstrap/-omv-setup/-proxmox-setup/-proxmox-api-token, 01-05 (SO, cluster, stacks), 06-backup, 07-nut-ups, network/ (OPNsense, OpenWrt, e 02-openwrt-exporter.yml em arquivo próprio: o gate de ordem de VLAN do 02 tem `tags: always` e bloquearia qualquer tag)
 │   └── terraform/          # Hardware virtual (Proxmox VE — VMs e CTs LXC)
 │       └── proxmox/        # Provider bpg/proxmox; no README de lá, o runbook de import e a exceção da VM do NAS, que é recriada
 ├── prod-snapshot/          # Ferramentas de coleta do estado real (só os scripts)

@@ -64,6 +64,29 @@ ntp_servers:
 # `ap.example`. Quem impede é o assert do playbook, que recusa qualquer nome
 # terminado em `.example`. Trocar estes valores por algo plausível desarma esse
 # assert — se for mexer, mexa no assert junto.
+# ---------------------------------------------------------------------------
+# EXPORTADOR DE MÉTRICAS DO PONTO DE ACESSO
+# ---------------------------------------------------------------------------
+# ⚠️ Estes seis pacotes estavam instalados À MÃO e o IaC não os declarava. O job
+# `openwrt` do Prometheus funcionava, e nada no repositório dizia por quê — uma
+# reinstalação do equipamento voltaria sem eles, com o sintoma de um alvo `down`
+# que ninguém associa a pacote faltando. Ver 1.2.2-h no roadmap.
+#
+# ⚠️ No OpenWrt quem atende a porta é o **uhttpd**, não um processo de exporter:
+# o exportador lua é um CGI servido por ele. Procurar por processo chamado
+# `node_exporter` não acha nada e leva à conclusão errada.
+#
+# Os módulos não são acessórios — cada um acrescenta uma família de métrica, e o
+# dashboard da comunidade consulta as quatro últimas. Remover um deixa painel
+# vazio sem erro em lugar nenhum.
+openwrt_exporter_packages:
+  - prometheus-node-exporter-lua               # o CGI base
+  - prometheus-node-exporter-lua-nat_traffic   # tráfego por conexão NAT
+  - prometheus-node-exporter-lua-netstat       # contadores de rede
+  - prometheus-node-exporter-lua-openwrt       # versão, modelo, uptime do OpenWrt
+  - prometheus-node-exporter-lua-wifi          # rádios, canal, potência
+  - prometheus-node-exporter-lua-wifi_stations # clientes associados e sinal
+
 opnsense_hostname: "fw.example"
 openwrt_hostname: "ap.example"
 
