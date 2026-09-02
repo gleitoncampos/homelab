@@ -19,7 +19,12 @@ host é `playbooks/03-stack-monitoring.yml`, a partir da lista
 | `loki-config.yml` | `/srv/containers/loki/loki-config.yml` | não |
 | `datasources.yml` | `/srv/containers/grafana/datasources.yml` | não |
 | `dashboards.yml` | `/srv/containers/grafana/dashboards.yml` | não |
-| `dashboards/nut.json` | `/srv/containers/grafana/dashboards/nut.json` | não |
+| `dashboards/` (o diretório) | `/srv/containers/grafana/dashboards/` | não |
+
+⚠️ Os dashboards vão pelo **diretório inteiro**, e não arquivo a arquivo — eles
+não estão em `monitoring_sidecar_files`. Enumerá-los faria cada dashboard novo
+depender de alguém lembrar de acrescentar a entrada, e o sintoma de esquecer é
+um painel que some sem erro nenhum.
 
 ⚠️ **`prometheus.yml.j2` é template, e é assim que ele não carrega dado real.**
 Todo endereço vem de `hostvars[...].ansible_host` e todo rótulo `instance` vem
@@ -31,6 +36,103 @@ CT central de rsyslog, fora do Swarm, lendo os arquivos que o rsyslog já
 gravou. Ele não está em `monitoring_sidecar_files` porque esse CT ainda não
 está no inventário; o template existe para que a configuração pare de viver só
 dentro do CT.
+
+## De onde vem cada métrica — e o que NÃO está nesta pasta
+
+⚠️ **A stack é metade do sistema.** Ela recebe, guarda e desenha; quase nada do
+que ela mostra nasce dentro dela. O que produz métrica são agentes instalados
+NOS EQUIPAMENTOS, fora deste diretório e fora do Swarm. Quem procurar aqui a
+origem de um número não vai achar.
+
+### O que roda dentro da stack
+
+Nove serviços no `compose.yml`. Só três deles **produzem** métrica; o resto
+coleta, guarda ou desenha.
+
+| serviço | papel | produz métrica? |
+|---|---|---|
+| `prometheus` | guarda e responde consulta | de si mesmo |
+| `grafana` | desenha | não |
+| `loki` | guarda log | não |
+| `alloy` | coleta log e empurra para o Loki | não |
+| `cadvisor` | métrica de contêiner do nó do Swarm | **sim** |
+| `node_exporter` | sistema operacional do nó do Swarm (contêiner) | **sim** |
+| `nut_exporter` | traduz o `upsd` do nobreak | **sim** |
+| `prometheus-pve-exporter` | raspa a API do Proxmox | **sim** (via API) |
+| `influxdb` | ⚠️ **sem consumidor** — ver 1.2.2-d no roadmap | não |
+
+### O que roda FORA da stack, nos equipamentos
+
+| job | equipamento | quem serve a porta | vem do IaC? |
+|---|---|---|---|
+| `node_exporter` | hipervisores e NAS | pacote Debian `prometheus-node-exporter` | ✅ `tasks/node_exporter.yml` |
+| — | idem | pacote `prometheus-node-exporter-collectors` (SMART, NVMe, apt) | ✅ mesma task |
+| `opnsense` | firewall | plugin `os-node_exporter` (FreeBSD, roda como `nobody`) | ✅ `opnsense_plugins` |
+| — | firewall | `gateway-metrics` + drop-in de cron, para o dpinger | ✅ `01-opnsense-setup.yml --tags metricas` |
+| `openwrt` | ponto de acesso | `prometheus-node-exporter-lua` + 5 módulos, servidos pelo **`uhttpd`** | ⚠️ **NÃO** |
+| `pve` | hipervisores | nada no host — a stack raspa a API | ✅ n/a |
+| `nut` | nobreak | `upsd` no hipervisor primário | ✅ `07-nut-ups.yml` |
+
+⚠️ **O ponto de acesso é a lacuna.** Os seis pacotes `prometheus-node-exporter-lua*`
+foram instalados à mão e **nenhum playbook os declara**. Uma reinstalação do
+equipamento volta sem eles, e o sintoma é um alvo `down` que ninguém associa a
+pacote faltando. Ver 1.2.2-h no roadmap.
+
+⚠️ **No ponto de acesso, quem escuta a 9100 é o `uhttpd`, não um processo de
+exporter.** Diagnóstico que procure por processo próprio não acha nada e conclui
+que o exporter não está instalado.
+
+### O caminho de uma métrica de disco, ponta a ponta
+
+Serve de modelo para entender os outros, e mostra por que a resposta não está
+neste diretório:
+
+```
+timer do systemd no NAS  (pacote prometheus-node-exporter-collectors)
+  -> executa smartmon.sh, que chama smartctl
+  -> escreve /var/lib/prometheus/node-exporter/smartmon.prom
+  -> node_exporter (pacote Debian, no NAS) serve o arquivo na 9100
+  -> job `node_exporter` do Prometheus raspa
+  -> dashboard `Discos — Saúde Física`
+```
+
+Cinco saltos, e **os quatro primeiros acontecem fora do Swarm**. Só o quinto
+mora aqui.
+
+⚠️ O `node_exporter` NÃO lê SMART sozinho, e isso não é omissão: `smartctl`
+exige root, e o serviço roda sob usuário sem privilégio. O coletor de arquivo
+resolve pelo outro lado — um script privilegiado ESCREVE, o serviço sem
+privilégio apenas LÊ.
+
+### Dois `node_exporter` diferentes, e a confusão que isso gera
+
+⚠️ Existe um `node_exporter` **em contêiner** (neste `compose.yml`) e um
+`node_exporter` **em pacote** (nos hipervisores e no NAS). Não são o mesmo, não
+medem a mesma máquina, e os dois aparecem sob o job `node_exporter`:
+
+- o em contêiner mede a **máquina virtual do Swarm**, e reporta o ID do
+  contêiner como `nodename` — no seletor do Node Exporter Full ele aparece como
+  um hexadecimal sem sentido;
+- o em pacote mede o **hipervisor** ou o **NAS**.
+
+Instalar o de pacote no nó do Swarm seria duplicar; instalar o de contêiner no
+hipervisor exigiria Docker ali, que não existe.
+
+### Por que alvo `down` costuma estar certo
+
+⚠️ Antes de investigar um alvo indisponível, confira se o equipamento devia
+estar ligado. O segundo hipervisor fica desligado por decisão, e o NAS roda
+dentro dele — os dois somem juntos, junto com o job `pve` daquele nó. Três
+alvos vermelhos, uma causa, e nenhuma delas é defeito.
+
+O mesmo vale para os coletores por timer: eles são **condicionados ao
+hardware**, e um timer inativo costuma ser o comportamento certo.
+
+```
+smartmon.timer  ConditionPathExistsGlob=|/dev/sd*     -> não roda em host só de NVMe
+nvme.timer      ConditionPathExistsGlob=/dev/nvme*    -> não roda em host só de SATA
+```
+
 
 ## Dashboards
 
