@@ -50,6 +50,23 @@ ntp_servers:
 # -------------------------------------------------------------
 # Nomes de interface física: reais, e ficam reais. Não são topologia — são
 # nomenclatura de dispositivo, não dizem em que endereço nada responde.
+# ---------------------------------------------------------------------------
+# IDENTIDADE DOS EQUIPAMENTOS
+# ---------------------------------------------------------------------------
+# ⚠️ Valores de DOCUMENTAÇÃO (RFC 2606, domínio `.example`), como os endereços
+# acima. O nome real vive em `99-local.yml`, gitignorado — hostname de
+# equipamento é dado que não pode ir para repositório público, mesma regra do
+# domínio e da faixa de rede.
+#
+# ⚠️ Os templates NÃO têm `| default()` para estas duas. Mas isto aqui é
+# versionado e SEMPRE entrega um valor, então o render nunca falha por ausência:
+# sem `99-local.yml`, o apply renomearia o firewall para `fw.example` e o AP para
+# `ap.example`. Quem impede é o assert do playbook, que recusa qualquer nome
+# terminado em `.example`. Trocar estes valores por algo plausível desarma esse
+# assert — se for mexer, mexa no assert junto.
+opnsense_hostname: "fw.example"
+openwrt_hostname: "ap.example"
+
 parent_interface: "vtnet0" # Interface física pai no OPNsense (Trunk vmbr0 Proxmox)
 passthrough_wan_interface: "enp5s0" # Interface física de rede dedicada via PCIe Pass-through (VT-d) no Proxmox Host
 passthrough_wan2_interface: "enp4s0" # 2ª WAN (CLARO): NIC física dedicada via PCIe Pass-through. Nomenclatura de device, não topologia — mesmo critério de passthrough_wan_interface. Valor real no 99-local.

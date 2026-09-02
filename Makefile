@@ -26,7 +26,7 @@ PLAYBOOKS   := $(wildcard $(ANSIBLE_DIR)/playbooks/*.yml $(ANSIBLE_DIR)/playbook
         validate-compose validate-ansible validate-patterns check-common-copies \
         secrets links snapshot omv-fs discover clean render-opnsense render-monitoring \
         render-proxmox-ifaces render-openwrt-led render-openwrt-network \
-        gates-ordem-vlan gateway-metrics inventario-diretorio
+        gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade
 
 help: ## Lista os alvos
 	@echo "Alvos disponíveis:"
@@ -55,7 +55,7 @@ ssh-keys: ## Instala a chave gerada pelo bootstrap em todo host do inventário (
 test-bootstrap: ## Testa os renderizadores do bootstrap contra os consumidores reais
 	@python3 IaC/bootstrap/test_render.py
 
-check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network gates-ordem-vlan gateway-metrics inventario-diretorio ## Tudo que a CI roda
+check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade ## Tudo que a CI roda
 	@echo
 	@echo "✓ check completo"
 
@@ -180,6 +180,9 @@ render-opnsense: ## Renderiza o template do OPNsense e compara com o baseline co
 
 gates-ordem-vlan: ## Confere os gates da ordem de aplicação da migração de VLANs
 	@python3 $(ANSIBLE_DIR)/tests/gates_ordem_vlan.py
+
+gates-identidade: ## Confere que o apply não pode renomear firewall e AP
+	@python3 $(ANSIBLE_DIR)/tests/gates_identidade.py
 
 inventario-diretorio: ## Confere que `-i <dir>` lê o inventário real, e não o .example
 	@python3 $(ANSIBLE_DIR)/tests/inventario_diretorio.py

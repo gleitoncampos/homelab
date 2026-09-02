@@ -29,6 +29,37 @@
           # passwordauth=0 e a PRÓXIMA execução não conecta.
           - opnsense_admin_authorizedkeys_b64
 
+    # =====================================================================
+    # GATE DE IDENTIDADE — o apply não pode renomear o equipamento
+    # =====================================================================
+    # ⚠️ `opnsense_hostname` vinha de um `| default('opnsense')` no template, e o
+    # equipamento se chama outra coisa. Um apply o renomearia sem aviso: o
+    # hostname entra no arquivo de configuração como qualquer outro campo, e
+    # nada na saída do playbook denuncia a troca.
+    #
+    # ⚠️ Tirar o default do template NÃO fecha o buraco, e é aqui que a
+    # intuição erra. `10-defaults.yml` é VERSIONADO e sempre entrega um valor,
+    # então o StrictUndefined nunca dispara — sem `99-local.yml` o render sai
+    # limpo, com o nome de documentação. Só este assert vê a diferença.
+    #
+    # Recusa qualquer nome terminado em `.example` (RFC 2606), que é a marca
+    # dos valores de documentação, do mesmo jeito que `validate_vault.yml`
+    # recusa o prefixo `TROCAR-`. Nome real vive em `99-local.yml`, que é
+    # gitignorado — hostname de equipamento não vai para repositório público.
+    - name: Abortar se o hostname ainda é o valor de documentação
+      ansible.builtin.assert:
+        that:
+          - opnsense_hostname is defined
+          - opnsense_hostname | string | length > 0
+          - not (opnsense_hostname | string).endswith('.example')
+        fail_msg: >-
+          opnsense_hostname está em "{{ opnsense_hostname | default('(indefinido)') }}", que é o
+          valor de documentação de `10-defaults.yml`. Aplicar assim RENOMEIA o
+          equipamento. Defina o nome real em
+          inventories/{{ homelab_env | default('prod') }}/group_vars/network/99-local.yml
+          (gitignorado). Ver 1.1.5 no roadmap.
+        success_msg: "Identidade: {{ opnsense_hostname }}"
+
     - name: Validar que todo objeto do OPNsense tem UUID
       ansible.builtin.assert:
         that:

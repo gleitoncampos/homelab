@@ -9,7 +9,17 @@
    ficaria hardcoded num arquivo rastreado. #}
   <system>
     <optimization>normal</optimization>
-    <hostname>{{ opnsense_hostname | default('opnsense') }}</hostname>
+    {# ⚠️ SEM `| default()`, e isso é deliberado. Variável de IDENTIDADE não pode
+       ter valor de reserva: o fallback troca "falta a variável" por "renomeia o
+       equipamento calado". O default anterior era 'opnsense', e a caixa se chama
+       outra coisa — o apply a renomearia sem uma linha de aviso.
+
+       ⚠️ Tirar o default NÃO basta, e é o ponto que engana: `10-defaults.yml` é
+       versionado e SEMPRE entrega um valor, então o render nunca falha por
+       ausência. Quem de fato protege é o assert do playbook, que recusa o valor
+       de documentação (`*.example`). Este comentário existe para que ninguém
+       "conserte" o assert achando que o StrictUndefined já cobre. #}
+    <hostname>{{ opnsense_hostname }}</hostname>
     <domain>home.arpa</domain>
 {% for g in opnsense_groups %}
     <group uuid="{{ g.uuid }}">
