@@ -140,7 +140,27 @@
     body:
       env: "{{ stack_env_merged }}"
       repositoryReferenceName: "{{ stack_repo_ref }}"
-      prune: false
+      # ⚠️ `prune: true` é o princípio central deste repositório aplicado ao
+      # deploy: serviço que sai do compose PRECISA sair do cluster. Com `false`,
+      # remover um serviço do compose não removia nada — o serviço órfão seguia
+      # rodando, e o repositório deixava de responder pela stack real no exato
+      # momento em que alguém apagava um bloco.
+      #
+      # O modo de falha era silencioso dos dois lados: o playbook reportava
+      # sucesso, o compose no git dizia uma coisa e o `docker service ls` outra.
+      # Descobrir a diferença exigia comparar as duas listas à mão.
+      #
+      # ⚠️ Isto APAGA serviço, então foi conferido contra a produção antes de
+      # virar (01/09/2026): as quatro stacks que o repositório governa —
+      # `dozzle`, `monitoring`, `portainer` e `traefik` — tinham exatamente os
+      # serviços dos seus composes, 13 no total, zero órfãos. Ligar hoje não
+      # remove nada. Quem for reintroduzir `false` para "não arriscar" está
+      # optando por deriva silenciosa em vez de risco visível.
+      #
+      # Alcance: só serviços da PRÓPRIA stack que sumiram do compose. Rede
+      # externa (`traefik_public`) não é gerida pela stack e não entra. Volume e
+      # dado em `/srv/containers/` também não — prune não toca em estado.
+      prune: true
       pullImage: true
     status_code: 200
     validate_certs: false
