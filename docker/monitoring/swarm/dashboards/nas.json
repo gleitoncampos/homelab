@@ -465,7 +465,7 @@
         "x": 0,
         "y": 7
       },
-      "description": "Um disco por linha. `Ativo` = 0 significa disco em repouso (spin-down), não falha: o coletor não o acorda para medir, então temperatura e atributos ficam do último ciclo acordado.",
+      "description": "Um disco por linha, inclusive os que estão dormindo. `Ativo` = em repouso significa spin-down, não falha: o coletor não acorda o disco para medir. Temperatura fica VAZIA nesse estado, de propósito — leitura de horas atrás exibida como atual é dado velho que se lê como saudável. Saúde, horas e contadores de setor carregam a última medição, porque mudam devagar e escondê-los seria pior.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -660,12 +660,12 @@
             "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
-          "expr": "max by (disk, device_model, type) (smartmon_device_info{instance=\"$node\"} and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1)",
+          "expr": "max by (disk, type) (smartmon_device_active{instance=\"$node\"} and on(disk, instance) last_over_time(smartmon_device_smart_available{instance=\"$node\"}[24h]) == 1)",
+          "format": "table",
+          "instant": true,
           "legendFormat": "__auto",
           "range": false,
-          "instant": true,
-          "refId": "A",
-          "format": "table"
+          "refId": "A"
         },
         {
           "datasource": {
@@ -673,12 +673,12 @@
             "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
-          "expr": "max by (disk) (smartmon_device_smart_healthy{instance=\"$node\"} and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1)",
+          "expr": "max by (disk, device_model) (last_over_time(smartmon_device_info{instance=\"$node\"}[24h]) and on(disk, instance) last_over_time(smartmon_device_smart_available{instance=\"$node\"}[24h]) == 1)",
+          "format": "table",
+          "instant": true,
           "legendFormat": "__auto",
           "range": false,
-          "instant": true,
-          "refId": "B",
-          "format": "table"
+          "refId": "B"
         },
         {
           "datasource": {
@@ -686,12 +686,12 @@
             "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
-          "expr": "max by (disk) (smartmon_device_active{instance=\"$node\"} and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1)",
+          "expr": "max by (disk) (last_over_time(smartmon_device_smart_healthy{instance=\"$node\"}[24h]) and on(disk, instance) last_over_time(smartmon_device_smart_available{instance=\"$node\"}[24h]) == 1)",
+          "format": "table",
+          "instant": true,
           "legendFormat": "__auto",
           "range": false,
-          "instant": true,
-          "refId": "C",
-          "format": "table"
+          "refId": "C"
         },
         {
           "datasource": {
@@ -699,12 +699,12 @@
             "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
-          "expr": "max by (disk) (smartmon_temperature_celsius_raw_value{instance=\"$node\"} and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1)",
+          "expr": "max by (disk) (smartmon_temperature_celsius_raw_value{instance=\"$node\"} and on(disk, instance) last_over_time(smartmon_device_smart_available{instance=\"$node\"}[24h]) == 1)",
+          "format": "table",
+          "instant": true,
           "legendFormat": "__auto",
           "range": false,
-          "instant": true,
-          "refId": "D",
-          "format": "table"
+          "refId": "D"
         },
         {
           "datasource": {
@@ -712,12 +712,12 @@
             "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
-          "expr": "max by (disk) (smartmon_power_on_hours_raw_value{instance=\"$node\"} and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1)",
+          "expr": "max by (disk) (last_over_time(smartmon_power_on_hours_raw_value{instance=\"$node\"}[24h]) and on(disk, instance) last_over_time(smartmon_device_smart_available{instance=\"$node\"}[24h]) == 1)",
+          "format": "table",
+          "instant": true,
           "legendFormat": "__auto",
           "range": false,
-          "instant": true,
-          "refId": "E",
-          "format": "table"
+          "refId": "E"
         },
         {
           "datasource": {
@@ -725,12 +725,12 @@
             "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
-          "expr": "max by (disk) (smartmon_reallocated_sector_ct_raw_value{instance=\"$node\"} and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1)",
+          "expr": "max by (disk) (last_over_time(smartmon_reallocated_sector_ct_raw_value{instance=\"$node\"}[24h]) and on(disk, instance) last_over_time(smartmon_device_smart_available{instance=\"$node\"}[24h]) == 1)",
+          "format": "table",
+          "instant": true,
           "legendFormat": "__auto",
           "range": false,
-          "instant": true,
-          "refId": "F",
-          "format": "table"
+          "refId": "F"
         },
         {
           "datasource": {
@@ -738,12 +738,12 @@
             "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
-          "expr": "max by (disk) (smartmon_current_pending_sector_raw_value{instance=\"$node\"} and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1)",
+          "expr": "max by (disk) (last_over_time(smartmon_current_pending_sector_raw_value{instance=\"$node\"}[24h]) and on(disk, instance) last_over_time(smartmon_device_smart_available{instance=\"$node\"}[24h]) == 1)",
+          "format": "table",
+          "instant": true,
           "legendFormat": "__auto",
           "range": false,
-          "instant": true,
-          "refId": "G",
-          "format": "table"
+          "refId": "G"
         },
         {
           "datasource": {
@@ -751,12 +751,12 @@
             "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
-          "expr": "max by (disk) (smartmon_udma_crc_error_count_raw_value{instance=\"$node\"} and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1)",
+          "expr": "max by (disk) (last_over_time(smartmon_udma_crc_error_count_raw_value{instance=\"$node\"}[24h]) and on(disk, instance) last_over_time(smartmon_device_smart_available{instance=\"$node\"}[24h]) == 1)",
+          "format": "table",
+          "instant": true,
           "legendFormat": "__auto",
           "range": false,
-          "instant": true,
-          "refId": "H",
-          "format": "table"
+          "refId": "H"
         }
       ],
       "transformations": [
@@ -785,9 +785,9 @@
               "disk": "Disco",
               "device_model": "Modelo",
               "type": "Tipo",
-              "Value #A": "",
-              "Value #B": "Saudável",
-              "Value #C": "Ativo",
+              "Value #A": "Ativo",
+              "Value #B": "",
+              "Value #C": "Saudável",
               "Value #D": "Temp",
               "Value #E": "Horas ligado",
               "Value #F": "Realocados",
