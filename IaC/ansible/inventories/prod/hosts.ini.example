@@ -34,12 +34,27 @@ openwrt
 # ntp_server_internal=<IP-DO-FIREWALL>
 
 # Lista de VMIDs dos convidados do Proxmox (VM QEMU e CT LXC) que entram no
-# backup agendado (playbooks/06-backup.yml). OBRIGATÓRIO para esse playbook
-# — sem default de propósito: uma lista errada faria o vzdump salvar o
-# convidado errado e reportar sucesso. Formato de lista em colchetes — o
-# parser INI do Ansible interpreta como lista Python de verdade, não como
-# string; sem os colchetes vira uma string só, não uma lista.
+# backup agendado (playbooks/06-backup.yml). OPCIONAL: ausente, o padrão é
+# TODO convidado do nó, que num homelab é o que se quer. Declarada, ela manda
+# — e continua sendo validada contra o que existe, porque o perigo nunca foi
+# não ter lista, foi ter uma lista errada: um VMID inexistente faz o vzdump
+# falhar toda madrugada, longe de qualquer execução de playbook.
+#
+# Formato de lista em colchetes — o parser INI do Ansible interpreta como lista
+# Python de verdade; sem os colchetes vira uma string só, não uma lista.
 # backup_vmids=[<VMID-1>,<VMID-2>,<VMID-3>]
+
+# VMIDs cuja cobertura PARCIAL de backup é aceita conscientemente.
+#
+# ⚠️ O vzdump nunca salva bind mount, device mount point nem disco por trás de
+# PCI passthrough — o manual é literal: "Device and bind mounts are never backed
+# up". O job roda verde e a restauração volta incompleta. O playbook levanta
+# esses casos e ABORTA; listar o VMID aqui é como se declara que a lacuna é
+# conhecida e aceita.
+#
+# ⚠️ Ao listar um VMID, escreva ao lado COMO aquele dado é protegido. Um número
+# sem essa frase vira, em três meses, indistinguível de um esquecimento.
+# backup_cobertura_parcial_ok=[<VMID-COM-BIND-MOUNT>]
 
 # Id do storage de backup NESTE nó (o que `pvesm status` mostra ali).
 # OBRIGATÓRIO para playbooks/06-backup.yml E para playbooks/00-proxmox-setup.yml,

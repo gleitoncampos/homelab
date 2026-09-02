@@ -55,8 +55,10 @@
           - backup_storage | string | length > 0
         fail_msg: >-
           backup_storage não está definido. Sem ele não há como saber qual
-          storage do Proxmox recebe o backup. Defina em [all:vars] no
-          hosts.ini do ambiente — ver hosts.ini.example.
+          storage do Proxmox recebe o backup. Defina na LINHA DO HOST no
+          hosts.ini do ambiente, nunca em [all:vars]: cada hipervisor registra
+          o próprio destino com id próprio, e um valor global faria um nó
+          agendar contra o id do outro. Ver hosts.ini.example.
 
   tasks:
     - name: Conferir que o storage de backup existe e aceita backup
@@ -134,6 +136,93 @@
           {{ (backup_vmids | intersect(node_existing_vmids))
              if backup_vmids is defined and backup_vmids | length > 0
              else node_existing_vmids }}
+
+    # =====================================================================
+    # GATE DE COBERTURA — o que o vzdump NÃO salva
+    # =====================================================================
+    # ⚠️ "Backup configurado" e "dado protegido" não são a mesma coisa, e a
+    # diferença só aparece na restauração. O manual do vzdump nesta caixa é
+    # literal: "Device and bind mounts are never backed up as their content is
+    # managed outside the Proxmox VE storage library."
+    #
+    # O job roda, o relatório fica verde, e o que estava fora volta vazio. Este
+    # gate existe para transformar isso numa DECISÃO tomada agora, em vez de uma
+    # descoberta feita no dia da restauração.
+    #
+    # O que é levantado, e por quê:
+    #   hostpci*  dispositivo PCI repassado. Se for controladora de disco, os
+    #             discos dela não existem para o vzdump — o convidado volta só
+    #             com o disco de sistema.
+    #   dev*      device mount point de LXC, mesma história.
+    #   mp*       ponto de montagem de LXC cujo valor começa com "/": é bind
+    #             mount de caminho do host, nunca salvo. Volume de storage
+    #             (`storage:vol`) É salvo e não entra aqui.
+    #   backup=0  disco ou volume marcado explicitamente para ficar de fora.
+    - name: "Ler a configuração de cada convidado que entra no backup"
+      ansible.builtin.command:
+        cmd: >-
+          pvesh get /nodes/{{ item.node }}/{{ item.type }}/{{ item.vmid }}/config
+          --output-format json
+      loop: >-
+        {{ (cluster_guests.stdout | from_json)
+           | selectattr('vmid', 'in', backup_vmids_deste_no) | list }}
+      loop_control:
+        label: "{{ item.vmid }} {{ item.name | default('') }}"
+      register: guest_configs
+      changed_when: false
+      # Consulta somente-leitura: sem isto o gate é pulado em --check e o
+      # playbook aprovaria uma cobertura que ninguém mediu.
+      check_mode: false
+
+    # `selectattr('value', 'string')` antes de qualquer `match`/`search`: o
+    # config traz inteiro (`cores`) e lista aninhada (`lxc`), e um teste de
+    # regex contra não-string aborta a task inteira.
+    - name: "Levantar o que o vzdump não vai cobrir"
+      ansible.builtin.set_fact:
+        backup_nao_coberto: >-
+          {{ backup_nao_coberto | default([]) + (
+               [{'vmid': item.item.vmid,
+                 'nome': item.item.name | default(''),
+                 'itens': _achados | map(attribute='key') | unique | sort | list}]
+               if _achados | length > 0 else []) }}
+      vars:
+        _cfg: "{{ (item.stdout | from_json) | dict2items }}"
+        _achados: >-
+          {{ (_cfg | selectattr('key', 'match', '^(hostpci|dev)[0-9]+$') | list)
+             + (_cfg | selectattr('value', 'string')
+                     | selectattr('key', 'match', '^mp[0-9]+$')
+                     | selectattr('value', 'match', '^/') | list)
+             + (_cfg | selectattr('value', 'string')
+                     | selectattr('value', 'search', 'backup=0') | list) }}
+      loop: "{{ guest_configs.results }}"
+      loop_control:
+        label: "{{ item.item.vmid }}"
+
+    # ⚠️ ABORTA em vez de avisar. Aviso em log de playbook é lido uma vez, no
+    # dia em que se configurou; a restauração acontece meses depois, por alguém
+    # com pressa. Reconhecer é declarar `backup_cobertura_parcial_ok` com os
+    # VMIDs — o que deixa a decisão escrita no inventário, onde ela é revisável,
+    # em vez de dissolvida no histórico do terminal.
+    - name: "Abortar se algum convidado tem dado fora do backup sem reconhecimento"
+      ansible.builtin.assert:
+        that:
+          - backup_nao_coberto | default([])
+            | rejectattr('vmid', 'in', backup_cobertura_parcial_ok | default([]))
+            | list | length == 0
+        fail_msg: >-
+          O vzdump NÃO vai salvar parte do dado destes convidados:
+          {{ backup_nao_coberto | default([])
+             | rejectattr('vmid', 'in', backup_cobertura_parcial_ok | default([]))
+             | map('to_json') | join('; ') }}.
+          O job rodaria verde e a restauração viria incompleta. Ou parametrize
+          o dado de outra forma (volume de storage em vez de bind mount), ou
+          declare os VMIDs em `backup_cobertura_parcial_ok` para registrar que
+          a cobertura parcial é aceita — e escreva ao lado como aquele dado é
+          protegido. Ver 1.2.1 no roadmap.
+        success_msg: >-
+          Cobertura conferida:
+          {{ (backup_nao_coberto | default([]) | length) or 'nada' }} convidado(s)
+          com dado fora do vzdump, todos reconhecidos.
 
     - name: "Dizer quais convidados deste nó entram no backup"
       ansible.builtin.debug:
