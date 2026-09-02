@@ -671,6 +671,23 @@
         state: present
         key: "{{ ssh_public_key }}"
 
+    # ⚠️ O NAS tinha o node_exporter instalado À MÃO, e o IaC não dizia nada
+    # sobre isso — o binário existia, o repositório o ignorava, e a divergência
+    # sobrevivia a qualquer apply. Confirmado ao vivo em 02/09/2026: binário em
+    # /usr/local/bin pertencendo ao usuário SMB (que tem shell), executado como
+    # root por uma unit sem `User=`. Escalonamento de privilégio local.
+    #
+    # A task inclui a REMOÇÃO da instalação manual antes de instalar o pacote.
+    # Tag própria pelo mesmo motivo do playbook do Proxmox: o playbook completo
+    # do OMV instala o próprio OMV e mexe em fstab, samba e sysctl. Ligar um
+    # exporter não pode exigir esse alcance junto.
+    - name: Instalar e verificar o node_exporter
+      tags: node_exporter
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../tasks/node_exporter.yml"
+        apply:
+          tags: node_exporter
+
     - name: Exibir confirmação do OMV NAS Host
       ansible.builtin.debug:
         msg: >-

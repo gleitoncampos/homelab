@@ -21,6 +21,42 @@
 # primeiro `apt upgrade`. A regra de tag fixa do CLAUDE.md é sobre imagem
 # Docker, não sobre pacote apt.
 
+# ==============================================================================
+# Remoção de instalação MANUAL pré-existente
+# ==============================================================================
+# ⚠️ Isto APAGA arquivo, e é o mecanismo, não um efeito colateral: enquanto a
+# instalação manual existir, o pacote não consegue subir (os dois disputam a
+# 9100) e a vulnerabilidade continua no ar.
+#
+# O caso real, confirmado ao vivo em 02/09/2026 no NAS:
+#
+#   796 root root /usr/local/bin/node_exporter          <- processo roda como ROOT
+#   -rwxr-xr-x 1 smb 1002 /usr/local/bin/node_exporter  <- binário é do usuário SMB
+#   node_exporterd.service: ExecStart=... (sem User=)
+#   smb:x:1001:100::/home/smb:/usr/bin/sh               <- e o SMB tem shell
+#
+# Quem escrever como `smb` troca o binário e ganha root no próximo restart. Não
+# precisa de exploit — é sobrescrever um arquivo que o dono pode sobrescrever.
+#
+# A ORDEM aqui não é negociável: para o serviço velho ANTES de instalar o
+# pacote (senão a porta está ocupada e o pacote sobe morto), e remove os
+# arquivos DEPOIS de o pacote estar de pé (senão uma falha do apt deixa o host
+# sem coleta nenhuma).
+- name: Detectar instalação manual do node_exporter
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /usr/local/bin/node_exporter
+    - /etc/systemd/system/node_exporterd.service
+  register: node_exporter_manual
+
+- name: Parar e desabilitar o serviço da instalação manual
+  ansible.builtin.systemd_service:
+    name: node_exporterd
+    enabled: false
+    state: stopped
+  when: node_exporter_manual.results[1].stat.exists
+
 # `update_cache` aqui, e não só no playbook que inclui: esta task passou a ser
 # endereçável por tag (`--tags node_exporter`), e nesse caminho a atualização de
 # cache do playbook não roda. Sem isso o `apt` falharia com "No package matching"
@@ -53,9 +89,37 @@
 # da task acima. Um serviço pode estar "ativo" e não ter conseguido abrir a
 # porta — e o sintoma disso, do outro lado, é um alvo em `up=0` no Prometheus
 # que ninguém associa a este playbook.
+# Só depois de o pacote estar servindo é que os arquivos antigos saem. Falha do
+# apt acima aborta o play e deixa o host com a instalação velha — insegura, mas
+# coletando — em vez de sem nada.
+- name: Remover os arquivos da instalação manual
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /usr/local/bin/node_exporter
+    - /etc/systemd/system/node_exporterd.service
+  when: node_exporter_manual.results | selectattr('stat.exists') | list | length > 0
+
+# ⚠️ INCONDICIONAL, e não `when: ... is changed`. Um handler seria o idiomático,
+# mas handler declarado em arquivo incluído por `include_tasks` não é alcançável
+# pelos playbooks que incluem — e a alternativa condicional é exatamente o que o
+# `no-handler` do ansible-lint reprova. Recarregar o systemd é idempotente e
+# barato; `changed_when: false` mantém o relatório honesto, porque a operação em
+# si não altera estado nenhum quando não há unit nova ou removida.
+- name: Recarregar o systemd depois de mexer em unit
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  changed_when: false
+
 - name: Conferir que o node_exporter responde em 9100
   ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ node_exporter_port }}/metrics"
+    url: "http://127.0.0.1:{{ node_exporter_port | default(9100) }}/metrics"
+    # `default(9100)` porque esta task passou a ser incluída por DOIS
+    # playbooks e só o do Proxmox declarava a variável. 9100 é a porta
+    # bem-conhecida do exporter, não identidade nem segredo — a regra de
+    # "nunca reintroduza default" vale para valor que, errado, passa
+    # despercebido; aqui um valor errado derruba a sonda na hora.
     return_content: false
     status_code: 200
   register: node_exporter_probe
