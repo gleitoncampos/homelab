@@ -2,7 +2,7 @@
   "annotations": {
     "list": []
   },
-  "description": "Saúde física do NAS: SMART por disco, espaço, I/O e serviços. Complementa o Node Exporter Full, que cobre o sistema operacional em geral.",
+  "description": "Saúde física dos discos do parque: SMART em SATA/SAS, telemetria em NVMe, mais espaço, I/O e serviços do host. Complementa o Node Exporter Full, que cobre o sistema operacional em geral.",
   "editable": true,
   "graphTooltip": 1,
   "links": [],
@@ -85,14 +85,14 @@
             "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
-          "expr": "max(smartmon_temperature_celsius_raw_value{instance=\"$node\"} and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1)",
+          "expr": "max(smartmon_temperature_celsius_raw_value{instance=\"$node\"} and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1 or nvme_temperature_celsius{instance=\"$node\"})",
           "legendFormat": "__auto",
           "range": false,
           "instant": true,
           "refId": "A"
         }
       ],
-      "description": "Acima de 45 °C a taxa de falha anual de disco mecânico começa a subir; acima de 55 °C sobe rápido."
+      "description": "Máxima entre TODOS os discos, SATA e NVMe. O `or` une as duas famílias de métrica: elas têm rótulos diferentes (`disk` contra `device`), então nenhuma série é descartada na união."
     },
     {
       "type": "gauge",
@@ -170,7 +170,7 @@
     },
     {
       "type": "stat",
-      "title": "Discos com SMART",
+      "title": "Discos monitorados",
       "datasource": {
         "type": "prometheus",
         "uid": "${ds_prometheus}"
@@ -223,7 +223,7 @@
             "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
-          "expr": "count(smartmon_device_smart_available{instance=\"$node\"} == 1)",
+          "expr": "count(smartmon_device_smart_available{instance=\"$node\"} == 1 or nvme_device_info{instance=\"$node\"})",
           "legendFormat": "__auto",
           "range": false,
           "instant": true,
@@ -290,18 +290,18 @@
             "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
-          "expr": "count(smartmon_device_smart_healthy{instance=\"$node\"} == 0 and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1) or vector(0)",
+          "expr": "count((smartmon_device_smart_healthy{instance=\"$node\"} == 0 and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1) or (nvme_critical_warning{instance=\"$node\"} != 0)) or vector(0)",
           "legendFormat": "__auto",
           "range": false,
           "instant": true,
           "refId": "A"
         }
       ],
-      "description": "Zero é o estado normal. Qualquer valor acima disso é disco que o próprio SMART já reprovou."
+      "description": "Zero é o normal. Conta disco SATA que o SMART reprovou E disco NVMe com aviso crítico — os dois significam a mesma coisa: o próprio dispositivo está dizendo que tem problema."
     },
     {
       "type": "stat",
-      "title": "Setores realocados + pendentes",
+      "title": "Setores e erros de mídia",
       "datasource": {
         "type": "prometheus",
         "uid": "${ds_prometheus}"
@@ -358,18 +358,18 @@
             "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
-          "expr": "sum(smartmon_reallocated_sector_ct_raw_value{instance=\"$node\"} and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1) + sum(smartmon_current_pending_sector_raw_value{instance=\"$node\"} and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1)",
+          "expr": "(sum(smartmon_reallocated_sector_ct_raw_value{instance=\"$node\"} and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1) or vector(0)) + (sum(smartmon_current_pending_sector_raw_value{instance=\"$node\"} and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1) or vector(0)) + (sum(nvme_media_errors_total{instance=\"$node\"}) or vector(0))",
           "legendFormat": "__auto",
           "range": false,
           "instant": true,
           "refId": "A"
         }
       ],
-      "description": "Os dois preditores reais de falha. Saíram de zero uma vez, não voltam: planeje a troca."
+      "description": "Setor realocado e pendente no SATA, erro de mídia no NVMe. São os preditores de falha de cada tecnologia. Saíram de zero uma vez, não voltam: planeje a troca. O `or vector(0)` existe para que a ausência de uma das famílias não anule a soma inteira."
     },
     {
       "type": "stat",
-      "title": "Idade da coleta SMART",
+      "title": "Idade da coleta",
       "datasource": {
         "type": "prometheus",
         "uid": "${ds_prometheus}"
@@ -430,18 +430,18 @@
             "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
-          "expr": "time() - max(smartmon_smartctl_run{instance=\"$node\"})",
+          "expr": "time() - min(node_textfile_mtime_seconds{instance=\"$node\",file=~\".*/(smartmon|nvme)\\\\.prom\"})",
           "legendFormat": "__auto",
           "range": false,
           "instant": true,
           "refId": "A"
         }
       ],
-      "description": "O coletor roda a cada 15 min. Passando de 30 min, o dado exibido está congelado — número velho se lê como saudável, e foi assim que o nobreak ficou três dias parado."
+      "description": "Idade do arquivo mais VELHO entre os coletores de disco. Vem de `node_textfile_mtime_seconds`, que o node_exporter publica por arquivo — funciona para qualquer coletor, enquanto `smartctl_run` só existe no lado SATA e deixaria o host de NVMe sem medição de frescor. Passando de 30 min o dado exibido está congelado, e número velho se lê como saudável."
     },
     {
       "type": "row",
-      "title": "Saúde dos discos",
+      "title": "Saúde dos discos (SATA/SAS)",
       "collapsed": false,
       "panels": [],
       "gridPos": {
@@ -488,7 +488,8 @@
                 "value": 0
               }
             ]
-          }
+          },
+          "noValue": "sem disco SATA/SAS neste host"
         },
         "overrides": [
           {
@@ -878,7 +879,8 @@
               }
             ]
           },
-          "unit": "celsius"
+          "unit": "celsius",
+          "noValue": "sem disco SATA/SAS neste host"
         },
         "overrides": []
       },
@@ -979,7 +981,8 @@
             ]
           },
           "unit": "short",
-          "min": 0
+          "min": 0,
+          "noValue": "sem disco SATA/SAS neste host"
         },
         "overrides": []
       },
@@ -1092,7 +1095,8 @@
             ]
           },
           "unit": "short",
-          "min": 0
+          "min": 0,
+          "noValue": "sem disco SATA/SAS neste host"
         },
         "overrides": []
       },
@@ -1192,7 +1196,8 @@
               }
             ]
           },
-          "unit": "h"
+          "unit": "h",
+          "noValue": "sem disco SATA/SAS neste host"
         },
         "overrides": []
       },
@@ -1231,7 +1236,7 @@
     },
     {
       "type": "row",
-      "title": "Espaço em disco",
+      "title": "NVMe",
       "collapsed": false,
       "panels": [],
       "gridPos": {
@@ -1239,6 +1244,525 @@
         "w": 24,
         "x": 0,
         "y": 31
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Desgaste do NVMe",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_prometheus}"
+      },
+      "pluginVersion": "12.2.0",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 32
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 0.8
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          },
+          "unit": "percentunit",
+          "noValue": "sem disco NVMe neste host"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "editorMode": "code",
+          "expr": "max(nvme_percentage_used_ratio{instance=\"$node\"})",
+          "legendFormat": "__auto",
+          "range": false,
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "description": "Fração da resistência de escrita já consumida, segundo o próprio controlador. Não é uso de espaço — é vida útil gasta. Chegando a 100% o fabricante deixa de garantir retenção de dado."
+    },
+    {
+      "type": "stat",
+      "title": "Reserva disponível",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_prometheus}"
+      },
+      "pluginVersion": "12.2.0",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 32
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 0.2
+              },
+              {
+                "color": "green",
+                "value": 0.5
+              }
+            ]
+          },
+          "unit": "percentunit",
+          "noValue": "sem disco NVMe neste host"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "editorMode": "code",
+          "expr": "min(nvme_available_spare_ratio{instance=\"$node\"})",
+          "legendFormat": "__auto",
+          "range": false,
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "description": "Blocos de reserva que o controlador ainda tem para substituir os que falharem. Caindo, o disco está consumindo a própria margem — e cai devagar até cair rápido."
+    },
+    {
+      "type": "stat",
+      "title": "Erros de mídia",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_prometheus}"
+      },
+      "pluginVersion": "12.2.0",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 32
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short",
+          "noValue": "sem disco NVMe neste host"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "editorMode": "code",
+          "expr": "sum(nvme_media_errors_total{instance=\"$node\"})",
+          "legendFormat": "__auto",
+          "range": false,
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "description": "Equivalente NVMe do setor realocado. Contador monotônico: qualquer valor acima de zero é permanente."
+    },
+    {
+      "type": "stat",
+      "title": "Desligamentos sujos",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_prometheus}"
+      },
+      "pluginVersion": "12.2.0",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 32
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short",
+          "noValue": "sem disco NVMe neste host"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "editorMode": "code",
+          "expr": "sum(nvme_unsafe_shutdowns_total{instance=\"$node\"})",
+          "legendFormat": "__auto",
+          "range": false,
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "description": "⚠️ Quantas vezes o disco perdeu energia sem desligamento ordenado. Subindo, é sintoma de queda de energia sem nobreak agindo — cruze com o painel do nobreak antes de culpar o disco."
+    },
+    {
+      "type": "timeseries",
+      "title": "Temperatura do NVMe",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_prometheus}"
+      },
+      "pluginVersion": "12.2.0",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 36
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "links": [],
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 60
+              },
+              {
+                "color": "red",
+                "value": 70
+              }
+            ]
+          },
+          "unit": "celsius",
+          "noValue": "sem disco NVMe neste host"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "editorMode": "code",
+          "expr": "nvme_temperature_celsius{instance=\"$node\"}",
+          "legendFormat": "{{device}}",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        }
+      ],
+      "description": "NVMe tolera mais calor que disco mecânico, mas reduz desempenho sozinho ao se proteger — temperatura alta aparece primeiro como lentidão inexplicada."
+    },
+    {
+      "type": "timeseries",
+      "title": "Escrita acumulada no NVMe",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds_prometheus}"
+      },
+      "pluginVersion": "12.2.0",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 36
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "links": [],
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "Bps",
+          "min": 0,
+          "noValue": "sem disco NVMe neste host"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "editorMode": "code",
+          "expr": "rate(nvme_data_units_written_total{instance=\"$node\"}[$__rate_interval]) * 512000",
+          "legendFormat": "{{device}} escrita",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "editorMode": "code",
+          "expr": "rate(nvme_data_units_read_total{instance=\"$node\"}[$__rate_interval]) * 512000",
+          "legendFormat": "{{device}} leitura",
+          "range": true,
+          "instant": false,
+          "refId": "B"
+        }
+      ],
+      "description": "Unidades de 1000 setores de 512 bytes, convertidas para bytes por segundo. É o que consome o desgaste do painel acima."
+    },
+    {
+      "type": "row",
+      "title": "Espaço em disco",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 44
       }
     },
     {
@@ -1253,7 +1777,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 32
+        "y": 45
       },
       "fieldConfig": {
         "defaults": {
@@ -1329,7 +1853,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 32
+        "y": 45
       },
       "fieldConfig": {
         "defaults": {
@@ -1427,7 +1951,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 40
+        "y": 53
       }
     },
     {
@@ -1442,7 +1966,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 41
+        "y": 54
       },
       "fieldConfig": {
         "defaults": {
@@ -1554,7 +2078,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 41
+        "y": 54
       },
       "fieldConfig": {
         "defaults": {
@@ -1666,7 +2190,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 41
+        "y": 54
       },
       "fieldConfig": {
         "defaults": {
@@ -1788,7 +2312,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 49
+        "y": 62
       }
     },
     {
@@ -1803,7 +2327,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 50
+        "y": 63
       },
       "fieldConfig": {
         "defaults": {
@@ -1904,7 +2428,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 50
+        "y": 63
       },
       "fieldConfig": {
         "defaults": {
@@ -2035,7 +2559,7 @@
           "type": "prometheus",
           "uid": "${ds_prometheus}"
         },
-        "definition": "label_values(smartmon_device_active, instance)",
+        "definition": "label_values(group by (instance) ({__name__=~\"smartmon_device_active|nvme_temperature_celsius\"}), instance)",
         "hide": 0,
         "includeAll": false,
         "label": "Host",
@@ -2044,14 +2568,15 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(smartmon_device_active, instance)",
+          "query": "label_values(group by (instance) ({__name__=~\"smartmon_device_active|nvme_temperature_celsius\"}), instance)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 2,
         "regex": "",
         "skipUrlSync": false,
         "sort": 1,
-        "type": "query"
+        "type": "query",
+        "description": "Só hosts que publicam saúde de disco — SATA/SAS pelo coletor smartmon, NVMe pelo coletor nvme. Host sem disco monitorado não aparece, em vez de aparecer e render painel vazio."
       }
     ]
   },
@@ -2061,7 +2586,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "NAS — Saúde dos Discos",
+  "title": "Discos — Saúde Física",
   "uid": "homelab-nas-discos",
   "weekStart": ""
 }
