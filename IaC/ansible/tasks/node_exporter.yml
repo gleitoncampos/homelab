@@ -21,18 +21,33 @@
 # primeiro `apt upgrade`. A regra de tag fixa do CLAUDE.md é sobre imagem
 # Docker, não sobre pacote apt.
 
+# `update_cache` aqui, e não só no playbook que inclui: esta task passou a ser
+# endereçável por tag (`--tags node_exporter`), e nesse caminho a atualização de
+# cache do playbook não roda. Sem isso o `apt` falharia com "No package matching"
+# num host cujo cache esteja velho — e a mensagem manda investigar o pacote, não
+# o cache. `cache_valid_time` evita repetir a atualização a cada execução.
 - name: Instalar o node_exporter a partir do repositório da distribuição
   ansible.builtin.apt:
     name: prometheus-node-exporter
     state: present
+    update_cache: true
+    cache_valid_time: 3600
   environment:
     DEBIAN_FRONTEND: noninteractive
+  register: node_exporter_pacote
 
+# ⚠️ Em `--check` num host que ainda NÃO tem o pacote, a unidade não existe e
+# esta task morre com "Could not find the requested service". Isso tornava o
+# `--check` inútil como pré-voo justamente no caso que interessa — o host novo.
+# A condição pula a task só nessa combinação: modo simulação E pacote que teria
+# sido instalado agora. Com o pacote já presente, ela roda normalmente em check
+# e continua reportando divergência de `enabled`/`state`.
 - name: Garantir o node_exporter ativo e habilitado no boot
   ansible.builtin.systemd_service:
     name: prometheus-node-exporter
     enabled: true
     state: started
+  when: not (ansible_check_mode and node_exporter_pacote is changed)
 
 # A verificação é contra a porta respondendo, e não contra o `state: started`
 # da task acima. Um serviço pode estar "ativo" e não ter conseguido abrir a

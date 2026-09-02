@@ -303,8 +303,35 @@
     # estado do nó pela API do PVE — não cobre CPU por núcleo, memória
     # detalhada, I/O de disco, sistema de arquivos nem interface de rede. O
     # host que hospeda o NAS era, por isso, um ponto cego.
+    #
+    # ⚠️ TAG PRÓPRIA, e as pre_tasks deste play NÃO levam `tags: always`. A regra
+    # "tag não pode desarmar gate" continua valendo — o que muda é o alcance de
+    # cada gate. Os asserts do topo protegem a escrita de REDE e de STORAGE
+    # (`proxmox_gateway_ip`, `backup_storage`), e nenhuma das duas acontece sob
+    # esta tag: ela instala um pacote e sobe um serviço. Exigi-los aqui travaria
+    # a coleta de métrica por variáveis que ela não usa — hoje, inclusive, a
+    # travaria de fato, porque `proxmox_gateway_ip` ainda não está no inventário.
+    #
+    # A tag existe porque o playbook completo reescreve `/etc/network/interfaces`
+    # e `storage.cfg`. Ligar o exporter num hipervisor em produção não pode exigir
+    # esse risco junto.
+    # ⚠️ `apply:` NÃO é decoração. `include_tasks` é DINÂMICO: a tag do include
+    # decide se o include roda, e NÃO desce para as tasks incluídas — elas são
+    # carregadas em tempo de execução e filtradas por `--tags` como qualquer
+    # outra. Sem `apply`, `--tags node_exporter` faz o include rodar e todas as
+    # tasks de dentro serem puladas.
+    #
+    # E o modo de falha é o pior possível: o relatório sai `ok=2 changed=0`, que
+    # se lê como "já estava instalado". Observado nesta base em 02/09/2026 — só
+    # apareceu ao conferir QUAIS tasks rodaram, em vez de ler o recap.
+    # (`import_tasks` propagaria a tag sozinho, mas é estático e não aceita o
+    # caminho com `playbook_dir` resolvido em execução.)
     - name: Instalar e verificar o node_exporter
-      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/node_exporter.yml"
+      tags: node_exporter
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../tasks/node_exporter.yml"
+        apply:
+          tags: node_exporter
 
     - name: Instalar pacotes Enterprise e ferramentas CLI modernas (ksmtuned, chrony, fail2ban, btop, ncdu, ripgrep, fzf, tmux)
       ansible.builtin.apt:
