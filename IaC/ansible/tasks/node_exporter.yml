@@ -62,9 +62,32 @@
 # cache do playbook não roda. Sem isso o `apt` falharia com "No package matching"
 # num host cujo cache esteja velho — e a mensagem manda investigar o pacote, não
 # o cache. `cache_valid_time` evita repetir a atualização a cada execução.
+# ⚠️ `prometheus-node-exporter-collectors` EXPLÍCITO, e não por recomendação.
+# Ele entrou sozinho nos hipervisores porque é `Recommends` do exporter — e
+# `Recommends` some se alguém instalar com `--no-install-recommends`. Dependência
+# implícita que sustenta métrica é dependência que desaparece em silêncio.
+#
+# É ele quem traz os coletores de SMART, NVMe e pacotes pendentes, por timer do
+# systemd, escrevendo no diretório textfile. O node_exporter não lê SMART sozinho
+# (exigiria root, e o serviço roda sem privilégio); este pacote resolve pelo
+# outro lado, com um script privilegiado ESCREVENDO e o serviço apenas LENDO.
+#
+# ⚠️ Em 02/09/2026 eu escrevi um coletor SMART próprio antes de descobrir este
+# pacote. O dele é melhor em três pontos, e vale registrar para ninguém repetir:
+# publica `device_active` em vez de omitir a série do disco dormindo (lacuna e
+# "disco em standby" viram coisas distintas), publica `smartctl_run` por disco
+# em vez de um carimbo global, e descobre com `smartctl --scan-open -d <tipo>`,
+# cobrindo SAT, SCSI, NVMe e megaraid. O script próprio foi apagado.
+#
+# O preço: o formato oficial publica `serial_number` como rótulo. Identificador
+# de hardware que fica permanente na série temporal. Aceito por vir com o pacote
+# — o alternativo era manter esquema próprio e ter duas verdades para a mesma
+# métrica, que é pior.
 - name: Instalar o node_exporter a partir do repositório da distribuição
   ansible.builtin.apt:
-    name: prometheus-node-exporter
+    name:
+      - prometheus-node-exporter
+      - prometheus-node-exporter-collectors
     state: present
     update_cache: true
     cache_valid_time: 3600
@@ -89,6 +112,25 @@
 # da task acima. Um serviço pode estar "ativo" e não ter conseguido abrir a
 # porta — e o sintoma disso, do outro lado, é um alvo em `up=0` no Prometheus
 # que ninguém associa a este playbook.
+# ⚠️ NÃO force `state: started` nos timers do pacote de coletores. Eles são
+# CONDICIONADOS ao hardware, e um timer inativo costuma ser o comportamento
+# certo, não uma falha:
+#
+#   smartmon.timer  ConditionFileIsExecutable=/usr/sbin/smartctl
+#                   ConditionPathExistsGlob=|/dev/sd*
+#                   ConditionPathExistsGlob=|/dev/hd*
+#   nvme.timer      ConditionFileIsExecutable=/usr/sbin/nvme
+#                   ConditionPathExistsGlob=/dev/nvme*
+#
+# Observado em 02/09/2026: o hipervisor com só NVMe tem `smartmon` inativo e
+# `nvme` ativo; o NAS, com só SATA, tem o inverso; o hipervisor com os dois tipos
+# tem os dois ativos. Cada host ativa exatamente o coletor que faz sentido nele.
+#
+# Registrado porque eu li esse padrão como "habilitado mas não rodando" e escrevi
+# uma task para forçar os três. Ela reportava `changed` e não mudava nada — o
+# systemd reavalia a condição e volta a pular. Forçar aqui só produziria unidade
+# em estado inconsistente e ruído de `changed` a cada execução.
+
 # Só depois de o pacote estar servindo é que os arquivos antigos saem. Falha do
 # apt acima aborta o play e deixa o host com a instalação velha — insegura, mas
 # coletando — em vez de sem nada.
