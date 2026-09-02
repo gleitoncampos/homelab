@@ -85,7 +85,7 @@
             "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
-          "expr": "max(smartmon_temperature_celsius_raw_value{instance=\"$node\"} and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1)",
+          "expr": "max(smartmon_temperature_celsius_raw_value{instance=\"$node\"})",
           "legendFormat": "__auto",
           "range": false,
           "instant": true,
@@ -223,7 +223,7 @@
             "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
-          "expr": "count(smartmon_device_smart_available{instance=\"$node\"} == 1)",
+          "expr": "count(last_over_time(smartmon_device_smart_available{instance=\"$node\"}[24h]) == 1)",
           "legendFormat": "__auto",
           "range": false,
           "instant": true,
@@ -290,7 +290,7 @@
             "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
-          "expr": "count(smartmon_device_smart_healthy{instance=\"$node\"} == 0 and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1) or vector(0)",
+          "expr": "count(last_over_time(smartmon_device_smart_healthy{instance=\"$node\"}[24h]) == 0 and on(disk, instance) last_over_time(smartmon_device_smart_available{instance=\"$node\"}[24h]) == 1) or vector(0)",
           "legendFormat": "__auto",
           "range": false,
           "instant": true,
@@ -358,7 +358,7 @@
             "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
-          "expr": "sum(smartmon_reallocated_sector_ct_raw_value{instance=\"$node\"} and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1) + sum(smartmon_current_pending_sector_raw_value{instance=\"$node\"} and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1)",
+          "expr": "sum(last_over_time(smartmon_reallocated_sector_ct_raw_value{instance=\"$node\"}[24h])) + sum(last_over_time(smartmon_current_pending_sector_raw_value{instance=\"$node\"}[24h]))",
           "legendFormat": "__auto",
           "range": false,
           "instant": true,
@@ -906,14 +906,14 @@
             "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
-          "expr": "smartmon_temperature_celsius_raw_value{instance=\"$node\"} and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1",
+          "expr": "smartmon_temperature_celsius_raw_value{instance=\"$node\"}",
           "legendFormat": "{{disk}}",
           "range": true,
           "instant": false,
           "refId": "A"
         }
       ],
-      "description": "Linhas de limiar em 45 e 55 °C. Disco em repouso não gera ponto — lacuna aqui é spin-down, não falha de coleta."
+      "description": "Linhas de limiar em 45 e 55 °C. ⚠️ Lacuna aqui é disco em REPOUSO, não falha de coleta — o coletor não o acorda para medir. Diferente dos contadores ao lado, a temperatura não carrega o último valor: leitura de horas atrás desenhada como atual seria dado velho se lendo como saudável."
     },
     {
       "type": "timeseries",
@@ -1007,7 +1007,7 @@
             "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
-          "expr": "smartmon_reallocated_sector_ct_raw_value{instance=\"$node\"} and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1",
+          "expr": "last_over_time(smartmon_reallocated_sector_ct_raw_value{instance=\"$node\"}[24h])",
           "legendFormat": "{{disk}} realocados",
           "range": true,
           "instant": false,
@@ -1019,14 +1019,14 @@
             "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
-          "expr": "smartmon_current_pending_sector_raw_value{instance=\"$node\"} and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1",
+          "expr": "last_over_time(smartmon_current_pending_sector_raw_value{instance=\"$node\"}[24h])",
           "legendFormat": "{{disk}} pendentes",
           "range": true,
           "instant": false,
           "refId": "B"
         }
       ],
-      "description": "Contadores monotônicos: qualquer subida é permanente e significa setor perdido."
+      "description": "Contadores monotônicos: qualquer subida é permanente e significa setor perdido. Carregam a última medição enquanto o disco dorme — a linha reta é a verdade, e sumir esconderia um disco problemático que por acaso está em repouso."
     },
     {
       "type": "timeseries",
@@ -1120,7 +1120,7 @@
             "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
-          "expr": "smartmon_udma_crc_error_count_raw_value{instance=\"$node\"} and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1",
+          "expr": "last_over_time(smartmon_udma_crc_error_count_raw_value{instance=\"$node\"}[24h])",
           "legendFormat": "{{disk}}",
           "range": true,
           "instant": false,
@@ -1220,7 +1220,7 @@
             "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
-          "expr": "smartmon_power_on_hours_raw_value{instance=\"$node\"} and on(disk, instance) smartmon_device_smart_available{instance=\"$node\"} == 1",
+          "expr": "last_over_time(smartmon_power_on_hours_raw_value{instance=\"$node\"}[24h])",
           "legendFormat": "{{disk}}",
           "range": true,
           "instant": false,
