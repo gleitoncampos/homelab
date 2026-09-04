@@ -115,15 +115,25 @@ validate-patterns: ## Valida os arquivos de padrões (separadores, isenção nã
 # o cabeçalho do próprio all.yml). Cópia manual diverge sem avisar; já
 # divergiu uma vez nesta base. Nada mais aqui compara as três, então falhar
 # rápido é este alvo.
-check-common-copies: ## Falha se as cópias de 00-common.yml divergirem da fonte em _common/all.yml
-	@src=$(ANSIBLE_DIR)/inventories/_common/all.yml; fail=0; \
+check-common-copies: ## Falha se alguma cópia divergir da sua fonte (00-common.yml e AGENTS.md)
+	@fail=0; \
+	src=$(ANSIBLE_DIR)/inventories/_common/all.yml; \
 	for env in prod dev; do \
 	  dst=$(ANSIBLE_DIR)/inventories/$$env/group_vars/all/00-common.yml; \
 	  if ! diff -u "$$src" "$$dst"; then \
 	    echo "✗ $$dst diverge de $$src (ver diff acima)"; fail=1; \
 	  fi; \
 	done; \
-	[ "$$fail" -eq 0 ] && echo "✓ 00-common.yml idêntico em _common/, prod/ e dev/" || exit 1
+	if ! diff -u CLAUDE.md AGENTS.md; then \
+	  echo "✗ AGENTS.md diverge de CLAUDE.md (ver diff acima)"; fail=1; \
+	fi; \
+	for f in AGENTS.md $(ANSIBLE_DIR)/inventories/prod/group_vars/all/00-common.yml \
+	         $(ANSIBLE_DIR)/inventories/dev/group_vars/all/00-common.yml; do \
+	  if [ -L "$$f" ]; then \
+	    echo "✗ $$f voltou a ser symlink — o Portainer não clona repositório com link simbólico"; fail=1; \
+	  fi; \
+	done; \
+	[ "$$fail" -eq 0 ] && echo "✓ cópias idênticas às fontes, e nenhuma delas é symlink" || exit 1
 
 # O baseline (tests/baseline/opnsense-fase0.xml) fica congelado a partir da
 # fase 0 do plano OPNsense Plano A — ele MESMO é regenerado uma vez, na tarefa

@@ -178,7 +178,7 @@ checar", aplicada ao campo individual de um template de reconciliação.
 
 ```text
 .
-├── AGENTS.md               # Regras de estilo para assistentes (CLAUDE.md é symlink)
+├── AGENTS.md               # Cópia byte a byte de CLAUDE.md; `make check` falha se divergirem
 ├── CLAUDE.md               # Este arquivo (diretrizes e premissas do repositório)
 ├── CONTRIBUTING.md         # Para quem vem de fora; aponta para cá, não duplica
 ├── LICENSE                 # MIT
@@ -678,8 +678,19 @@ compatibilidade, funcionalidade específica. Fora isso, deixe o bot abrir o PR:
 
 ## 🗣️ Estilo de resposta dos assistentes
 
-Este arquivo é a fonte única: `AGENTS.md` é um symlink para cá — uma fonte,
-todas as ferramentas.
+Este arquivo é a fonte única, e `AGENTS.md` é uma **cópia byte a byte** dele —
+uma fonte, todas as ferramentas.
+
+⚠️ Era um symlink, e deixou de ser por um motivo externo ao repositório: o
+Portainer clona daqui para subir as stacks e a biblioteca de Git que ele usa
+**não resolve link simbólico** — o clone falha antes de chegar ao compose, com
+um erro que não aponta para a causa. Os dois `00-common.yml` do inventário
+saíram pelo mesmo motivo.
+
+Cópia troca um problema por outro: symlink não diverge, cópia diverge em
+silêncio. Por isso `make check-common-copies` compara os dois pares byte a byte
+**e** falha se qualquer um dos três voltar a ser symlink. Ao editar este
+arquivo, copie para `AGENTS.md` no mesmo commit — o gate cobra.
 
 - Responder de forma direta e comprimida. Toda substância técnica permanece; só
   o enfeite sai.
