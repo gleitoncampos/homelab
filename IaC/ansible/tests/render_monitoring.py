@@ -205,20 +205,40 @@ for caminho, fornecidas in pares:
 #     entre configurar por ambiente e ler `/etc/prometheus/pve.yml` — arquivo
 #     que esta stack não monta. Sem a variável ele morre com
 #     `FileNotFoundError`, mensagem que não menciona credencial nenhuma.
-#     `config_from_env` mapeia `PVE_USER -> user` e `PVE_TOKEN_NAME ->
-#     token_name` como campos SEPARADOS, então o identificador completo
-#     (`usuario@realm!id`) precisa chegar partido.
+#
+#     ⚠️ `config_from_env` aceita DOIS modos e o exportador não avisa qual
+#     está em uso: `PVE_PASSWORD`, ou o par `PVE_TOKEN_NAME`/`PVE_TOKEN_VALUE`.
+#     Declarar metade de um e metade do outro não dá erro de configuração —
+#     dá 401 em toda coleta, com o serviço em `1/1`. Por isso a asserção cobra
+#     um modo INTEIRO, e reprova a mistura.
+#
+#     Hoje o modo é senha, e é temporário: o alvo é token, e a credencial dele
+#     não existe em hipervisor nenhum (item 1.2.16 do roadmap). Ao reverter,
+#     troque `MODO_PVE` para "token" — a asserção acompanha.
+MODO_PVE = "senha"
+CAMPOS_PVE = {
+    "senha": ("PVE_USER", "PVE_PASSWORD"),
+    "token": ("PVE_USER", "PVE_TOKEN_NAME", "PVE_TOKEN_VALUE"),
+}
 bloco_pve = re.search(r"^  prometheus-pve-exporter:.*?(?=^  \S|\Z)", compose_txt, re.M | re.S)
 checar(bloco_pve is not None, "serviço prometheus-pve-exporter presente no compose")
 if bloco_pve:
-    # ⚠️ Casar a CHAVE, não a string solta: os comentários deste bloco citam
-    # `PVE_USER` várias vezes, e um `in` simples ficava verde com a declaração
-    # apagada — a asserção era satisfeita pela prosa que a explica.
-    for var in ("PVE_USER", "PVE_TOKEN_NAME", "PVE_TOKEN_VALUE"):
-        checar(re.search(rf"^\s+{var}:\s", bloco_pve.group(0), re.M) is not None,
-               f"{var} declarada no exportador do Proxmox (exigência da imagem)")
-    checar("pve_exporter_token_name.split('!')[0]" in playbook_txt,
-           "o playbook parte o identificador do token em usuário e nome")
+    corpo = bloco_pve.group(0)
+    # ⚠️ Casar a CHAVE, não a string solta: os comentários deste bloco citam os
+    # nomes das variáveis várias vezes, e um `in` simples ficava verde com a
+    # declaração apagada — a asserção era satisfeita pela prosa que a explica.
+    def declarada(var):
+        return re.search(rf"^\s+{var}:\s", corpo, re.M) is not None
+
+    for var in CAMPOS_PVE[MODO_PVE]:
+        checar(declarada(var), f"{var} declarada no exportador (modo {MODO_PVE})")
+
+    outro = "token" if MODO_PVE == "senha" else "senha"
+    intrusas = [v for v in CAMPOS_PVE[outro] if v not in CAMPOS_PVE[MODO_PVE] and declarada(v)]
+    checar(not intrusas,
+           f"nenhuma variável do modo {outro} misturada ao modo {MODO_PVE}")
+    if intrusas:
+        print(f"     intrusas: {sorted(intrusas)}")
 
 # Todo bind mount de ARQUIVO sob /srv/containers precisa de um `dest`
 # correspondente em `monitoring_sidecar_files`. Diretório não entra: é criado
