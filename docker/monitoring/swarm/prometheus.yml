@@ -58,8 +58,8 @@ local.file_match "proxmox" {
 local.file_match "docker_critical" {
   path_targets = [{
     __address__ = "localhost",
-    __path__    = "/var/log/vm/docker-critical.log",
-    job         = "docker-critical",
+    __path__    = "/var/log/vm/SWARM-MANAGER.log",
+    job         = "SWARM-MANAGER",
   }]
 }
 
