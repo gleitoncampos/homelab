@@ -77,13 +77,22 @@ local.file_match "proxmox" {
   ]
 }
 
+{# ⚠️ Este bloco era o único com hostname LITERAL no arquivo, contrariando o
+   aviso do cabeçalho — e o arquivo é versionado num repositório público. Agora
+   segue o mesmo laço dos demais: um alvo por nó manager, caminho e rótulo
+   derivados do `inventory_hostname`. O rótulo passou a ser maiúsculo como o de
+   todo bloco vizinho; nenhum dashboard filtrava pelo valor antigo. #}
 // VM que hospeda o Swarm, cujo log chega por serial/console.
 local.file_match "docker_critical" {
-  path_targets = [{
-    __address__ = "localhost",
-    __path__    = "/var/log/vm/docker-critical.log",
-    job         = "docker-critical",
-  }]
+  path_targets = [
+{% for host in groups['homelab_managers'] | default([]) %}
+    {
+      __address__ = "localhost",
+      __path__    = "/var/log/vm/{{ host }}.log",
+      job         = "{{ host | upper }}",
+    },
+{% endfor %}
+  ]
 }
 
 // ----------------------------------------------------------------------

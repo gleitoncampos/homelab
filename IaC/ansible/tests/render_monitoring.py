@@ -133,7 +133,8 @@ checar(
     alloy_txt.count("/var/log/rsyslog/opnsense/*.log") == 1,
     "glob do OPNsense aparece uma vez só (linha não é lida em dobro)",
 )
-for host in GRUPOS["openwrt"] + GRUPOS["omv"] + GRUPOS["proxmox"]:
+for host in (GRUPOS["openwrt"] + GRUPOS["omv"] + GRUPOS["proxmox"]
+             + GRUPOS["homelab_managers"]):
     checar(f"{host}.log" in alloy_txt, f"caminho de log de {host} presente")
 # Não se checa vírgula sobrando antes de `)`: a configuração que roda em
 # produção tem uma em `array.concat(...)` e o Alloy a aceita há meses. Uma
