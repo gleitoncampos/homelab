@@ -124,6 +124,17 @@ services:
   prometheus-pve-exporter:
     image: prompve/prometheus-pve-exporter:3.5.5
     environment:
+      # ⚠️ `PVE_USER` não é opcional, e a falta dele NÃO dá erro de autenticação:
+      # o `cli.py` do exportador usa a presença desta variável como interruptor
+      # entre configurar por ambiente e ler um arquivo YAML. Sem ela, ele tenta
+      # abrir `/etc/prometheus/pve.yml`, que esta stack não monta, e morre com
+      # `FileNotFoundError` — mensagem que não menciona credencial nenhuma.
+      #
+      # `PVE_USER` e `PVE_TOKEN_NAME` são campos SEPARADOS (`user` e
+      # `token_name` no `config_from_env`). O identificador completo do token
+      # tem a forma `usuario@realm!id`; quem parte a string nas duas metades é
+      # o playbook, para o vault seguir com uma verdade só.
+      PVE_USER: "${PVE_USER}"
       PVE_TOKEN_NAME: "${PVE_TOKEN_NAME}"
       PVE_TOKEN_VALUE: "${PVE_TOKEN_VALUE}"
       PVE_VERIFY_SSL: "false"
