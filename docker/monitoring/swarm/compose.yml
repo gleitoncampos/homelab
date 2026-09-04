@@ -68,6 +68,16 @@ services:
     image: grafana/grafana:12.4.8
     environment:
       GF_SECURITY_ADMIN_PASSWORD: "${GF_SECURITY_ADMIN_PASSWORD}"
+      # Telemetria desligada, e o motivo é medido, não preferência: o Grafana
+      # consulta `stats.grafana.org` de forma contínua, o nome está na DNSBL do
+      # resolver da casa e responde `0.0.0.0`, e o Grafana trata isso como falha
+      # transitória e repete. A auditoria de 04/09/2026 mediu 29.422 consultas
+      # em 24h vindas deste host e do CT de rsyslog — 35% de TODO o DNS da rede,
+      # e o cache hit do Unbound no chão (13%). O bloqueio está certo; quem
+      # estava errado era o serviço que insiste. A correção é na origem.
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_FEEDBACK_LINKS_ENABLED: "false"
     volumes:
       - /srv/containers/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
       - /srv/containers/grafana/data:/var/lib/grafana
@@ -159,7 +169,10 @@ services:
     ports:
       - "1514:1514/udp" # Remote Syslog UDP (OpenWrt, OPNsense, Proxmox, NAS)
       - "1514:1514/tcp" # Remote Syslog TCP
-    command: "run --server.http.listen-addr=0.0.0.0:12345 --storage.path=/var/lib/alloy/data /etc/alloy/config.alloy"
+    # `--disable-reporting`: mesmo motivo do Grafana acima — o Alloy também
+    # reporta uso para `stats.grafana.org`, que a DNSBL bloqueia, e ele também
+    # repete. Ver o comentário no serviço `grafana`.
+    command: "run --disable-reporting --server.http.listen-addr=0.0.0.0:12345 --storage.path=/var/lib/alloy/data /etc/alloy/config.alloy"
     deploy:
       placement:
         constraints: [node.role == manager]
