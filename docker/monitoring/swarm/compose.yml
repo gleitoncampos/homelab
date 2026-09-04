@@ -126,17 +126,24 @@ services:
     environment:
       # ⚠️ `PVE_USER` não é opcional, e a falta dele NÃO dá erro de autenticação:
       # o `cli.py` do exportador usa a presença desta variável como interruptor
-      # entre configurar por ambiente e ler um arquivo YAML. Sem ela, ele tenta
-      # abrir `/etc/prometheus/pve.yml`, que esta stack não monta, e morre com
-      # `FileNotFoundError` — mensagem que não menciona credencial nenhuma.
+      # entre configurar por ambiente e ler `/etc/prometheus/pve.yml`. Sem ela,
+      # ele nem tenta o ambiente — abre o arquivo, que esta stack não monta, e
+      # morre com `FileNotFoundError`, mensagem que não menciona credencial.
+      # Vale para os dois modos de autenticação, senha ou token.
       #
-      # `PVE_USER` e `PVE_TOKEN_NAME` são campos SEPARADOS (`user` e
-      # `token_name` no `config_from_env`). O identificador completo do token
-      # tem a forma `usuario@realm!id`; quem parte a string nas duas metades é
-      # o playbook, para o vault seguir com uma verdade só.
+      # ⚠️ AUTENTICAÇÃO POR SENHA É TEMPORÁRIA, E O ALVO É O TOKEN.
+      # O `config_from_env` aceita `PVE_PASSWORD` ou o par
+      # `PVE_TOKEN_NAME`/`PVE_TOKEN_VALUE`. O repositório declarava o token, mas
+      # a credencial nunca foi criada em hipervisor nenhum: os dois só têm
+      # `root@pam`. Com as variáveis de token apontando para um usuário
+      # inexistente, o exportador sobe `1/1` e responde 401 em toda coleta — o
+      # painel fica vazio sem nada gritar. Senha destrava hoje ao custo de usar
+      # credencial de privilégio total onde o próprio playbook de tokens escreve
+      # que isso "derrota o propósito de ter um usuário dedicado".
+      # A reversão está descrita em `1.2.16` do roadmap, e depende de o cofre
+      # ser cifrado antes: o Proxmox exibe o valor do token uma única vez.
       PVE_USER: "${PVE_USER}"
-      PVE_TOKEN_NAME: "${PVE_TOKEN_NAME}"
-      PVE_TOKEN_VALUE: "${PVE_TOKEN_VALUE}"
+      PVE_PASSWORD: "${PVE_PASSWORD}"
       PVE_VERIFY_SSL: "false"
     deploy:
       resources:
