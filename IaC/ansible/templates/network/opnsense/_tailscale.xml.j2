@@ -48,6 +48,32 @@
       </settings>
       <authentication version="0.0.0" description="Tailscale authentication settings">
         <loginServer>{{ opnsense_tailscale.login_server }}</loginServer>
+        {# ⚠️ VAZIO é o estado normal, e é decisão de segurança, não descuido.
+
+           Uma auth key da Tailscale REGISTRA dispositivos novos na tailnet.
+           Guardá-la em arquivo permanentemente é manter uma credencial de
+           admissão parada — categoricamente diferente de um hash bcrypt, que
+           só serve para comparar. Pior aqui, porque o vault deste repositório
+           ainda está em texto puro.
+
+           O nó não precisa dela: a identidade dele é a chave de nó em
+           /var/db/tailscale/tailscaled.state, não este campo. Duas proteções
+           do próprio plugin, lidas de
+           service/templates/OPNsense/Tailscale/rc.conf.d em 03/09/2026:
+
+             1. `helpers.exists()` OMITE o bloco inteiro quando o campo é
+                vazio. Comprovado no arquivo gerado: `useExitNode` está vazio
+                e `--exit-node=` não aparece nos argumentos.
+             2. Mesmo preenchido, a chave só entra em `--auth-key` se
+                `tailscaled.state` NÃO tiver `_current-profile` — ou seja, só
+                num nó ainda não autenticado.
+
+           Preencher só faz sentido para registrar um firewall reconstruído do
+           zero, e nesse caso a chave sai do vault e volta a ser vazia depois. #}
+{% if opnsense_tailscale_preauth_key %}
         <preAuthKey>{{ opnsense_tailscale_preauth_key }}</preAuthKey>
+{% else %}
+        <preAuthKey/>
+{% endif %}
       </authentication>
     </tailscale>

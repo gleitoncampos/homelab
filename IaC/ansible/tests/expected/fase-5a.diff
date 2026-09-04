@@ -254,7 +254,7 @@
 +      </settings>
 +      <authentication description="Tailscale authentication settings" version="0.0.0">
 +        <loginServer>https://controlplane.tailscale.com</loginServer>
-+        <preAuthKey>FIXTURE-sem-prefixo-real-de-chave</preAuthKey>
++        <preAuthKey/>
 +      </authentication>
 +    </tailscale>
    </OPNsense>

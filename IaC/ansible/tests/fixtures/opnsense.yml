@@ -11,7 +11,9 @@ opnsense_root_password_hash: "$2y$10$FIXTURE000000000000000000000000000000000000
 opnsense_admin_username: "adminfixture"
 opnsense_admin_fullname: "Admin Fixture"
 opnsense_admin_password_hash: "$2y$10$FIXTURE1111111111111111111111111111111111111111111111"
-opnsense_tailscale_preauth_key: "FIXTURE-sem-prefixo-real-de-chave"
+# Vazio é o estado normal: a chave de registro não mora em arquivo.
+# Ver o comentário em _tailscale.xml.j2.
+opnsense_tailscale_preauth_key: ""
 opnsense_tailscale:
   enabled: '1'
   login_server: https://controlplane.tailscale.com

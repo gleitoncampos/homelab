@@ -132,6 +132,36 @@ else:
             "voltaria a receber tráfego de IP em blocklist"
         )
 
+print("\n== CAMADA 6: a chave de registro não é obrigatória ==")
+# Decisão de 03/09/2026: `preAuthKey` renderiza VAZIO por padrão. Uma auth key
+# registra dispositivos novos na tailnet — credencial de admissão, não segredo
+# de comparação — e o nó já registrado não precisa dela (o plugin só a usa
+# quando tailscaled.state não tem `_current-profile`).
+#
+# Duas peças, e a segunda é a que engana: exigir a chave em `required_secrets`
+# obriga alguém a colocar uma chave VIVA no vault, que hoje está em texto puro,
+# só para o playbook rodar. Foi assim que a linha nasceu, e foi por isso que
+# saiu.
+PLAYBOOK = ANSIBLE / "playbooks" / "network" / "01-opnsense-setup.yml"
+if not PARTIAL.is_file():
+    print("  -- não avaliada: o partial não existe (ver camada 2)")
+else:
+    corpo = PARTIAL.read_text(encoding="utf-8")
+    if "{% if opnsense_tailscale_preauth_key %}" in corpo and "<preAuthKey/>" in corpo:
+        print("  OK o partial renderiza preAuthKey vazio quando não há chave")
+    else:
+        falhas.append(
+            "_tailscale.xml.j2 não trata a chave ausente: sem o ramo vazio, o "
+            "apply exige uma credencial de admissão viva guardada em arquivo"
+        )
+    if "opnsense_tailscale_preauth_key" in PLAYBOOK.read_text(encoding="utf-8"):
+        falhas.append(
+            "01-opnsense-setup.yml voltou a exigir opnsense_tailscale_preauth_key "
+            "em required_secrets: isso obriga a guardar uma chave viva no vault"
+        )
+    else:
+        print("  OK o playbook não exige a chave como segredo obrigatório")
+
 if falhas:
     print()
     for f in falhas:
@@ -139,4 +169,4 @@ if falhas:
     sys.exit(1)
 
 print("\n  TAILSCALE OK (plugin declarado; partial incluído; sem chave literal; "
-      "tráfego liberado; blocklist nas duas WANs)")
+      "tráfego liberado; blocklist nas duas WANs; chave de registro não exigida)")
