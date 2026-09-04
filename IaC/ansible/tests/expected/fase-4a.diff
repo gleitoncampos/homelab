@@ -1,16 +1,74 @@
-@@ -1458,7 +1515,7 @@
+@@ -1457,8 +1520,8 @@
+             <action>block</action>
              <quick>1</quick>
              <interfacenot>0</interfacenot>
-             <interface>wan</interface>
+-            <interface>wan</interface>
 -            <direction>any</direction>
++            <interface>opt1,wan</interface>
 +            <direction>in</direction>
              <ipprotocol>inet</ipprotocol>
              <protocol>any</protocol>
              <icmptype/>
-@@ -1505,6 +1562,454 @@
+@@ -1505,6 +1568,510 @@
              <shaper2/>
              <description/>
            </rule>
++          <rule uuid="658fe3d1-c5ea-4489-b876-1bdd376fa26f">
++            <enabled>1</enabled>
++            <statetype>keep</statetype>
++            <state-policy/>
++            <sequence>241</sequence>
++            <action>pass</action>
++            <quick>1</quick>
++            <interfacenot>0</interfacenot>
++            <interface>opt2</interface>
++            <direction>any</direction>
++            <ipprotocol>inet</ipprotocol>
++            <protocol>any</protocol>
++            <icmptype/>
++            <icmp6type/>
++            <source_net>any</source_net>
++            <source_not>0</source_not>
++            <source_port/>
++            <destination_net>any</destination_net>
++            <destination_not>0</destination_not>
++            <destination_port/>
++            <divert-to/>
++            <gateway/>
++            <replyto/>
++            <disablereplyto>0</disablereplyto>
++            <log>0</log>
++            <allowopts>0</allowopts>
++            <nosync>0</nosync>
++            <nopfsync>0</nopfsync>
++            <statetimeout/>
++            <udp-first/>
++            <udp-multiple/>
++            <udp-single/>
++            <max-src-nodes/>
++            <max-src-states/>
++            <max-src-conn/>
++            <max/>
++            <max-src-conn-rate/>
++            <max-src-conn-rates/>
++            <overload/>
++            <adaptivestart/>
++            <adaptiveend/>
++            <prio/>
++            <set-prio/>
++            <set-prio-low/>
++            <tag/>
++            <tagged/>
++            <tcpflags1/>
++            <tcpflags2/>
++            <tcpflags_any>0</tcpflags_any>
++            <categories/>
++            <sched/>
++            <tos/>
++            <shaper1/>
++            <shaper2/>
++            <description>Tailnet alcanca a LAN e sai pelo exit node</description>
++          </rule>
 +          <rule uuid="7da37146-edf2-5fa8-8203-a5083990a068">
 +            <enabled>1</enabled>
 +            <statetype>keep</statetype>

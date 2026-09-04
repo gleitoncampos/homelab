@@ -1105,7 +1105,12 @@ opnsense_rules:
     action: block
     quick: '1'
     interfacenot: '0'
-    interface: wan
+    # ⚠️ AS DUAS WANs. Valia só para `wan` e deixava a segunda WAN (`opt1`,
+    # CLARO) receber tráfego de IP em blocklist sem passar pelo filtro.
+    # Corrigido na produção em 03/09/2026 e trazido para cá no mesmo dia: sem
+    # esta linha o apply devolveria para `wan` e reabriria o buraco em
+    # silêncio. Coberto pela camada 5 de tests/gates_tailscale.py.
+    interface: opt1,wan
     direction: in
     ipprotocol: inet
     protocol: any
@@ -1153,6 +1158,71 @@ opnsense_rules:
     shaper2: ''
     description: ''
 
+  # Tailscale (roadmap §3.7). ⚠️ `destination_net: any` é largo DE
+  # PROPÓSITO, e é consequência direta do exit node: com destino restrito à
+  # LAN o túnel sobe, o ping interno responde e a navegação NÃO abre — o
+  # sintoma não aponta para cá. Quem restringe quem alcança o quê é a ACL da
+  # tailnet, no console, não esta regra. Estreitar aqui derruba a saída.
+  #
+  # O plugin cria a `tailscale0` SEM regra nenhuma e o padrão do OPNsense é
+  # bloquear: sem este registro o apply entrega um túnel mudo. Coberto pela
+  # camada 4 de tests/gates_tailscale.py.
+  - uuid: 658fe3d1-c5ea-4489-b876-1bdd376fa26f
+    enabled: '1'
+    statetype: keep
+    state-policy: ''
+    sequence: '241'
+    action: pass
+    quick: '1'
+    interfacenot: '0'
+    interface: opt2
+    direction: any
+    ipprotocol: inet
+    protocol: any
+    icmptype: ''
+    icmp6type: ''
+    source_net: any
+    source_not: '0'
+    source_port: ''
+    destination_net: any
+    destination_not: '0'
+    destination_port: ''
+    divert-to: ''
+    gateway: ''
+    replyto: ''
+    disablereplyto: '0'
+    log: '0'
+    allowopts: '0'
+    nosync: '0'
+    nopfsync: '0'
+    statetimeout: ''
+    udp-first: ''
+    udp-multiple: ''
+    udp-single: ''
+    max-src-nodes: ''
+    max-src-states: ''
+    max-src-conn: ''
+    max: ''
+    max-src-conn-rate: ''
+    max-src-conn-rates: ''
+    overload: ''
+    adaptivestart: ''
+    adaptiveend: ''
+    prio: ''
+    set-prio: ''
+    set-prio-low: ''
+    tag: ''
+    tagged: ''
+    tcpflags1: ''
+    tcpflags2: ''
+    tcpflags_any: '0'
+    categories: ''
+    sched: ''
+    tos: ''
+    shaper1: ''
+    shaper2: ''
+    description: Tailnet alcanca a LAN e sai pelo exit node
+
 # =============================================================================
 # SYSTEM — grupo administrativo e usuários (system/group, system/user)
 # =============================================================================
@@ -1165,6 +1235,38 @@ opnsense_rules:
 # especial por uuid, lendo o vault — nunca hardcoded num arquivo rastreado.
 # dashboard é o layout salvo do widget da GUI (posição/tamanho de cada
 # widget), não é segredo; mantido idêntico ao que a caixa grava hoje.
+# =============================================================================
+# TAILSCALE — VPN de acesso remoto (roadmap §3.7, decidido em 03/09/2026)
+# =============================================================================
+# Plano Personal (gratuito), plano de controle HOSPEDADO pela Tailscale. O
+# firewall sai para alcançá-lo, então não há porta aberta na WAN nem DDNS.
+#
+# ⚠️ A chave de autenticação NÃO mora aqui: é segredo, e o partial a lê de
+# `opnsense_tailscale_preauth_key`, no vault — mesmo caminho da senha do admin.
+opnsense_tailscale:
+  enabled: '1'
+  login_server: https://controlplane.tailscale.com
+  login_timeout: '10'
+  listen_port: '41641'
+  # ⚠️ 0, e o modelo do plugin entrega 1. Aceitar o DNS da tailnet aqui
+  # sequestraria o Unbound deste equipamento, que serve DNSBL e os overrides
+  # curinga para a rede inteira. Quem consome o DNS de casa são os PEERS, e
+  # isso se configura no console (nameserver global), não neste campo.
+  accept_dns: '0'
+  # Decidido em 03/09/2026: o exit node é o próprio firewall.
+  advertise_exit_node: '1'
+  # Este nó ANUNCIA rotas; não absorve as de terceiros.
+  accept_subnet_routes: '0'
+  enable_ssh: '0'
+  # 0 = o tailscaled faz o SNAT antes de entregar ao pf, e é por isso que a
+  # geração automática de NAT de saída basta. Ligar exigiria regra outbound
+  # manual, que hoje NÃO existe e não deve ser criada — ver _nat.xml.j2.
+  disable_snat: '0'
+  subnets:
+    - uuid: 3d0bc697-16a0-4364-9770-1b09566b8ded
+      subnet: "{{ lan_network_cidr }}"
+      description: LAN
+
 opnsense_groups:
   - uuid: 38d3ed68-080e-4ef6-b07a-4139d184979d
     gid: '1999'
@@ -1234,6 +1336,7 @@ opnsense_plugins:
   - os-osint
   - os-qemu-guest-agent
   - os-speedtest-community
+  - os-tailscale          # VPN de acesso remoto — roadmap §3.7
   - os-theme-rebellion    # substitui os-theme-cicada
   - os-upnp
 

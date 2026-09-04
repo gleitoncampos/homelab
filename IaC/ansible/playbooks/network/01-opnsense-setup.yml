@@ -28,6 +28,9 @@
           # Sem chave, o apply instala permitrootlogin=0 +
           # passwordauth=0 e a PRÓXIMA execução não conecta.
           - opnsense_admin_authorizedkeys_b64
+          # Sem ela o render sai com o placeholder e o firewall NÃO
+          # registra na tailnet: o acesso remoto morre no apply, calado.
+          - opnsense_tailscale_preauth_key
 
     # =====================================================================
     # GATE DE IDENTIDADE — o apply não pode renomear o equipamento

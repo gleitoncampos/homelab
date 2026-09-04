@@ -259,6 +259,7 @@
 {% set _plugins_section = 'agents' %}
 {% include '_plugins.xml.j2' %}
     <radvd version="1.0.1" description="Radvd configuration"/>
+{% include '_tailscale.xml.j2' %}
   </OPNsense>
   <hasync version="1.0.2">
     <disablepreempt>0</disablepreempt>

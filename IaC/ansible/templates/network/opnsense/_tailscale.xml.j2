@@ -1,0 +1,53 @@
+{# Tailscale: VPN de acesso remoto. Roadmap §3.7, decidido em 03/09/2026.
+
+   Plano Personal (gratuito) com o plano de controle HOSPEDADO pela Tailscale.
+   O firewall SAI para alcançar o controle, então não há porta aberta na WAN e
+   não há DDNS — foi isso que decidiu a escolha contra Headscale e NetBird, que
+   exigiriam 443 pública com TLS válido. As alternativas soberanas seguem
+   abertas no §3.7.1; trocar o plano de controle depois não exige reinstalar
+   cliente nenhum, só re-registrar os nós.
+
+   O schema abaixo NÃO foi deduzido: saiu de
+   /usr/local/opnsense/mvc/app/models/OPNsense/Tailscale/{Settings,Authentication}.xml
+   com o plugin instalado, e conferido contra o diff do config.xml vivo.
+
+   ⚠️ A chave de autenticação NÃO aparece aqui. É segredo, vem do vault, pelo
+   mesmo caminho de opnsense_admin_password_hash em _system.xml.j2. #}
+    <tailscale>
+      <settings version="1.0.0" description="Tailscale general settings">
+        <enabled>{{ opnsense_tailscale.enabled }}</enabled>
+        <loginTimeout>{{ opnsense_tailscale.login_timeout }}</loginTimeout>
+        <listenPort>{{ opnsense_tailscale.listen_port }}</listenPort>
+        {# ⚠️ acceptDNS vem 1 DE FÁBRICA no modelo do plugin, e 1 aqui
+           sequestraria o resolvedor deste equipamento: o Unbound dele serve a
+           DNSBL, os overrides curinga e a rede inteira. Este nó tem que
+           resolver por si. Quem consome o DNS de casa são os PEERS, e isso é
+           configurado no console (nameserver global), não aqui. #}
+        <acceptDNS>{{ opnsense_tailscale.accept_dns }}</acceptDNS>
+        <advertiseExitNode>{{ opnsense_tailscale.advertise_exit_node }}</advertiseExitNode>
+        {# Vazio por imposição do plugin: não é possível ANUNCIAR exit node e
+           USAR um exit node ao mesmo tempo. Aqui o firewall é o exit node. #}
+        <useExitNode/>
+        {# Este nó ANUNCIA rotas; não absorve as que outros anunciam. #}
+        <acceptSubnetRoutes>{{ opnsense_tailscale.accept_subnet_routes }}</acceptSubnetRoutes>
+        <enableSSH>{{ opnsense_tailscale.enable_ssh }}</enableSSH>
+        {# 0 = o tailscaled faz o SNAT do tráfego dos peers antes de entregar ao
+           pf. É por isso que a geração automática de NAT de saída do OPNsense
+           basta, e nenhuma regra outbound manual foi necessária — conferido em
+           03/09/2026 com `pfctl -sn`. Ligar isto exigiria escrever aquela
+           regra à mão. #}
+        <disableSNAT>{{ opnsense_tailscale.disable_snat }}</disableSNAT>
+        <subnets>
+{% for rota in opnsense_tailscale.subnets %}
+          <subnet4 uuid="{{ rota.uuid }}">
+            <subnet>{{ rota.subnet }}</subnet>
+            <description>{{ rota.description | e }}</description>
+          </subnet4>
+{% endfor %}
+        </subnets>
+      </settings>
+      <authentication version="0.0.0" description="Tailscale authentication settings">
+        <loginServer>{{ opnsense_tailscale.login_server }}</loginServer>
+        <preAuthKey>{{ opnsense_tailscale_preauth_key }}</preAuthKey>
+      </authentication>
+    </tailscale>

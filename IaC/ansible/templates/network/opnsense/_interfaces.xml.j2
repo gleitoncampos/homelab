@@ -56,6 +56,26 @@
       <ipaddr>dhcp</ipaddr>
       <ipaddrv6>dhcp6</ipaddrv6>
     </opt1>
+    {# Interface do Tailscale (roadmap §3.7). O dispositivo `tailscale0` é criado
+       pelo daemon; aqui ele só é ATRIBUÍDO, sem endereço — `ipaddr` fica de
+       fora de propósito, quem endereça é o tailscaled.
+
+       ⚠️ A atribuição não é cosmética, e foi ela que resolveu o NAT de saída:
+       enquanto a `tailscale0` não era interface do OPNsense, a geração
+       automática de NAT não a cobria e o exit node não navegava. Conferido em
+       03/09/2026 com `pfctl -sn`.
+
+       `opt2` e não `tailscale` porque é o nome que o equipamento vivo tem — e a
+       regra de filtro o referencia por este identificador. As VLANs usam
+       `vlan<tag>` por outro motivo (evitar colidir com `opt1`, a segunda WAN);
+       aqui não há colisão, e seguir o vivo evita renomear a interface no
+       próximo apply. #}
+    <opt2>
+      <if>tailscale0</if>
+      <descr>TAILSCALE</descr>
+      <enable>1</enable>
+      <spoofmac/>
+    </opt2>
     {# Uma interface por entrada de `vlans`. O nome do elemento é o
        IDENTIFICADOR da interface no OPNsense, e é ele que `opnsense_rules`,
        `<dhcpd>` e o Unbound referenciam — por isso `vlan<tag>` e não `optN`:

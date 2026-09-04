@@ -3,11 +3,11 @@
        <mirror/>
        <flavour/>
 -      <plugins>os-crowdsec,os-etpro-telemetry,os-igmp-proxy,os-isc-dhcp,os-mdns-repeater,os-monit,os-node_exporter,os-qemu-guest-agent,os-speedtest-community,os-theme-cicada,os-upnp</plugins>
-+      <plugins>os-arpwatch,os-crowdsec,os-etpro-telemetry,os-igmp-proxy,os-mdns-repeater,os-monit,os-node_exporter,os-osint,os-qemu-guest-agent,os-speedtest-community,os-theme-rebellion,os-upnp</plugins>
++      <plugins>os-arpwatch,os-crowdsec,os-etpro-telemetry,os-igmp-proxy,os-mdns-repeater,os-monit,os-node_exporter,os-osint,os-qemu-guest-agent,os-speedtest-community,os-tailscale,os-theme-rebellion,os-upnp</plugins>
        <type/>
        <subscription/>
        <reboot/>
-@@ -426,6 +411,31 @@
+@@ -426,6 +411,37 @@
        <ipaddrv6>pppoev6</ipaddrv6>
        <mss>1420</mss>
      </wan>
@@ -20,6 +20,12 @@
 +      <ipaddr>dhcp</ipaddr>
 +      <ipaddrv6>dhcp6</ipaddrv6>
 +    </opt1>
++    <opt2>
++      <if>tailscale0</if>
++      <descr>TAILSCALE</descr>
++      <enable>1</enable>
++      <spoofmac/>
++    </opt2>
 +    <vlan10>
 +      <if>vtnet0.10</if>
 +      <descr>MGMT</descr>
@@ -39,7 +45,7 @@
    </interfaces>
    <dhcpd>
      <lan>
-@@ -463,12 +473,22 @@
+@@ -463,12 +479,22 @@
          <ntpserver/>
        </staticmap>
      </lan>
