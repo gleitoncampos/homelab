@@ -140,6 +140,101 @@ for host in (GRUPOS["openwrt"] + GRUPOS["omv"] + GRUPOS["proxmox"]
 # produção tem uma em `array.concat(...)` e o Alloy a aceita há meses. Uma
 # asserção que reprova o known-good é asserção errada.
 
+# ----------------------------------------------------------------------
+# O compose NÃO é template, mas depende de duas coisas que vivem fora dele:
+# as variáveis que o playbook injeta, e os arquivos que o playbook escreve no
+# host. As duas já quebraram a stack em produção, cada uma do seu jeito.
+#
+# ⚠️ Leia a diferença entre as três asserções abaixo, porque elas NÃO são a
+# mesma checagem em três formas:
+#
+#   1. e 2. pegam DESACORDO entre compose e playbook — um lado tem, o outro
+#      não. Não pegam os dois lados esquecendo a mesma coisa.
+#   3. pega exatamente isso: uma exigência que só a IMAGEM conhece, e que
+#      nenhum dos dois arquivos do repositório teria como deduzir sozinho.
+#
+# A distinção não é acadêmica. Foi (3) que aconteceu: nem o compose nem o
+# playbook mencionavam `PVE_USER`, e por isso (1) e (2) ficariam verdes para
+# sempre. Escrever só (1) e (2) e declarar o caso coberto seria o defeito que
+# o guia chama de "teste verde não é o mesmo que alvo testado".
+# ----------------------------------------------------------------------
+print("\n== contrato entre compose.yml e o playbook ==")
+compose_txt = (SWARM / "compose.yml").read_text(encoding="utf-8")
+playbook_txt = (RAIZ / "IaC/ansible/playbooks/03-stack-monitoring.yml").read_text(encoding="utf-8")
+comum_txt = (RAIZ / "IaC/ansible/inventories/_common/all.yml").read_text(encoding="utf-8")
+
+# ⚠️ O playbook implanta MAIS DE UMA stack (`monitoring` e `statping`), cada
+# uma com seu compose e seu `stack_env`. Varrer o arquivo inteiro de uma vez
+# mistura as duas e acusa desacordo que não existe — o `FQDN` do statping
+# aparece como "injetado e não usado" pelo compose do monitoramento. Por isso
+# o pareamento é por bloco de `stack_name:`.
+blocos = re.split(r"^\s*stack_name:\s*", playbook_txt, flags=re.M)[1:]
+pares = []
+for bloco in blocos:
+    caminho = re.search(r"^\s*stack_compose_path:\s*\"([^\"]+)\"", bloco, re.M)
+    if not caminho:
+        continue
+    nomes = set(re.findall(r"^\s*-\s+name:\s*\"([A-Z_][A-Z0-9_]*)\"", bloco, re.M))
+    pares.append((caminho.group(1), nomes))
+
+checar(len(pares) >= 1, f"blocos de deploy de stack encontrados no playbook ({len(pares)})")
+for caminho, fornecidas in pares:
+    arq = RAIZ / caminho
+    if not arq.is_file():
+        checar(False, f"compose referenciado pelo playbook existe ({caminho})")
+        continue
+    txt = arq.read_text(encoding="utf-8")
+    usadas = set(re.findall(r"\$\{([A-Z_][A-Z0-9_]*)\}", txt))
+
+    # (1) Usada no compose e nunca injetada: a stack sobe com o valor vazio,
+    #     sem erro nenhum na subida.
+    faltando = usadas - fornecidas
+    checar(not faltando, f"{caminho}: toda variável usada é injetada ({len(usadas)} usadas)")
+    if faltando:
+        print(f"     usadas e não injetadas: {sorted(faltando)}")
+
+    # (2) Injetada e nunca usada: configuração morta. Quem a edita pensa que
+    #     mudou algo, e não mudou.
+    sobrando = fornecidas - usadas
+    checar(not sobrando, f"{caminho}: toda variável injetada é usada ({len(fornecidas)} injetadas)")
+    if sobrando:
+        print(f"     injetadas e não usadas: {sorted(sobrando)}")
+
+# (3) Exigência da IMAGEM, que nenhum dos dois arquivos revela.
+#     `pve_exporter/cli.py` usa a PRESENÇA de `PVE_USER` como interruptor
+#     entre configurar por ambiente e ler `/etc/prometheus/pve.yml` — arquivo
+#     que esta stack não monta. Sem a variável ele morre com
+#     `FileNotFoundError`, mensagem que não menciona credencial nenhuma.
+#     `config_from_env` mapeia `PVE_USER -> user` e `PVE_TOKEN_NAME ->
+#     token_name` como campos SEPARADOS, então o identificador completo
+#     (`usuario@realm!id`) precisa chegar partido.
+bloco_pve = re.search(r"^  prometheus-pve-exporter:.*?(?=^  \S|\Z)", compose_txt, re.M | re.S)
+checar(bloco_pve is not None, "serviço prometheus-pve-exporter presente no compose")
+if bloco_pve:
+    # ⚠️ Casar a CHAVE, não a string solta: os comentários deste bloco citam
+    # `PVE_USER` várias vezes, e um `in` simples ficava verde com a declaração
+    # apagada — a asserção era satisfeita pela prosa que a explica.
+    for var in ("PVE_USER", "PVE_TOKEN_NAME", "PVE_TOKEN_VALUE"):
+        checar(re.search(rf"^\s+{var}:\s", bloco_pve.group(0), re.M) is not None,
+               f"{var} declarada no exportador do Proxmox (exigência da imagem)")
+    checar("pve_exporter_token_name.split('!')[0]" in playbook_txt,
+           "o playbook parte o identificador do token em usuário e nome")
+
+# Todo bind mount de ARQUIVO sob /srv/containers precisa de um `dest`
+# correspondente em `monitoring_sidecar_files`. Diretório não entra: é criado
+# pela task de mkdir, ou é estado do serviço. Sem isto, um arquivo renomeado no
+# repositório deixa o host com o nome velho e o Swarm recusa a tarefa com
+# `bind source path does not exist` — foi o que pôs o Grafana em 0/1.
+montados = {
+    m for m in re.findall(r"-\s+(/srv/containers/[^\s:]+):", compose_txt)
+    if Path(m).suffix
+}
+escritos = set(re.findall(r"^\s*dest:\s*\"?(/srv/containers/[^\s\"]+)\"?", comum_txt, re.M))
+orfaos = montados - escritos
+checar(not orfaos, f"todo arquivo montado do host é escrito pelo playbook ({len(montados)} arquivos)")
+if orfaos:
+    print(f"     montados e nunca escritos: {sorted(orfaos)}")
+
 print()
 if falhas:
     print(f"  {len(falhas)} FALHA(S)")

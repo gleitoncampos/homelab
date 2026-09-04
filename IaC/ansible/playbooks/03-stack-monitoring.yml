@@ -112,8 +112,15 @@
             value: "{{ fqdn_grafana }}"
           - name: "GF_SECURITY_ADMIN_PASSWORD"
             value: "{{ grafana_admin_password }}"
+          # `pve_exporter_token_name` guarda o identificador COMPLETO do
+          # token (`usuario@realm!id`), que é como o Proxmox o exibe. O
+          # exportador quer as duas metades em variáveis distintas, então a
+          # divisão acontece aqui — no consumidor — e não vira um segundo
+          # campo no vault dizendo a mesma coisa pela metade.
+          - name: "PVE_USER"
+            value: "{{ pve_exporter_token_name.split('!')[0] }}"
           - name: "PVE_TOKEN_NAME"
-            value: "{{ pve_exporter_token_name }}"
+            value: "{{ pve_exporter_token_name.split('!')[1] }}"
           - name: "PVE_TOKEN_VALUE"
             value: "{{ pve_exporter_token_value }}"
           # Endereço do `upsd`: o nó Proxmox que tem o cabo USB, eleito pelo
