@@ -260,8 +260,9 @@ services:
           memory: 256M
       restart_policy:
         condition: on-failure
-    # Só a overlay `monitoring`: nada aqui é roteado pelo Traefik. A porta 1514
-    # é publicada acima diretamente (syslog vem de fora da rede overlay).
+    # Só a overlay `monitoring`: nada aqui é roteado pelo Traefik. As portas de
+    # syslog são publicadas acima diretamente, porque o log vem de equipamento
+    # fora da rede overlay.
     networks:
       - monitoring
 
