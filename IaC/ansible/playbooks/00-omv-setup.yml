@@ -609,7 +609,11 @@
       ansible.builtin.copy:
         dest: /etc/rsyslog.d/50-remote-alloy-syslog.conf
         content: |
-          *.* @{{ syslog_server_ip }}:{{ syslog_server_port | default('1514') }}
+          # ⚠️ O template NÃO é opcional. Sem ele o rsyslog usa o
+          # `RSYSLOG_TraditionalForwardFormat`, que é RFC3164, e o ouvinte do
+          # Alloy na 1514 declara RFC5424 — a mensagem chega e é descartada em
+          # silêncio, sem erro em ponta nenhuma.
+          *.* @{{ syslog_server_ip }}:{{ syslog_server_port }};RSYSLOG_SyslogProtocol23Format
         owner: root
         group: root
         mode: '0644'

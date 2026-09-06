@@ -9,7 +9,9 @@ config system
 	option conloglevel '8'
 	option cronloglevel '5'
 	option log_ip '{{ syslog_server_ip }}'
-	option log_port '{{ syslog_server_port | default('1514') }}'
+	{# ⚠️ Porta do ouvinte RFC3164, não a mesma dos demais: o `logd` do
+	   OpenWrt não fala RFC5424 e não há opção para mudar isso. #}
+	option log_port '{{ syslog_server_port_rfc3164 }}'
 	option timezone '<-03>3'
 	option packet_steering '1'
 

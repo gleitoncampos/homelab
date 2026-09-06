@@ -429,5 +429,5 @@
       ansible.builtin.debug:
         msg: >-
           📶 OpenWrt ({{ openwrt_hostname | default('openwrt-ap') }}) padronizado:
-          syslog para {{ syslog_server_ip }}:{{ syslog_server_port }}, SSIDs
+          syslog para {{ syslog_server_ip }}:{{ syslog_server_port_rfc3164 }}, SSIDs
           segregados, dhcp/odhcpd desativados e reboot semanal agendado.

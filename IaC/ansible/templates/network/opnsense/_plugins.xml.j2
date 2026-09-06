@@ -661,7 +661,7 @@
           <facility>kern,user,daemon,syslog,authpriv,console</facility>
           <hostname>{{ syslog_server_ip }}</hostname>
           <certificate/>
-          <port>{{ syslog_server_port | default('1514') }}</port>
+          <port>{{ syslog_server_port }}</port>
           <rfc5424>1</rfc5424>
           <description/>
         </destination>

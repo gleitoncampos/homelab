@@ -42,6 +42,7 @@ netflow_collector_port: "2056"
 geoip_license_key: ""
 syslog_server_ip: "192.0.2.10"
 syslog_server_port: "1514"
+syslog_server_port_rfc3164: "1515"
 
 opnsense_dns_redirect_uuid: "a1000000-0000-4000-8000-00000000d015"
 opnsense_dns_redirect_enabled: true

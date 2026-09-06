@@ -31,7 +31,6 @@
 # (opnsense, openwrt) — um literal aqui sombrearia silenciosamente a derivação
 # de `inventories/_common/all.yml:106-107` justo para os hosts que a consomem.
 # Só porta/protocolo, que não têm equivalente derivado, ficam neste arquivo.
-syslog_server_port: "1514"
 syslog_protocol: "udp"
 
 # Coletor NetFlow (Akvorado / ElastiFlow)

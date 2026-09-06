@@ -150,6 +150,27 @@ unbound_host_overrides: >-
 syslog_server_ip: "{{ hostvars[groups['homelab_managers'][0]].ansible_host }}"
 netflow_collector_ip: "{{ syslog_server_ip }}"
 
+# DUAS portas, e a divisão é por FORMATO de syslog, não por equipamento.
+#
+# ⚠️ `syslog_format` é declarado por ouvinte no Alloy, e esta rede emite nos
+# dois padrões. Misturados numa porta só, o ouvinte descarta em silêncio tudo
+# que não casa com o formato declarado — sem erro que aponte a causa.
+#
+#   1514 (RFC5424) -> OPNsense, que já emite assim; e Proxmox e OMV, cujo
+#                     rsyslog recebe o template `RSYSLOG_SyslogProtocol23Format`
+#                     na linha de encaminhamento.
+#   1515 (RFC3164) -> OpenWrt, e só ele: o `logd` não fala 5424 e não há opção
+#                     para mudar isso.
+#
+# ⚠️ Ficam aqui, em `all`, e não em `network/`, pelo mesmo motivo escrito acima
+# para `syslog_server_ip`: os nós do cluster e os dispositivos de rede precisam
+# resolver a MESMA variável. Enquanto a porta viveu em `network/`, os playbooks
+# do Proxmox e do OMV só funcionavam por causa de um `| default('1514')` — e um
+# default que substitui variável ausente é exatamente o que esconde erro de
+# inventário, como `gates_identidade.py` registra.
+syslog_server_port: "1514"
+syslog_server_port_rfc3164: "1515"
+
 # Fontes de tempo dos hosts que NÃO são dispositivo de rede (Proxmox, OMV).
 #
 # Duas fontes de propósito. O desenho-alvo é o lab inteiro sincronizar pelo

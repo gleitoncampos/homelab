@@ -47,6 +47,7 @@ CONTEXTO = {
     "openwrt_hostname": "ap-exemplo",
     "syslog_server_ip": "192.0.2.10",
     "syslog_server_port": "1514",
+    "syslog_server_port_rfc3164": "1515",
     "network_timezone": "America/Sao_Paulo",
 }
 
