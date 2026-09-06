@@ -27,7 +27,7 @@ PLAYBOOKS   := $(wildcard $(ANSIBLE_DIR)/playbooks/*.yml $(ANSIBLE_DIR)/playbook
         secrets links snapshot omv-fs discover clean render-opnsense render-monitoring \
         render-proxmox-ifaces render-openwrt-led render-openwrt-network \
         gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade \
-        gates-tailscale gates-cpu-pinning
+        gates-tailscale gates-cpu-pinning validate-alloy
 
 help: ## Lista os alvos
 	@echo "Alvos disponíveis:"
@@ -56,7 +56,7 @@ ssh-keys: ## Instala a chave gerada pelo bootstrap em todo host do inventário (
 test-bootstrap: ## Testa os renderizadores do bootstrap contra os consumidores reais
 	@python3 IaC/bootstrap/test_render.py
 
-check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade gates-tailscale gates-cpu-pinning ## Tudo que a CI roda
+check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade gates-tailscale gates-cpu-pinning validate-alloy ## Tudo que a CI roda
 	@echo
 	@echo "✓ check completo"
 
@@ -200,6 +200,23 @@ gates-tailscale: ## Confere que o apply não pode apagar a VPN de acesso remoto
 
 gates-cpu-pinning: ## Afirma que o pinning da VM do firewall recusa VM com mais de 1 vCPU
 	@python3 $(ANSIBLE_DIR)/tests/gates_cpu_pinning.py
+
+# ⚠️ A configuração do Alloy NÃO é YAML e nenhum linter deste repositório a
+# enxergava. O arquivo versionado carregava um erro de sintaxe — uma vírgula
+# faltando num mapa — que fazia o Alloy recusar o arquivo inteiro na subida.
+# Passou despercebido porque a produção rodava uma cópia antiga no host, e o
+# arquivo do repositório nunca chegou a ser aplicado.
+#
+# A versão da imagem sai do compose, não é fixada aqui: uma fonte, dois
+# consumidores. Docker ausente vira aviso, não falha — mesma convenção dos
+# linters, para que um clone de terceiro não trave.
+validate-alloy: ## Valida config.alloy com o binário do Alloy, na versão do compose
+	@if ! command -v docker >/dev/null 2>&1; then \
+	  echo -e "\033[33m  ! docker ausente — validação do Alloy pulada\033[0m"; exit 0; fi; \
+	img=$$(grep -oE 'grafana/alloy:[^"[:space:]]+' docker/monitoring/swarm/compose.yml | head -1); \
+	if [ -z "$$img" ]; then echo "✗ não achei a imagem do Alloy no compose"; exit 1; fi; \
+	docker run --rm -v "$(CURDIR)/docker/monitoring/swarm:/c:ro" --entrypoint /bin/alloy "$$img" \
+	  validate /c/config.alloy && echo "✓ config.alloy válido ($$img)"
 
 inventario-diretorio: ## Confere que `-i <dir>` lê o inventário real, e não o .example
 	@python3 $(ANSIBLE_DIR)/tests/inventario_diretorio.py

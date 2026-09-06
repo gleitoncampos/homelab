@@ -449,6 +449,16 @@ nenhuma apontando para a causa. O gate não se contenta em ver o `assert`
 escrito: ele **executa** as expressões extraídas do playbook contra
 configurações sintéticas de VM e confirma que o caso ruim reprova de verdade.
 
+E `validate-alloy`, que fecha um buraco de categoria: **a configuração do
+Alloy não é YAML**, então nenhum linter deste repositório a enxergava. O
+arquivo versionado carregava um erro de sintaxe — uma vírgula faltando num
+mapa — que faz o Alloy recusar o arquivo inteiro na subida. Passou despercebido
+por anos porque a produção rodava uma cópia antiga no host e o arquivo do
+repositório nunca chegou a ser aplicado: ninguém nunca o executou. O alvo roda
+o binário oficial, **na versão que o compose fixa** (uma fonte, dois
+consumidores), e valida também as referências entre componentes, não só a
+sintaxe. Docker ausente vira aviso e não falha, mesma convenção dos linters.
+
 ⚠️ Por último vem `inventario-diretorio`, que não é sobre template: prova que
 `-i <diretório>` lê o inventário REAL. O Ansible traz `.ini` na lista de
 extensões que ignora ao varrer um diretório, então a forma diretório pulava o

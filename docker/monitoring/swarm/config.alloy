@@ -3,22 +3,134 @@
 // =============================================================
 
 // -------------------------------------------------------------
-// 1. RECEPTOR DE SYSLOG REMOTO (OpenWrt, OPNsense, Proxmox, OMV)
+// 1. RECEPTOR DE SYSLOG REMOTO (OPNsense, Proxmox, OMV, OpenWrt)
 // -------------------------------------------------------------
-loki.source.syslog "syslog_net" {
+// ⚠️ DOIS pares de listener, e não é redundância: `syslog_format` é por
+// listener, e a rede emite em DOIS formatos.
+//
+//   RFC5424 -> OPNsense (o destino do plugin de Syslog traz `<rfc5424>1`), e
+//              Proxmox e OMV depois de o rsyslog receber o template
+//              `RSYSLOG_SyslogProtocol23Format` na linha de encaminhamento.
+//   RFC3164 -> OpenWrt, e só ele: o `logd` do OpenWrt não fala 5424, e não há
+//              opção para mudar isso.
+//
+// Misturar os dois numa porta só faz o parser descartar a mensagem que não
+// casa com o formato declarado, sem erro que aponte para a causa.
+//
+// ⚠️ E o ponto que fazia esta stack não entregar nada: a fonte de syslog
+// APAGA todo rótulo com prefixo `__` antes de repassar a entrada adiante. Sem
+// `relabel_rules`, o Loki recebia apenas o `job` estático — hostname, serviço
+// e severidade morriam na saída do componente, não no Loki. Nenhum erro em
+// lugar nenhum; o log chegava, anônimo e inútil para consulta.
+
+loki.relabel "syslog" {
+  forward_to = []
+
+  // ⚠️ Mapeamento EXPLÍCITO, um rótulo por regra, em vez do atalho
+  // `labelmap` sobre `__syslog_message_(.+)`. O atalho traria junto
+  // `proc_id`, `msg_id`, `msg_counter` e `sequence` — valores que mudam a cada
+  // mensagem. Como rótulo, cada um deles cria uma série nova no índice do
+  // Loki, e o custo aparece semanas depois, como lentidão de consulta que
+  // ninguém liga à configuração de coleta.
+  rule {
+    source_labels = ["__syslog_message_hostname"]
+    target_label  = "host"
+  }
+
+  rule {
+    source_labels = ["__syslog_message_app_name"]
+    target_label  = "service"
+  }
+
+  rule {
+    source_labels = ["__syslog_message_severity"]
+    target_label  = "level"
+  }
+
+  rule {
+    source_labels = ["__syslog_message_facility"]
+    target_label  = "facility"
+  }
+}
+
+loki.source.syslog "syslog_rfc5424" {
   listener {
-    address  = "0.0.0.0:1514"
-    protocol = "udp"
-    labels   = { job = "syslog_net" }
+    address       = "0.0.0.0:1514"
+    protocol      = "udp"
+    syslog_format = "rfc5424"
+    labels        = { job = "syslog" }
   }
 
   listener {
-    address  = "0.0.0.0:1514"
-    protocol = "tcp"
-    labels   = { job = "syslog_net" }
+    address       = "0.0.0.0:1514"
+    protocol      = "tcp"
+    syslog_format = "rfc5424"
+    labels        = { job = "syslog" }
   }
 
+  relabel_rules = loki.relabel.syslog.rules
+  forward_to    = [loki.process.syslog.receiver]
+}
+
+loki.source.syslog "syslog_rfc3164" {
+  listener {
+    address       = "0.0.0.0:1515"
+    protocol      = "udp"
+    syslog_format = "rfc3164"
+    labels        = { job = "syslog" }
+  }
+
+  listener {
+    address       = "0.0.0.0:1515"
+    protocol      = "tcp"
+    syslog_format = "rfc3164"
+    labels        = { job = "syslog" }
+  }
+
+  relabel_rules = loki.relabel.syslog.rules
+  forward_to    = [loki.process.syslog.receiver]
+}
+
+// -------------------------------------------------------------
+// 1b. PARSER DO QUE O SYSLOG NÃO ENTREGA SOZINHO
+// -------------------------------------------------------------
+// ⚠️ Este bloco substitui QUATRO `loki.process` que viviam no coletor
+// intermediário (`config-rsyslog.alloy.j2`), e a redução não é descuido —
+// três deles reconstruíam por expressão regular exatamente os campos que o
+// cabeçalho do syslog já carrega, porque lá a origem era ARQUIVO e o cabeçalho
+// tinha se perdido no caminho:
+//
+//   proxmox_pipeline  -> extraía host, service e level. Agora vêm do relabel.
+//   openwrt_pipeline  -> extraía facility, level e service. Idem.
+//   docker_pipeline   -> lia o console serial da VM do Swarm em
+//                        /var/log/vm/<host>.log. Esse caminho deixa de existir
+//                        junto com o coletor; log de contêiner já entra pelo
+//                        bloco 2, com rótulos melhores.
+//
+// Sobra o que é de verdade específico: extrair o tipo de consulta DNS das
+// linhas do unbound, que nenhum campo de syslog carrega.
+//
+// ⚠️ O que NÃO foi portado de propósito: o `stage.static_labels` que cravava
+// `level = "info"` em tudo que vinha do firewall. Era remendo para a origem
+// arquivo, onde não havia severidade nenhuma e o Grafana pintava todo NOERROR
+// do unbound como erro. Agora a severidade é a real, vinda do próprio syslog —
+// manter o remendo apagaria os erros de verdade.
+loki.process "syslog" {
   forward_to = [loki.write.default.receiver]
+
+  stage.match {
+    selector = `{service="unbound"}`
+
+    stage.regex {
+      expression = `(reply|query):\s+\S+\s+\S+\s+(?P<dns_type>A|AAAA|TXT|MX|CNAME|PTR)`
+    }
+
+    stage.labels {
+      values = {
+        dns_type = "dns_type",
+      }
+    }
+  }
 }
 
 // -------------------------------------------------------------
@@ -64,7 +176,10 @@ loki.write "default" {
   endpoint {
     url = "http://loki:3100/loki/api/v1/push"
   }
+  // ⚠️ A vírgula final não é estilo: sem ela o Alloy recusa o arquivo inteiro
+  // com `missing ',' in field list`. O arquivo versionado carregava esse
+  // defeito desde sempre e por isso nunca chegou a subir.
   external_labels = {
-    cluster = "homelab"
+    cluster = "homelab",
   }
 }
