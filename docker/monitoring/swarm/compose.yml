@@ -185,8 +185,13 @@ services:
       - /srv/containers/alloy/data:/var/lib/alloy/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
-      - "1514:1514/udp" # Remote Syslog UDP (OpenWrt, OPNsense, Proxmox, NAS)
-      - "1514:1514/tcp" # Remote Syslog TCP
+      # Duas portas, uma por FORMATO de syslog — ver o comentário do bloco 1
+      # em `config.alloy`. Misturar RFC5424 e RFC3164 no mesmo ouvinte faz o
+      # que não casa ser descartado sem erro.
+      - "1514:1514/udp" # RFC5424: OPNsense, Proxmox, OMV
+      - "1514:1514/tcp"
+      - "1515:1515/udp" # RFC3164: OpenWrt (o `logd` não fala 5424)
+      - "1515:1515/tcp"
     # `--disable-reporting`: mesmo motivo do Grafana acima — o Alloy também
     # reporta uso para `stats.grafana.org`, que a DNSBL bloqueia, e ele também
     # repete. Ver o comentário no serviço `grafana`.
@@ -200,8 +205,9 @@ services:
           memory: 256M
       restart_policy:
         condition: on-failure
-    # Só a overlay `monitoring`: nada aqui é roteado pelo Traefik. A porta 1514
-    # é publicada acima diretamente (syslog vem de fora da rede overlay).
+    # Só a overlay `monitoring`: nada aqui é roteado pelo Traefik. As portas de
+    # syslog são publicadas acima diretamente, porque o log vem de equipamento
+    # fora da rede overlay.
     networks:
       - monitoring
 
