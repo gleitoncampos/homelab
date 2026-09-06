@@ -248,6 +248,7 @@ checar", aplicada ao campo individual de um template de reconciliação.
 │   │   │   ├── gates_ordem_vlan.py  # Gates da ORDEM da migração de VLANs: (1) afirma que os asserts existem em 01-opnsense/02-openwrt e mantêm a forma, e que a fase do AP continua partida em --tags rede/wifi (com toda pre_task em `tags: always`); (2) renderiza e confere que o template cria uma interface por VLAN, DHCP só onde dhcp_enabled, Unbound em todas, e que cada `politica` vira as regras prometidas NA ORDEM certa. Os gates EFETIVOS são os asserts dos playbooks
 │   │   │   ├── gateway_metrics.py  # Métricas de gateway do OPNsense: agendamento desacoplado do config.xml (o config renderizado não pode mencionar o coletor), cron chamando o mesmo caminho que o playbook instala, e config e script concordando sobre `opnsense_gateway_groups` — uma fonte, dois consumidores (make gateway-metrics)
 │   │   │   ├── inventario_diretorio.py  # ⚠️ O Ansible ignora `.ini` POR PADRÃO ao varrer um diretório de inventário: `-i inventories/prod` pulava o `hosts.ini` real e lia o `hosts.ini.example`, entregando host de exemplo com endereço-placeholder. Afirma a forma da opção em `ansible.cfg` E prova o comportamento com um inventário sintético (make inventario-diretorio)
+│   │   │   ├── gates_cpu_pinning.py  # ⚠️ `affinity: 0` prende a VM a UM núcleo; o playbook o escrevia sem conferir quantos vCPUs a VM tem. Com quatro, isso não é pinning, é contenção — os quatro disputam o núcleo 0 e a lentidão não aponta para cá. Duas metades: afirma que as quatro tasks existem NA ORDEM (asserção depois da escrita seria inútil) e EXECUTA as expressões extraídas do playbook contra configurações sintéticas, provando que reprovam o caso ruim (make gates-cpu-pinning)
 │   │   │   ├── gates_identidade.py  # ⚠️ Renomeação silenciosa: `opnsense_hostname`/`openwrt_hostname` vinham de `| default()` e não existiam em group_vars — o apply renomearia firewall e AP sem aviso. Tirar o default NÃO basta: `10-defaults.yml` é versionado e sempre entrega valor, então o StrictUndefined nunca dispara. Confere as três peças: sem default no template, assert nos dois playbooks, e o valor versionado ainda terminando em `.example` (make gates-identidade)
 │   │   │   ├── fixtures/       # Variáveis de exemplo (RFC 5737, MAC de documentação IANA); isenção por ARQUIVO no gate, nunca por diretório
 │   │   │   ├── baseline/       # Render congelado da fase 0 — nunca regenerar
@@ -439,6 +440,14 @@ em `01-opnsense-setup.yml` e `02-openwrt-setup.yml` com a forma certa, e
 renderiza o config do OPNsense para provar que o template cria de fato uma
 interface por VLAN — sem essa segunda camada o asserto do playbook compararia
 contra `vlans` e passaria a mentir no dia em que o template parasse de emitir.
+
+Depois vem `gates-cpu-pinning`, que protege a VM do firewall de um defeito
+silencioso: o playbook do Proxmox escrevia `affinity: 0` — que prende a VM ao
+núcleo 0, UM núcleo físico — sem conferir quantos vCPUs ela tem. Numa VM com
+quatro, isso não é pinning, é contenção, e o sintoma é lentidão sem mensagem
+nenhuma apontando para a causa. O gate não se contenta em ver o `assert`
+escrito: ele **executa** as expressões extraídas do playbook contra
+configurações sintéticas de VM e confirma que o caso ruim reprova de verdade.
 
 ⚠️ Por último vem `inventario-diretorio`, que não é sobre template: prova que
 `-i <diretório>` lê o inventário REAL. O Ansible traz `.ini` na lista de

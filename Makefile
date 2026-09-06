@@ -27,7 +27,7 @@ PLAYBOOKS   := $(wildcard $(ANSIBLE_DIR)/playbooks/*.yml $(ANSIBLE_DIR)/playbook
         secrets links snapshot omv-fs discover clean render-opnsense render-monitoring \
         render-proxmox-ifaces render-openwrt-led render-openwrt-network \
         gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade \
-        gates-tailscale
+        gates-tailscale gates-cpu-pinning
 
 help: ## Lista os alvos
 	@echo "Alvos disponíveis:"
@@ -56,7 +56,7 @@ ssh-keys: ## Instala a chave gerada pelo bootstrap em todo host do inventário (
 test-bootstrap: ## Testa os renderizadores do bootstrap contra os consumidores reais
 	@python3 IaC/bootstrap/test_render.py
 
-check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade gates-tailscale ## Tudo que a CI roda
+check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade gates-tailscale gates-cpu-pinning ## Tudo que a CI roda
 	@echo
 	@echo "✓ check completo"
 
@@ -197,6 +197,9 @@ gates-identidade: ## Confere que o apply não pode renomear firewall e AP
 
 gates-tailscale: ## Confere que o apply não pode apagar a VPN de acesso remoto
 	@python3 $(ANSIBLE_DIR)/tests/gates_tailscale.py
+
+gates-cpu-pinning: ## Afirma que o pinning da VM do firewall recusa VM com mais de 1 vCPU
+	@python3 $(ANSIBLE_DIR)/tests/gates_cpu_pinning.py
 
 inventario-diretorio: ## Confere que `-i <dir>` lê o inventário real, e não o .example
 	@python3 $(ANSIBLE_DIR)/tests/inventario_diretorio.py

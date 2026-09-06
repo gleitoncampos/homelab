@@ -622,6 +622,51 @@
         path: "/etc/pve/qemu-server/{{ opnsense_vmid | default(100) }}.conf"
       register: opnsense_vm_conf
 
+    # ⚠️ `affinity: 0` prende a VM ao núcleo 0 — UM núcleo físico. Escrever essa
+    # linha numa VM com mais de um vCPU não é pinning, é contenção: os vCPUs
+    # passam a disputar o mesmo núcleo, e o sintoma é lentidão sem nenhuma
+    # mensagem que aponte para a causa. O alvo do Terraform declara `cores = 1`
+    # para esta VM justamente por isso, mas o Terraform pode não ter sido
+    # aplicado, ou alguém pode ter mexido pela interface do Proxmox.
+    #
+    # Por isso a task LÊ o que a VM realmente tem antes de escrever. O total de
+    # vCPUs é `sockets × cores`, e os dois campos são OMITIDOS do arquivo quando
+    # valem 1 — daí o `default([1], true)`, que trata tanto "ausente" quanto
+    # "regex não casou".
+    - name: Ler a configuração da VM do firewall
+      ansible.builtin.slurp:
+        src: "/etc/pve/qemu-server/{{ opnsense_vmid | default(100) }}.conf"
+      register: opnsense_vm_raw
+      when: opnsense_vm_conf.stat.exists
+
+    - name: Derivar quantos vCPUs a VM do firewall tem hoje
+      ansible.builtin.set_fact:
+        opnsense_vcpus: >-
+          {{ ((opnsense_vm_raw.content | b64decode
+               | regex_search('(?m)^cores:\s*(\d+)', '\1')
+               | default([1], true) | first | int)
+              *
+              (opnsense_vm_raw.content | b64decode
+               | regex_search('(?m)^sockets:\s*(\d+)', '\1')
+               | default([1], true) | first | int)) }}
+      when: opnsense_vm_conf.stat.exists
+
+    - name: Recusar o pinning quando a VM tem mais de um vCPU
+      ansible.builtin.assert:
+        that:
+          - (opnsense_vcpus | int) == 1
+        fail_msg: >-
+          A VM do firewall (VMID {{ opnsense_vmid | default(100) }}) declara
+          {{ opnsense_vcpus }} vCPUs, e este play escreveria `affinity: 0`, que
+          a prende a UM núcleo. Isso não é pinning, é contenção — os
+          {{ opnsense_vcpus }} vCPUs disputariam o núcleo 0 e a lentidão
+          resultante não apontaria para cá. O alvo do Terraform declara
+          `cores = 1` para esta VM: ou aplique-o, ou ajuste os vCPUs pela
+          interface do Proxmox, e só então rode este play de novo.
+        success_msg: >-
+          A VM do firewall tem 1 vCPU — `affinity: 0` é pinning de verdade.
+      when: opnsense_vm_conf.stat.exists
+
     - name: Configurar CPU Pinning na VM do OPNsense (1 núcleo dedicado - Core 0)
       ansible.builtin.lineinfile:
         path: "/etc/pve/qemu-server/{{ opnsense_vmid | default(100) }}.conf"
