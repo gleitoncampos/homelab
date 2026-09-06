@@ -121,8 +121,15 @@ loki.process "syslog" {
   stage.match {
     selector = `{service="unbound"}`
 
+    // ⚠️ A ordem da alternância é o que importa aqui, e ela estava errada no
+    // coletor antigo — de onde este parser foi portado. Alternância em regex
+    // casa da esquerda para a direita, então `A|AAAA` faz toda consulta AAAA
+    // ser rotulada como A. Medido em produção em 06/09/2026: o Loki só
+    // conhecia os valores `A` e `PTR`, e uma linha de resposta AAAA aparecia
+    // com `dns_type="A"`. Os tipos longos vêm primeiro, e o `\b` no fim impede
+    // que um prefixo case um tipo maior que ainda não esteja na lista.
     stage.regex {
-      expression = `(reply|query):\s+\S+\s+\S+\s+(?P<dns_type>A|AAAA|TXT|MX|CNAME|PTR)`
+      expression = `(reply|query):\s+\S+\s+\S+\s+(?P<dns_type>AAAA|CNAME|PTR|TXT|MX|A)\b`
     }
 
     stage.labels {
