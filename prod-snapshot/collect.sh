@@ -370,41 +370,6 @@ collect_opnsense() { # <target> <dir-do-host>
   unset -f opn_api
 }
 
-collect_rsyslog() { # <target> <dir-do-host>
-  local target="$1" hdir="$2"
-
-  # Coletor de syslog central. O desenho-alvo elimina este host: o Alloy passa a
-  # receber syslog direto na 1514. O que está aqui é a referência do que não
-  # pode se perder nessa troca — quem manda log, para qual arquivo, com qual
-  # rotação. É também o que responde se `remote-logs.conf`/`rotate_log.sh`
-  # (deletados do repositório) tinham função que o Alloy ainda não cobre.
-  fetch_path "$target" "/etc/rsyslog.conf" "$hdir" "etc/rsyslog.conf"
-  fetch_path "$target" "/etc/rsyslog.d"    "$hdir" "etc/rsyslog.d"
-  fetch_path "$target" "/etc/logrotate.d"  "$hdir" "etc/logrotate.d"
-
-  # Há um SEGUNDO Alloy aqui, fora do Swarm: binário em /usr/bin/alloy, unit
-  # systemd ativa, escutando na 12345. É quase certo que `local.config.alloy` e
-  # `container.config.alloy` (deletados do repositório como "arquitetura de log
-  # duplicada") descreviam este host e o do Swarm, respectivamente — ou seja,
-  # não eram código morto. Coletar antes de concluir qualquer coisa.
-  fetch_path "$target" "/etc/alloy" "$hdir" "etc/alloy"
-  capture_cmd "$target" "systemctl cat alloy 2>/dev/null" "$hdir/alloy.service" "alloy.service"
-
-  # Que árvore de log existe de fato — o config.alloy do repositório aponta para
-  # /var/log/rsyslog/{opnsense,openwrt,omv,pve}/*.log e ninguém tinha conferido
-  # se esses caminhos batem.
-  capture_cmd "$target" "$SUDO find /var/log -maxdepth 3 -type d 2>/dev/null | sort" \
-    "$hdir/log-tree.txt" "log-tree.txt"
-  capture_cmd "$target" "$SUDO du -sh /var/log/* 2>/dev/null | sort -h" \
-    "$hdir/log-sizes.txt" "log-sizes.txt"
-
-  # Em que portas ele escuta hoje (514/udp, 514/tcp, 1514?) — define para onde
-  # os dispositivos precisam ser reapontados na migração.
-  capture_cmd "$target" "$SUDO ss -lntup 2>/dev/null || $SUDO netstat -lntup 2>/dev/null" \
-    "$hdir/listening-ports.txt" "listening-ports.txt"
-  capture_cmd "$target" "$SUDO rsyslogd -N1 2>&1" "$hdir/rsyslogd-check.txt" "rsyslogd-check.txt"
-}
-
 collect_openwrt() { # <target> <dir-do-host>
   local target="$1" hdir="$2"
   # OpenWrt não tem Python nem sudo por padrão; o acesso já é root e o tar do
@@ -524,7 +489,6 @@ while IFS=$'\t' read -r host addr user groups; do
   has_group proxmox          "$groups" && collect_proxmox    "$target" "$hdir"
   has_group omv              "$groups" && collect_omv        "$target" "$hdir"
   has_group openwrt          "$groups" && collect_openwrt    "$target" "$hdir"
-  has_group rsyslog          "$groups" && collect_rsyslog    "$target" "$hdir"
   if has_group opnsense "$groups"; then OPN_ADDR="$addr"; collect_opnsense "$target" "$hdir"; fi
 done < <(read_inventory)
 
