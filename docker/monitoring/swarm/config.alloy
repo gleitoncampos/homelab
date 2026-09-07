@@ -53,19 +53,40 @@ loki.relabel "syslog" {
   }
 }
 
+// ⚠️ `use_incoming_timestamp` é assimétrico de propósito, e a assimetria é o
+// ponto: LIGADO só onde a origem é confiável.
+//
+// O padrão do Alloy é `false`, e nesse modo ele carimba a entrada com a hora em
+// que PROCESSA, não com a do evento. Funciona, e é imune a relógio errado na
+// origem — mas se houver enfileiramento na rede, o horário registrado é o da
+// chegada, e a correlação entre equipamentos passa a mentir sem avisar.
+//
+// Aqui, ligado: o RFC5424 traz timestamp completo, com fuso explícito e
+// microssegundo (`2026-09-06T21:21:40.815378-03:00`). É melhor que a hora de
+// recepção em todos os aspectos.
+//
+// No ouvinte RFC3164, abaixo, DESLIGADO — e não por descuido. Aquele formato
+// não carrega ano nem fuso. Com `use_incoming_timestamp = true` e
+// `rfc3164_default_to_current_year` no padrão `false`, o ano das entradas
+// vira ZERO. E mesmo corrigindo o ano, o fuso passaria a ser o do contêiner do
+// Alloy — que roda em UTC — enquanto o equipamento envia hora local. Ligar lá
+// exigiria as duas correções juntas mais o fuso do contêiner, para ganhar
+// resolução de segundo. Não compensa.
 loki.source.syslog "syslog_rfc5424" {
   listener {
-    address       = "0.0.0.0:1514"
-    protocol      = "udp"
-    syslog_format = "rfc5424"
-    labels        = { job = "syslog" }
+    address                = "0.0.0.0:1514"
+    protocol               = "udp"
+    syslog_format          = "rfc5424"
+    use_incoming_timestamp = true
+    labels                 = { job = "syslog" }
   }
 
   listener {
-    address       = "0.0.0.0:1514"
-    protocol      = "tcp"
-    syslog_format = "rfc5424"
-    labels        = { job = "syslog" }
+    address                = "0.0.0.0:1514"
+    protocol               = "tcp"
+    syslog_format          = "rfc5424"
+    use_incoming_timestamp = true
+    labels                 = { job = "syslog" }
   }
 
   relabel_rules = loki.relabel.syslog.rules
