@@ -240,6 +240,60 @@ if bloco_pve:
     if intrusas:
         print(f"     intrusas: {sorted(intrusas)}")
 
+# ----------------------------------------------------------------------
+# As portas publicadas pela stack e os ouvintes declarados na configuração do
+# Alloy são DOIS arquivos que precisam concordar, e nada os obrigava a isso.
+#
+# ⚠️ Os três modos de falha são todos silenciosos:
+#   - porta publicada sem ouvinte  -> o pacote chega ao host e morre ali;
+#   - ouvinte sem porta publicada  -> o processo escuta e ninguém alcança;
+#   - dois FORMATOS na mesma porta -> o ouvinte descarta o que não casa, sem
+#     erro em ponta nenhuma. Foi por isso que a coleta ficou dividida em duas
+#     portas, e é a divisão que este bloco protege.
+# ----------------------------------------------------------------------
+print("\n== portas da stack x ouvintes do Alloy ==")
+alloy_cfg = (SWARM / "config.alloy").read_text(encoding="utf-8")
+
+bloco_alloy = re.search(r"^  alloy:.*?(?=^  \S|\Z)", compose_txt, re.M | re.S)
+checar(bloco_alloy is not None, "serviço alloy presente no compose")
+
+publicadas = set()
+if bloco_alloy:
+    for porta, proto in re.findall(r'-\s+"(\d+):\d+/(tcp|udp)"', bloco_alloy.group(0)):
+        publicadas.add((porta, proto))
+
+# Cada `listener { ... }` traz address, protocol e syslog_format.
+ouvintes = set()
+formato_por_porta = {}
+for corpo in re.findall(r"listener\s*\{(.*?)\n  \}", alloy_cfg, re.S):
+    end = re.search(r'address\s*=\s*"[^"]*:(\d+)"', corpo)
+    proto = re.search(r'protocol\s*=\s*"(\w+)"', corpo)
+    fmt = re.search(r'syslog_format\s*=\s*"(\w+)"', corpo)
+    if not (end and proto):
+        continue
+    ouvintes.add((end.group(1), proto.group(1)))
+    if fmt:
+        formato_por_porta.setdefault(end.group(1), set()).add(fmt.group(1))
+
+checar(bool(publicadas), f"portas publicadas encontradas no compose ({len(publicadas)})")
+checar(bool(ouvintes), f"ouvintes encontrados no config.alloy ({len(ouvintes)})")
+
+sem_ouvinte = publicadas - ouvintes
+checar(not sem_ouvinte, "toda porta publicada tem ouvinte correspondente")
+if sem_ouvinte:
+    print(f"     publicadas e sem ouvinte: {sorted(sem_ouvinte)}")
+
+sem_porta = ouvintes - publicadas
+checar(not sem_porta, "todo ouvinte tem porta publicada")
+if sem_porta:
+    print(f"     escutando e não publicadas: {sorted(sem_porta)}")
+
+# ⚠️ O invariante que mais importa: uma porta, um formato.
+misturadas = {p: sorted(f) for p, f in formato_por_porta.items() if len(f) > 1}
+checar(not misturadas, f"cada porta declara UM formato de syslog só ({len(formato_por_porta)} portas)")
+if misturadas:
+    print(f"     portas com formato misturado: {misturadas}")
+
 # Todo bind mount de ARQUIVO sob /srv/containers precisa de um `dest`
 # correspondente em `monitoring_sidecar_files`. Diretório não entra: é criado
 # pela task de mkdir, ou é estado do serviço. Sem isto, um arquivo renomeado no

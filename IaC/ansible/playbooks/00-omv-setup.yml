@@ -605,6 +605,21 @@
         group: root
         mode: '0644'
 
+    # ⚠️ O alvo declara o encaminhamento em `rsyslog.d/50-remote-alloy-syslog.conf`.
+    # Qualquer linha de encaminhamento no `/etc/rsyslog.conf` principal é, por
+    # definição, divergência — e divergência aqui não é inofensiva: o host passa
+    # a enviar para DOIS destinos, e o antigo continua recebendo sem que nada
+    # acuse. Encontrado assim em produção em 06/09/2026, com
+    # `*.* @<coletor-antigo>:514` acrescentado à mão no fim do arquivo.
+    #
+    # Removida, e não preservada, pelo princípio do CLAUDE.md: configuração
+    # feita à mão que o IaC não parametriza DEVE ser perdida.
+    - name: Remover encaminhamento de syslog fora do arquivo que este play controla
+      ansible.builtin.lineinfile:
+        path: /etc/rsyslog.conf
+        regexp: '^\s*\*\.\*\s+@'
+        state: absent
+
     - name: Configurar Envio Centralizado de Logs Syslog do OMV para o Grafana Alloy (UDP 1514)
       ansible.builtin.copy:
         dest: /etc/rsyslog.d/50-remote-alloy-syslog.conf

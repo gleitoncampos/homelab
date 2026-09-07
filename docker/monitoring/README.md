@@ -31,11 +31,42 @@ Todo endereço vem de `hostvars[...].ansible_host` e todo rótulo `instance` vem
 do `inventory_hostname`. Acrescentar um alvo é acrescentar um host ao
 inventário, nunca um IP ao arquivo.
 
-`config-rsyslog.alloy.j2` é a configuração do **outro** Alloy — o que roda no
-CT central de rsyslog, fora do Swarm, lendo os arquivos que o rsyslog já
-gravou. Ele não está em `monitoring_sidecar_files` porque esse CT ainda não
-está no inventário; o template existe para que a configuração pare de viver só
-dentro do CT.
+### Syslog dos equipamentos: DUAS portas, e a divisão é por formato
+
+`config.alloy` abre **dois pares de ouvinte**, e não é redundância:
+
+| porta | formato | quem envia |
+|---|---|---|
+| 1514 | RFC5424 | firewall (nativo), hipervisores e NAS (rsyslog com `RSYSLOG_SyslogProtocol23Format`) |
+| 1515 | RFC3164 | ponto de acesso — o `logd` do OpenWrt não fala RFC5424 e não tem opção |
+
+⚠️ **`syslog_format` é declarado por ouvinte e não há autodetecção.** Dois
+formatos na mesma porta fazem o ouvinte descartar, em silêncio, tudo que não
+casa com o declarado. Nenhum erro, em ponta nenhuma.
+
+⚠️ **A fonte de syslog apaga todo rótulo com prefixo `__` antes de repassar.**
+Sem as `relabel_rules`, o destino recebe apenas o rótulo estático e o nome do
+equipamento, o serviço e a severidade morrem na saída do componente. O
+remapeamento é explícito, um rótulo por regra — o atalho `labelmap` traria
+junto identificadores que mudam a cada mensagem, e cada um vira uma série nova
+no índice.
+
+⚠️ **`use_incoming_timestamp` é assimétrico de propósito:** ligado no ouvinte
+RFC5424, onde a origem traz data completa e fuso; desligado no RFC3164, onde
+não há ano nem fuso e ligá-lo faria o ano das entradas virar zero. O motivo de
+cada lado está escrito dentro do `config.alloy`.
+
+⚠️ **As portas do compose e os ouvintes do `config.alloy` precisam concordar**,
+e `make render-monitoring` passou a afirmar isso — inclusive que cada porta
+declara um formato só. Os três modos de falha são silenciosos: porta sem
+ouvinte, ouvinte sem porta, e formato misturado.
+
+`config-rsyslog.alloy.j2` é a configuração de um coletor intermediário que está
+**sendo desligado**. Ele roda num contêiner fora do Swarm e lê arquivos que o
+rsyslog já gravou — desenho anterior a este, em que os equipamentos enviavam
+para ele em vez de enviarem direto para a stack. Os parsers que valiam a pena
+já foram portados para `config.alloy`; o arquivo continua aqui só até o
+contêiner ser destruído, e sai no mesmo commit que o destruir.
 
 ## De onde vem cada métrica — e o que NÃO está nesta pasta
 
