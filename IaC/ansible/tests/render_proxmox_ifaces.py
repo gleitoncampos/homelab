@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Protege o gate de sub-rede do Proxmox em DUAS camadas, rodável na CI sem host.
+"""Protege os gates de rede do Proxmox em TRÊS camadas, rodáveis na CI sem host.
 
 O gate EFETIVO contra o hipervisor é o `assert` do playbook
 `00-proxmox-setup.yml` (task "Abortar se o gateway e o endereço do nó caírem em
@@ -35,8 +35,20 @@ CAMADA 2 — render do template (verifica_render_template).
   As três provam o RENDER (o template não decide, só escreve o que recebe);
   a decisão de aprovar/reprovar é do assert do playbook, coberto pela Camada 1.
 
-Sai 0 só quando AS DUAS camadas passam. Sai != 0 se qualquer checagem falhar —
-inclusive se a Camada 1 não encontrar o assert ou suas condições no playbook.
+CAMADA 3 — a declaração da interface de WAN (verifica_gate_wan).
+  Outra variável, outro modo de falha. `proxmox_wan_interface` é consumida no
+  template com `| default('')`, então OMITI-LA põe toda interface física dos
+  facts na bridge vmbr0 — a NIC de WAN junto, no mesmo L2 da LAN. Hoje isso não
+  aparece porque o PCIe pass-through já removeu essa NIC dos facts e o vazio
+  acerta por acidente; a janela de perigo é a reconstrução, com o IOMMU ainda
+  desligado. O playbook passou a exigir DECLARAR, não preencher — `""` é
+  resposta válida e significa "o pass-through já levou a NIC". Esta camada
+  afirma que o assert existe, que exige `is defined`, que está condicionado ao
+  nó que hospeda a VM do firewall, e RENDERIZA os dois casos para mostrar a
+  consequência: declarada, a NIC fica fora da bridge; vazia, entra.
+
+Sai 0 só quando AS TRÊS camadas passam. Sai != 0 se qualquer checagem falhar —
+inclusive se a Camada 1 ou a 3 não encontrarem o assert que protegem.
 """
 import re
 import sys
@@ -56,6 +68,15 @@ PLAYBOOK = RAIZ / "IaC" / "ansible" / "playbooks" / "00-proxmox-setup.yml"
 # `name` exato da task do gate no playbook. Se o playbook renomear a task, este
 # teste FALHA — de propósito: é o ponto onde a Camada 1 se prende ao alvo real.
 GATE_TASK_NAME = "Abortar se o gateway e o endereço do nó caírem em /24 diferentes"
+
+# ⚠️ `proxmox_wan_interface` é a única variável desta família que falha CALADA:
+# o template a consome com `| default('')`, e omiti-la põe TODA interface
+# física dos facts na bridge vmbr0 — a NIC de WAN junto, no mesmo L2 da LAN.
+# Hoje o pass-through já removeu essa NIC dos facts e o vazio acerta por
+# acidente; a janela de perigo é a reconstrução, com IOMMU ainda desligado.
+# Por isso o playbook exige DECLARAR, não preencher: `""` é resposta válida.
+WAN_TASK_NAME = ("Exigir que proxmox_wan_interface seja declarada no nó "
+                 "que hospeda o firewall")
 
 # Faixas de documentação da RFC 5737 — nunca dado real.
 # ansible_interfaces é lista fictícia: o gate é sobre address/gateway/prefixo,
@@ -161,6 +182,22 @@ def _achar_task_do_gate(playbook_path):
     return None
 
 
+def _achar_task_por_nome(playbook_path, nome):
+    """Mesma varredura de `_achar_task_do_gate`, com o `name` parametrizado."""
+    docs = list(yaml.safe_load_all(playbook_path.read_text(encoding="utf-8")))
+    for doc in docs:
+        if not isinstance(doc, list):
+            continue
+        for play in doc:
+            if not isinstance(play, dict):
+                continue
+            for chave in ("pre_tasks", "tasks", "post_tasks", "handlers"):
+                for task in play.get(chave) or []:
+                    if isinstance(task, dict) and task.get("name") == nome:
+                        return task
+    return None
+
+
 def verifica_gate_no_playbook():
     """Prova que o assert de sub-rede AINDA existe e tem a forma certa.
 
@@ -252,9 +289,67 @@ def verifica_render_template():
                f"(veio {gw})")
 
 
+# ---------------------------------------------------------------------------
+# CAMADA 3 — a declaração da interface de WAN
+# ---------------------------------------------------------------------------
+def verifica_gate_wan():
+    """Prova as duas metades: o assert existe, e o dano que ele evita é real.
+
+    Metade 1 — o assert continua no playbook, exigindo `is defined` e condicionado
+    à presença da VM do firewall NESTE nó (que é onde a NIC de WAN é dedicada).
+
+    Metade 2 — o render demonstra a consequência. Com a variável declarada, a
+    NIC de WAN fica fora de `bridge-ports`; com ela vazia, entra. As duas
+    renderizações são o motivo de o assert existir: o template não erra, ele
+    obedece — quem decide é a declaração no inventário.
+    """
+    print("\n== CAMADA 3: declaração da interface de WAN ==")
+
+    task = _achar_task_por_nome(PLAYBOOK, WAN_TASK_NAME)
+    checar(task is not None, f"task encontrada pelo name: {WAN_TASK_NAME!r}")
+    if task is None:
+        return
+
+    bloco = task.get("ansible.builtin.assert") or task.get("assert")
+    checar(isinstance(bloco, dict) and "that" in bloco,
+           "a task é um ansible.builtin.assert com bloco `that:`")
+    if not (isinstance(bloco, dict) and "that" in bloco):
+        return
+
+    that = bloco["that"]
+    corpo = _normalizar(" ".join(str(i) for i in (that if isinstance(that, list) else [that])))
+    checar("proxmox_wan_interface is defined" in corpo,
+           "a condição exige `proxmox_wan_interface is defined`")
+
+    # ⚠️ `is defined` sem o `when` valeria para TODO nó Proxmox, inclusive os que
+    # não hospedam o firewall e nunca terão NIC dedicada — o assert viraria
+    # burocracia e a primeira reação seria afrouxá-lo.
+    quando = _normalizar(str(task.get("when", "")))
+    checar("opnsense_vm_conf.stat.exists" in quando,
+           "o assert só vale no nó que hospeda a VM do firewall (when)")
+
+    # Metade 2 — a consequência, renderizada.
+    facts = ["lo", "eth0", "eth1", "eth2", "vmbr0", "tap100i0"]
+    declarada = render({**FIXTURE_BOA, "ansible_interfaces": facts,
+                        "proxmox_wan_interface": "eth2"})
+    omitida = render({**FIXTURE_BOA, "ansible_interfaces": facts,
+                      "proxmox_wan_interface": ""})
+
+    def portas(texto):
+        m = re.search(r"^\s*bridge-ports\s+(.+)$", texto, re.M)
+        return m.group(1).split() if m else []
+
+    checar(portas(declarada) == ["eth0", "eth1"],
+           f"declarada: a NIC de WAN fica FORA da bridge (veio {portas(declarada)})")
+    checar("eth2" in portas(omitida),
+           f"vazia: a NIC de WAN ENTRA na bridge — o dano que o assert evita "
+           f"(veio {portas(omitida)})")
+
+
 def main():
     verifica_gate_no_playbook()
     verifica_render_template()
+    verifica_gate_wan()
 
     print()
     if falhas:

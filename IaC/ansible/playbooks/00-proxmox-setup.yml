@@ -693,6 +693,42 @@
         create: false
       when: opnsense_vm_conf.stat.exists
 
+    # ⚠️ `proxmox_wan_interface` é a única variável desta família que falha
+    # CALADA. As outras quatro (`proxmox_gateway_ip`, `backup_storage`,
+    # `proxmox_backup_share`, `proxmox_lan_prefix`) têm assert ou default
+    # documentado; esta é consumida em proxmox_interfaces.j2 com
+    # `| default('')`, e omiti-la faz TODA interface física dos facts entrar na
+    # bridge vmbr0 — a NIC de WAN junto.
+    #
+    # Hoje isso não aparece: o pass-through já está ativo, a NIC de WAN
+    # pertence ao vfio-pci e some dos facts, então a variável vazia acerta por
+    # acidente. A janela de perigo é a RECONSTRUÇÃO: host novo, IOMMU ainda
+    # desligado (o bloco logo abaixo é quem o liga), todas as NICs visíveis nos
+    # facts — e a WAN entra na mesma bridge L2 da LAN, sem erro nenhum.
+    #
+    # Por isso a exigência é DECLARAR, não preencher: `proxmox_wan_interface=""`
+    # é resposta válida e significa "o pass-through já levou a NIC". Omitir não
+    # é resposta, é silêncio. A condição usa a presença da VM do firewall neste
+    # host — o mesmo fato que o bloco de pinning acima já coletou —, porque é
+    # exatamente onde a NIC de WAN é dedicada.
+    - name: "Exigir que proxmox_wan_interface seja declarada no nó que hospeda o firewall"
+      ansible.builtin.assert:
+        that:
+          - proxmox_wan_interface is defined
+        fail_msg: >-
+          Este nó hospeda a VM do firewall e `proxmox_wan_interface` não está
+          declarada no inventário. Omitida, ela vale '' e o
+          proxmox_interfaces.j2 põe TODA interface física dos facts em
+          bridge-ports do vmbr0 — inclusive a NIC de WAN, que passa a
+          compartilhar o L2 da LAN sem que nada acuse. Declare o nome da
+          interface na linha do host em hosts.ini, ou declare
+          `proxmox_wan_interface=""` para afirmar que o PCIe pass-through já a
+          removeu dos facts.
+        success_msg: >-
+          WAN declarada: "{{ proxmox_wan_interface }}"
+          {{ '(vazia — pass-through já ativo)' if not proxmox_wan_interface else '' }}
+      when: opnsense_vm_conf.stat.exists
+
     # IOMMU entra AQUI, e não num passo manual de runbook. A task já existia
     # para o `pcie_aspm`, já escreve a mesma linha do GRUB e já notifica o
     # `update-grub` — deixar o IOMMU fora dela era omissão histórica, não
