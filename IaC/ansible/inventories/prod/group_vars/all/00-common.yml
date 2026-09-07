@@ -342,10 +342,32 @@ nut_sysconfdir: "/etc/nut"
 nut_monitor_user: "upsmon"
 nut_secondary_user: "upsmon-secondary"
 
-# ⚠️ Comandos de desligamento e de teste de bateria ficam DESABILITADOS. O
-# firmware desta família não religa sozinho depois de um desligamento
-# coordenado: volta só com o botão físico. Ligar isto é decisão consciente,
-# depois de leitura estável, nunca padrão.
+# ⚠️ Comandos de desligamento e de teste de bateria ficam DESABILITADOS.
+#
+# MEDIDO — o man page do driver `ragtech`, que acompanha o código-fonte
+# compilado em `nut_git_ref`, é explícito: o firmware do **Easy 2000 TI** NÃO
+# religa sozinho depois de um desligamento coordenado, e um desligamento
+# disparado pelo `upsmon` em bateria baixa deixa o nobreak, e tudo ligado
+# nele, sem energia até alguém apertar o botão físico.
+#
+# PRESUNÇÃO — o equipamento desta casa é um **Easy 1200 TI**, e o mesmo man
+# page diz que só o 2000 TI foi validado ponta a ponta; os outros 19 modelos
+# da tabela "share the same wire protocol and register layout and are expected
+# to work; please report results". Protocolo e registradores iguais é fato;
+# comportamento de firmware igual é inferência. E `shutdown.return` está
+# marcado como "implemented but not yet verified end-to-end".
+#
+# ⚠️ CONSEQUÊNCIA DE MANTER DESLIGADO, e ela não é neutra: com a flag ausente,
+# o `upsdrv_shutdown` REGISTRA a recusa e sai com erro em vez de cortar a
+# saída. Numa queda real isso significa que os hosts desligam pelo sistema
+# operacional e o nobreak segue alimentando até a bateria acabar sozinha — não
+# é desligamento coordenado, é desligamento do software com o hardware
+# drenando até o fim.
+#
+# Ligar isto é decisão consciente, depois de leitura estável, nunca padrão. E
+# o teste que resolve a dúvida não exige desligamento coordenado: puxar a
+# tomada do nobreak com os convidados já parados mede a autonomia real e
+# mostra se ele religa sozinho quando a energia volta.
 nut_allow_shutdown: false
 
 # --- Rotas do Traefik para back-ends que não são container -----------------

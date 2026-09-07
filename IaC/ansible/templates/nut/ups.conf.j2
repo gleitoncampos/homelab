@@ -10,7 +10,14 @@ maxretry = 3
   desc = "Nobreak do rack"
   pollinterval = 5
 {% if nut_allow_shutdown | bool %}
-  # ⚠️ Habilitado por decisão explícita (nut_allow_shutdown). O firmware desta
-  # família NÃO religa sozinho depois de um desligamento coordenado.
+  # ⚠️ Habilitado por decisão explícita (nut_allow_shutdown).
+  #
+  # MEDIDO: o man page do driver afirma que o firmware do Easy 2000 TI NÃO
+  # religa sozinho depois de um desligamento coordenado — volta só com o
+  # botão físico.
+  #
+  # PRESUNÇÃO: os demais modelos da família compartilham protocolo e
+  # registradores, mas só o 2000 TI foi validado ponta a ponta. Confira o
+  # comportamento do SEU modelo antes de contar com ele.
   allow_shutdown
 {% endif %}
