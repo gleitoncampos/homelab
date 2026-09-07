@@ -15,10 +15,66 @@
              <source_not>0</source_not>
              <source_port/>
              <destination_net>any</destination_net>
-@@ -1505,6 +1551,510 @@
+@@ -1505,6 +1551,566 @@
              <shaper2/>
              <description/>
            </rule>
++          <rule uuid="7f3a1c92-4d5e-4b8a-9c11-0a1b2c3d4e5f">
++            <enabled>1</enabled>
++            <statetype>keep</statetype>
++            <state-policy/>
++            <sequence>142</sequence>
++            <action>block</action>
++            <quick>1</quick>
++            <interfacenot>0</interfacenot>
++            <interface>opt1,wan</interface>
++            <direction>in</direction>
++            <ipprotocol>inet46</ipprotocol>
++            <protocol>tcp</protocol>
++            <icmptype/>
++            <icmp6type/>
++            <source_net>any</source_net>
++            <source_not>0</source_not>
++            <source_port/>
++            <destination_net>(self)</destination_net>
++            <destination_not>0</destination_not>
++            <destination_port>Management_Ports</destination_port>
++            <divert-to/>
++            <gateway/>
++            <replyto/>
++            <disablereplyto>0</disablereplyto>
++            <log>1</log>
++            <allowopts>0</allowopts>
++            <nosync>0</nosync>
++            <nopfsync>0</nopfsync>
++            <statetimeout/>
++            <udp-first/>
++            <udp-multiple/>
++            <udp-single/>
++            <max-src-nodes/>
++            <max-src-states/>
++            <max-src-conn/>
++            <max/>
++            <max-src-conn-rate/>
++            <max-src-conn-rates/>
++            <overload/>
++            <adaptivestart/>
++            <adaptiveend/>
++            <prio/>
++            <set-prio/>
++            <set-prio-low/>
++            <tag/>
++            <tagged/>
++            <tcpflags1/>
++            <tcpflags2/>
++            <tcpflags_any>0</tcpflags_any>
++            <categories/>
++            <sched/>
++            <tos/>
++            <shaper1/>
++            <shaper2/>
++            <description>Bloqueia gerencia do firewall vinda das WANs</description>
++          </rule>
 +          <rule uuid="658fe3d1-c5ea-4489-b876-1bdd376fa26f">
 +            <enabled>1</enabled>
 +            <statetype>keep</statetype>

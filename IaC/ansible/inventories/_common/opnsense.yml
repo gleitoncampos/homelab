@@ -1165,6 +1165,81 @@ opnsense_rules:
   # O plugin cria a `tailscale0` SEM regra nenhuma e o padrão do OPNsense é
   # bloquear: sem este registro o apply entrega um túnel mudo. Coberto pela
   # camada 4 de tests/gates_tailscale.py.
+  # ⚠️ REGRA NOVA em 07/09/2026, e ela NÃO veio da produção — foi decidida aqui.
+  # Motivo: `Management_Ports` só era usada na política de VLAN, para bloquear a
+  # GUI a partir de dentro. A borda ficava descoberta pelo lado de fora, apoiada
+  # apenas no deny padrão — que derruba o pacote sem contador, sem log e sem
+  # nome, então uma varredura de gerência é indistinguível de qualquer outro
+  # ruído de WAN.
+  #
+  # O efeito no tráfego é NULO: entrada já é negada por padrão. O que muda é o
+  # pacote passar a cair por uma regra nomeada, com contador próprio e log.
+  #
+  # `(self)` como destino, e não `any`, é deliberado: `any` numa interface de
+  # WAN também alcançaria host interno atrás de encaminhamento de porta, e
+  # bloquearia em silêncio um encaminhamento futuro em 80, 443, 8080 ou 8443.
+  # Com `(self)` a regra só fala do próprio firewall, que é o alvo pretendido.
+  # Não há risco de cortar a GUI pela LAN: a regra casa `in` nas interfaces de
+  # WAN, e tráfego da LAN entra por outra interface.
+  #
+  # `inet46` cobre IPv4 e IPv6 numa regra só. As de blocklist acima são `inet`
+  # porque as tabelas delas são de IPv4; aqui o critério é porta, e deixar o
+  # IPv6 de fora seria um buraco de propósito nenhum.
+  - uuid: 7f3a1c92-4d5e-4b8a-9c11-0a1b2c3d4e5f
+    enabled: '1'
+    statetype: keep
+    state-policy: ''
+    sequence: '142'
+    action: block
+    quick: '1'
+    interfacenot: '0'
+    interface: opt1,wan
+    direction: in
+    ipprotocol: inet46
+    protocol: tcp
+    icmptype: ''
+    icmp6type: ''
+    source_net: any
+    source_not: '0'
+    source_port: ''
+    destination_net: (self)
+    destination_not: '0'
+    destination_port: Management_Ports
+    divert-to: ''
+    gateway: ''
+    replyto: ''
+    disablereplyto: '0'
+    log: '1'
+    allowopts: '0'
+    nosync: '0'
+    nopfsync: '0'
+    statetimeout: ''
+    udp-first: ''
+    udp-multiple: ''
+    udp-single: ''
+    max-src-nodes: ''
+    max-src-states: ''
+    max-src-conn: ''
+    max: ''
+    max-src-conn-rate: ''
+    max-src-conn-rates: ''
+    overload: ''
+    adaptivestart: ''
+    adaptiveend: ''
+    prio: ''
+    set-prio: ''
+    set-prio-low: ''
+    tag: ''
+    tagged: ''
+    tcpflags1: ''
+    tcpflags2: ''
+    tcpflags_any: '0'
+    categories: ''
+    sched: ''
+    tos: ''
+    shaper1: ''
+    shaper2: ''
+    description: Bloqueia gerencia do firewall vinda das WANs
   - uuid: 658fe3d1-c5ea-4489-b876-1bdd376fa26f
     enabled: '1'
     statetype: keep
