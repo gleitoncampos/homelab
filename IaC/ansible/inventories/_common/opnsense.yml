@@ -385,22 +385,13 @@ opnsense_aliases:
     expire: ''
     categories: ''
     description: Spamhaus DROP List
-  - uuid: d4e98c23-00b5-5b3f-9234-223344556677
-    enabled: '1'
-    name: Spamhaus_EDROP
-    type: urltable
-    path_expression: ''
-    proto: ''
-    interface: ''
-    counters: '0'
-    updatefreq: '1'
-    content: https://www.spamhaus.org/drop/edrop.txt
-    password: ''
-    username: ''
-    authtype: ''
-    expire: ''
-    categories: ''
-    description: Spamhaus EDROP List
+  # Aqui existiu Spamhaus_EDROP (urltable, https://www.spamhaus.org/drop/edrop.txt).
+  # A lista foi FUNDIDA na DROP pelo próprio Spamhaus, e o endpoint continua no ar
+  # devolvendo 200 com 277 bytes de comentário e nenhum prefixo — medido em
+  # 07/09/2026. Uma urltable assim cria a tabela pf vazia e não reclama de nada:
+  # o 200 não denuncia, o alias aparece na GUI, e a regra que a citasse passaria
+  # a não casar mais nada. Removida em vez de mantida vazia. Se voltar a ser
+  # necessária, o conteúdo já está dentro de Spamhaus_DROP.
   - uuid: 5aeba382-8760-42dd-bea3-9dd5241fbe14
     enabled: '1'
     name: DNS_REDIRECT_BYPASS

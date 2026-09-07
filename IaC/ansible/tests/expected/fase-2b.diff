@@ -56,7 +56,31 @@
          <geoip>
            <url/>
          </geoip>
-@@ -1004,6 +1023,25 @@
+@@ -838,23 +857,6 @@
+             <categories/>
+             <description>Spamhaus DROP List</description>
+           </alias>
+-          <alias uuid="d4e98c23-00b5-5b3f-9234-223344556677">
+-            <enabled>1</enabled>
+-            <name>Spamhaus_EDROP</name>
+-            <type>urltable</type>
+-            <path_expression/>
+-            <proto/>
+-            <interface/>
+-            <counters>0</counters>
+-            <updatefreq>1</updatefreq>
+-            <content>https://www.spamhaus.org/drop/edrop.txt</content>
+-            <password/>
+-            <username/>
+-            <authtype/>
+-            <expire/>
+-            <categories/>
+-            <description>Spamhaus EDROP List</description>
+-          </alias>
+           <alias uuid="5aeba382-8760-42dd-bea3-9dd5241fbe14">
+             <enabled>1</enabled>
+             <name>DNS_REDIRECT_BYPASS</name>
+@@ -1004,6 +1006,25 @@
              <categories/>
              <description>Portas DNS-over-QUIC (UDP 853)</description>
            </alias>
@@ -82,7 +106,7 @@
            <alias uuid="d8c7b6a5-f4e3-2109-8765-443322110099">
              <enabled>1</enabled>
              <name>Management_Ports</name>
-@@ -1031,39 +1069,8 @@
+@@ -1031,39 +1052,8 @@
        <Category version="1.0.0">
          <categories/>
        </Category>
