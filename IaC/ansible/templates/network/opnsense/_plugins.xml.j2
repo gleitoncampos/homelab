@@ -658,7 +658,40 @@
           <transport>udp4</transport>
           <program>audit,configd.py,dhcpd,filterlog,firewall,dpinger,kernel,ppp,unbound,suricata</program>
           <level>debug,info,notice,warn,err,crit,alert,emerg</level>
-          <facility>kern,user,daemon,syslog,authpriv,console</facility>
+          {#-
+            ⚠️ Os três filtros são combinados com E, não com OU. O syslog-ng
+            gerado por este destino emite `filter(programa); filter(nivel);
+            filter(facilidade);` no mesmo bloco `log {}`, então um programa
+            listado acima ainda é DESCARTADO se a facilidade dele não estiver
+            aqui. Ler a lista de programas como "isto é encaminhado" é o erro:
+            ela é só uma das três condições.
+
+            Foi assim que o log do filtro de pacotes sumiu. `filterlog` estava
+            na lista de programas desde sempre, e mesmo assim o Loki não tinha
+            UMA linha dele. Medido em 07/09/2026: a consulta
+            `{service="filterlog"}` em 48h devolveu zero fluxos, enquanto
+            `{host=<firewall>}` devolvia normalmente, e nenhuma facilidade
+            local0..local7 aparecia no índice.
+
+            A causa está no PRI da própria mensagem. Uma linha crua de
+            /var/log/filter começa com `<134>`: 134 >> 3 = 16, que é `local0` —
+            ausente da lista antiga. O filtro de facilidade descartava tudo, em
+            silêncio, e o `program("filterlog")` acima dava a impressão
+            contrária.
+
+            As quatro acrescentadas foram MEDIDAS no equipamento, pelo PRI da
+            última linha de cada log, e não deduzidas:
+
+              local0 (16)  filterlog          PRI 134
+              local4 (20)  dpinger, firewall  PRI 165
+              local7 (23)  dhcpd              PRI 190
+              auth   (4)   audit/sshd         PRI 38   (a lista tinha
+                                                        `authpriv`, que é 10)
+
+            `suricata` continua na lista de programas sem facilidade conferida:
+            o IDS está desligado neste equipamento e não havia linha para medir.
+          -#}
+          <facility>kern,user,daemon,syslog,auth,authpriv,console,local0,local4,local7</facility>
           <hostname>{{ syslog_server_ip }}</hostname>
           <certificate/>
           <port>{{ syslog_server_port }}</port>

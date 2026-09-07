@@ -177,6 +177,15 @@
        <general>
          <enabled>1</enabled>
          <loglocal>1</loglocal>
+@@ -2096,7 +2741,7 @@
+           <transport>udp4</transport>
+           <program>audit,configd.py,dhcpd,filterlog,firewall,dpinger,kernel,ppp,unbound,suricata</program>
+           <level>debug,info,notice,warn,err,crit,alert,emerg</level>
+-          <facility>kern,user,daemon,syslog,authpriv,console</facility>
++          <facility>kern,user,daemon,syslog,auth,authpriv,console,local0,local4,local7</facility>
+           <hostname>192.0.2.10</hostname>
+           <certificate/>
+           <port>1514</port>
 @@ -2110,12 +2755,12 @@
        <queues/>
        <rules/>
