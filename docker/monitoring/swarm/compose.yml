@@ -212,6 +212,35 @@ services:
       - monitoring
 
 
+  nut_exporter:
+    image: ghcr.io/druggeri/nut_exporter:3.3.0
+    environment:
+      NUT_EXPORTER_SERVER: "${NUT_SERVER}"
+      # Sem usuário e sem senha: o `upsd` não exige autenticação para ler
+      # variável — `upsd.users` governa ação e papel do upsmon, não leitura.
+      # Verificado contra o nobreak real: as 14 variáveis vieram sem credencial.
+      # A lista padrão do exporter cobre só 7 variáveis e deixa de fora tudo o
+      # que o driver deste nobreak publica de saída e temperatura. Enumerada
+      # aqui de propósito: lista vazia exportaria toda variável numérica, o que
+      # muda a série temporal sem aviso quando o driver ganhar campos novos.
+      #
+      # ⚠️ UMA LINHA SÓ, sem escalar dobrado. Com `>-` o YAML dobra a quebra de
+      # linha em ESPAÇO, e o exporter compara o nome da variável com
+      # `sliceContains` literal, sem `TrimSpace`: " ups.load" não casa com
+      # "ups.load" e a métrica some sem erro nenhum, do exporter ao Grafana.
+      NUT_EXPORTER_VARIABLES: "battery.charge,battery.voltage,battery.voltage.nominal,input.voltage,input.voltage.nominal,output.voltage,output.voltage.nominal,output.current,output.frequency,ups.load,ups.power.nominal,ups.realpower.nominal,ups.temperature,ups.status"
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 64M
+      restart_policy:
+        condition: on-failure
+    networks:
+      - monitoring
+
 networks:
   traefik_public:
     external: true
