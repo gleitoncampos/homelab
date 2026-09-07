@@ -357,6 +357,16 @@ nut_secondary_user: "upsmon-secondary"
 # comportamento de firmware igual é inferência. E `shutdown.return` está
 # marcado como "implemented but not yet verified end-to-end".
 #
+# ⚠️ MEDIDO NO 1200 TI, e é OUTRO evento — não confundir com o de cima: quando
+# a bateria se esgota até zerar, o nobreak corta a saída sozinho e, ao voltar
+# a energia da rua, RELIGA por conta própria. Observado neste equipamento.
+#
+# São caminhos diferentes e o desfecho conhecido de um não vale para o outro:
+#   esgotamento da bateria  -> o nobreak corta e religa sozinho   (MEDIDO aqui)
+#   desligamento coordenado -> o 2000 TI fica desligado           (man page)
+# O comportamento do 1200 TI no caminho COORDENADO segue não verificado, e é
+# justamente esse que `nut_allow_shutdown` habilitaria.
+#
 # ⚠️ CONSEQUÊNCIA DE MANTER DESLIGADO, e ela não é neutra: com a flag ausente,
 # o `upsdrv_shutdown` REGISTRA a recusa e sai com erro em vez de cortar a
 # saída. Numa queda real isso significa que os hosts desligam pelo sistema
