@@ -249,6 +249,7 @@ checar", aplicada ao campo individual de um template de reconciliação.
 │   │   │   ├── gateway_metrics.py  # Métricas de gateway do OPNsense: agendamento desacoplado do config.xml (o config renderizado não pode mencionar o coletor), cron chamando o mesmo caminho que o playbook instala, e config e script concordando sobre `opnsense_gateway_groups` — uma fonte, dois consumidores (make gateway-metrics)
 │   │   │   ├── inventario_diretorio.py  # ⚠️ O Ansible ignora `.ini` POR PADRÃO ao varrer um diretório de inventário: `-i inventories/prod` pulava o `hosts.ini` real e lia o `hosts.ini.example`, entregando host de exemplo com endereço-placeholder. Afirma a forma da opção em `ansible.cfg` E prova o comportamento com um inventário sintético (make inventario-diretorio)
 │   │   │   ├── gates_cpu_pinning.py  # ⚠️ `affinity: 0` prende a VM a UM núcleo; o playbook o escrevia sem conferir quantos vCPUs a VM tem. Com quatro, isso não é pinning, é contenção — os quatro disputam o núcleo 0 e a lentidão não aponta para cá. Duas metades: afirma que as quatro tasks existem NA ORDEM (asserção depois da escrita seria inútil) e EXECUTA as expressões extraídas do playbook contra configurações sintéticas, provando que reprovam o caso ruim (make gates-cpu-pinning)
+│   │   │   ├── render_traefik.py  # ⚠️ O compose do Traefik monta /srv/containers/traefik/config como file provider desde sempre, e o repositório nunca teve conteúdo para ele: as rotas de hipervisor, NAS, firewall e AP existiam só no host, escritas à mão. Reconstruir do zero sobe um proxy com o diretório vazio — sem erro, porque file provider vazio é config válida — e derruba de uma vez o acesso a tudo que não é container. O gate central é o CONTROLE NEGATIVO do nome: a fixture dá ao firewall e ao AP um `*_hostname` DIFERENTE do nome de inventário, provando que a rota segue a variável que renomeia o equipamento (make render-traefik)
 │   │   │   ├── gates_identidade.py  # ⚠️ Renomeação silenciosa: `opnsense_hostname`/`openwrt_hostname` vinham de `| default()` e não existiam em group_vars — o apply renomearia firewall e AP sem aviso. Tirar o default NÃO basta: `10-defaults.yml` é versionado e sempre entrega valor, então o StrictUndefined nunca dispara. Confere as três peças: sem default no template, assert nos dois playbooks, e o valor versionado ainda terminando em `.example` (make gates-identidade)
 │   │   │   ├── fixtures/       # Variáveis de exemplo (RFC 5737, MAC de documentação IANA); isenção por ARQUIVO no gate, nunca por diretório
 │   │   │   ├── baseline/       # Render congelado da fase 0 — nunca regenerar
@@ -429,6 +430,7 @@ make check     # o mesmo conjunto que a CI roda
 divergiram de `_common/all.yml`), `links`, `test-bootstrap` e os três renders de
 template fora da caixa: `render-opnsense` (contra o baseline congelado da fase 0),
 `render-monitoring` (render da stack de monitoramento com 2 hosts por grupo) e
+`render-traefik` (as rotas do Traefik para back-ends fora do Swarm) e
 `render-proxmox-ifaces` (afirma que o assert de sub-rede do
 `00-proxmox-setup.yml` existe e mantém as 3 condições — apagar/descaracterizar o
 assert deixa o `make check` vermelho — e renderiza `proxmox_interfaces.j2`; o
@@ -448,6 +450,16 @@ quatro, isso não é pinning, é contenção, e o sintoma é lentidão sem mensa
 nenhuma apontando para a causa. O gate não se contenta em ver o `assert`
 escrito: ele **executa** as expressões extraídas do playbook contra
 configurações sintéticas de VM e confirma que o caso ruim reprova de verdade.
+
+Depois `render-traefik`, que fecha o mesmo tipo de buraco por outro lado: o
+bind mount das rotas de arquivo do Traefik existia no compose, o conteúdo
+nunca existiu no repositório. O gate renderiza o template e prova o vínculo
+que sustenta tudo: **o nome da rota sai da mesma variável que renomeia o
+equipamento**. A fixture dá ao firewall e ao AP um `*_hostname` diferente do
+nome de inventário — se o template voltar a usar o inventário, o gate fica
+vermelho. Sem isso, renomear o firewall pelo IaC deixaria a rota apontando
+para um `Host()` que ninguém atende, e o Traefik não reclama: regra que não
+casa nada é regra válida.
 
 E `validate-alloy`, que fecha um buraco de categoria: **a configuração do
 Alloy não é YAML**, então nenhum linter deste repositório a enxergava. O

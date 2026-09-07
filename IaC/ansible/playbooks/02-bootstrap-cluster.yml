@@ -48,7 +48,11 @@
   hosts: homelab_managers
   become: true
   vars:
-    docker_dir: "{{ playbook_dir }}/../../docker"
+    # ⚠️ TRÊS níveis: playbooks/ -> ansible/ -> IaC/ -> raiz do repositório.
+    # Com dois, isto resolvia para `IaC/docker`, que não existe — e a cópia do
+    # compose do Portainer abaixo falhava por arquivo inexistente. Passou
+    # despercebido porque a stack já estava no ar e ninguém reexecutou o play.
+    docker_dir: "{{ playbook_dir }}/../../../docker"
     portainer_url: "http://localhost:9000"
   pre_tasks:
     - name: Validar segredos do Vault exigidos por este play
@@ -115,6 +119,43 @@
 
     - name: Autenticar na API do Portainer
       ansible.builtin.include_tasks: "../tasks/portainer_login.yml"
+
+    # ⚠️ As rotas precisam existir ANTES de o Traefik subir. O file provider
+    # relê o diretório sozinho, mas subir com ele vazio publica um proxy sem
+    # nenhuma rota para equipamento — e é exatamente o estado que o
+    # repositório entregava até aqui, porque o bind mount existia no compose e
+    # o conteúdo, não.
+    - name: Recusar identidade de exemplo nas rotas do Traefik
+      ansible.builtin.assert:
+        that:
+          - not (hostvars[item].opnsense_hostname | default('') | string).endswith('.example')
+        fail_msg: >-
+          {{ item }} ainda está com a identidade de exemplo
+          ({{ hostvars[item].opnsense_hostname | default('(indefinido)') }}).
+          A rota do Traefik sairia com Host() apontando para um nome que
+          ninguém atende — regra que não casa nada é regra válida, e o Traefik
+          não reclama. Defina opnsense_hostname em group_vars/network/99-local.yml.
+      loop: "{{ groups['opnsense'] | default([]) }}"
+
+    - name: Recusar identidade de exemplo no ponto de acesso
+      ansible.builtin.assert:
+        that:
+          - not (hostvars[item].openwrt_hostname | default('') | string).endswith('.example')
+        fail_msg: >-
+          {{ item }} ainda está com a identidade de exemplo
+          ({{ hostvars[item].openwrt_hostname | default('(indefinido)') }}).
+      loop: "{{ groups['openwrt'] | default([]) }}"
+
+    - name: Renderizar as rotas do Traefik para back-ends fora do Swarm
+      ansible.builtin.template:
+        src: "{{ docker_dir }}/traefik/swarm/{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      loop: "{{ traefik_sidecar_files }}"
+      loop_control:
+        label: "{{ item.dest }}"
 
     - name: Subir a Stack do Traefik Ingress via Portainer (create-or-update)
       ansible.builtin.include_tasks: "../tasks/portainer_stack.yml"

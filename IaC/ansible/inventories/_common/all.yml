@@ -353,3 +353,24 @@ nut_secondary_user: "upsmon-secondary"
 # coordenado: volta só com o botão físico. Ligar isto é decisão consciente,
 # depois de leitura estável, nunca padrão.
 nut_allow_shutdown: false
+
+# --- Rotas do Traefik para back-ends que não são container -----------------
+#
+# O `compose.yml` do Traefik monta /srv/containers/traefik/config como file
+# provider desde sempre, mas o repositório nunca teve conteúdo para ele: as
+# rotas de hipervisor, NAS, firewall e AP existiam só no host, escritas à mão.
+# `docker/traefik/swarm/rotas.yml.j2` fecha isso derivando cada rota do
+# inventário — ver o cabeçalho do template para o porquê de cada escolha.
+traefik_certresolver: "cloudflare"
+traefik_porta_proxmox: 8006
+traefik_porta_omv: 80
+traefik_porta_openwrt: 80
+
+# Mesma forma do `monitoring_sidecar_files`: uma fonte para o playbook saber
+# o que renderizar, para onde e com que permissão.
+traefik_sidecar_files:
+  - src: "rotas.yml.j2"
+    dest: "/srv/containers/traefik/config/rotas.yml"
+    owner: "root"
+    group: "root"
+    mode: "0644"

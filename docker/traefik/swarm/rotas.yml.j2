@@ -1,0 +1,108 @@
+{#
+  Rotas do Traefik para back-ends que NÃO são container do Swarm.
+
+  Renderizado por playbooks/02-bootstrap-cluster.yml em
+  /srv/containers/traefik/config/rotas.yml — o diretório que o
+  `compose.yml` desta stack monta como `/config:ro` (file provider).
+
+  ⚠️ POR QUE ESTE ARQUIVO EXISTE. O bind mount sempre esteve no compose, mas o
+  repositório nunca teve conteúdo para ele e nenhum playbook o escrevia. Os
+  arquivos de rota existiam SÓ no host, escritos à mão. Uma reconstrução do
+  zero sobe o Traefik com o diretório vazio e derruba de uma vez o acesso a
+  tudo que não é container — hipervisores, NAS, firewall e AP — e derruba sem
+  erro nenhum: file provider com diretório vazio é configuração válida.
+
+  ⚠️ O NOME DA ROTA VEM DA MESMA VARIÁVEL QUE RENOMEIA O EQUIPAMENTO. Não é
+  detalhe de estilo. `opnsense_hostname` e `openwrt_hostname` são o que os
+  playbooks 01/02 de rede escrevem no equipamento; se a rota repetisse o nome
+  em literal, renomear o firewall pelo IaC trocaria o hostname e deixaria a
+  rota apontando para um Host() que ninguém mais atende — sem erro, porque
+  uma regra que não casa nada é uma regra válida. Hipervisor e NAS não têm
+  variável de identidade (nada no IaC escreve /etc/hostname neles), então
+  para eles a autoridade é o nome do host no inventário.
+
+  ⚠️ As duas variáveis de identidade vivem em group_vars/network/, que só é
+  visível para os hosts dos grupos opnsense/openwrt. Este template renderiza
+  no nó manager do Swarm, que não está em nenhum dos dois — por isso a leitura
+  é `hostvars[h].opnsense_hostname`, e não `opnsense_hostname` direto. A forma
+  curta renderiza "undefined" aqui e em lugar nenhum mais.
+
+  Rotas fora do inventário (o Syncthing de cada máquina roda em convidado
+  próprio, com endereço que o inventário não conhece) entram por
+  `traefik_rotas_extra`, no vault — mesma convenção de
+  `unbound_host_overrides_extra`. Endereço privado em arquivo rastreado de
+  repositório público é justamente o que o gate de segredo barra.
+#}
+{% set rotas = [] %}
+{% for h in groups['opnsense'] | default([]) %}
+{%   set _ = rotas.append({
+        'nome': hostvars[h].opnsense_hostname,
+        'url': 'https://' ~ hostvars[h].ansible_host,
+        'inseguro': true}) %}
+{% endfor %}
+{% for h in groups['openwrt'] | default([]) %}
+{%   set _ = rotas.append({
+        'nome': hostvars[h].openwrt_hostname,
+        'url': 'http://' ~ hostvars[h].ansible_host ~ ':' ~ traefik_porta_openwrt,
+        'inseguro': false}) %}
+{% endfor %}
+{% for h in groups['proxmox'] | default([]) %}
+{%   set _ = rotas.append({
+        'nome': h,
+        'url': 'https://' ~ hostvars[h].ansible_host ~ ':' ~ traefik_porta_proxmox,
+        'inseguro': true}) %}
+{% endfor %}
+{% for h in groups['omv'] | default([]) %}
+{%   set _ = rotas.append({
+        'nome': h,
+        'url': 'http://' ~ hostvars[h].ansible_host ~ ':' ~ traefik_porta_omv,
+        'inseguro': false}) %}
+{% endfor %}
+{% set rotas = rotas + (traefik_rotas_extra | default([])) %}
+{#- A chave do router não aceita ponto com o mesmo sentido que o Host(): um
+    nome com subdomínio (`sync.<maquina>`) troca o ponto por hífen no
+    identificador e continua com o ponto na regra. -#}
+---
+# GERADO POR docker/traefik/swarm/rotas.yml.j2 — NÃO EDITAR NO HOST.
+# Edição feita aqui é perdida na próxima execução do 02-bootstrap-cluster.yml.
+http:
+  routers:
+{% for r in rotas %}
+    {{ r.nome | replace('.', '-') }}:
+      rule: "Host(`{{ r.nome }}.{{ homelab_domain }}`)"
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: "{{ traefik_certresolver }}"
+      service: "{{ r.nome | replace('.', '-') }}"
+{% endfor %}
+
+  services:
+{% for r in rotas %}
+    {{ r.nome | replace('.', '-') }}:
+      loadBalancer:
+        servers:
+          - url: "{{ r.url }}"
+{% if r.inseguro %}
+        serversTransport: "{{ r.nome | replace('.', '-') }}"
+{% endif %}
+{% endfor %}
+{% if rotas | selectattr('inseguro') | list | length > 0 %}
+{#
+  O certificado que o hipervisor e o firewall apresentam é autoassinado: sem
+  isto o Traefik recusa o back-end com "x509: certificate signed by unknown
+  authority". O salto é interno e é o Traefik quem termina o TLS do cliente.
+
+  ⚠️ Este comentário fecha SEM o hífen de supressão. Com ele, o fechamento
+  comeria a indentação da linha seguinte e jogaria `serversTransports` para a
+  coluna 0, fora de `http:`. O Traefik aceitaria o arquivo e ignoraria a
+  chave — e o back-end voltaria a falhar por certificado, longe da causa.
+  (Um comentário Jinja também não pode CITAR a sequência de fechamento: ela
+  encerra o comentário ali mesmo e o resto do texto vira conteúdo.)
+#}
+  serversTransports:
+{% for r in rotas | selectattr('inseguro') %}
+    {{ r.nome | replace('.', '-') }}:
+      insecureSkipVerify: true
+{% endfor %}
+{% endif %}
