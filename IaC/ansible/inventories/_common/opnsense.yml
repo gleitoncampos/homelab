@@ -1107,7 +1107,14 @@ opnsense_rules:
     protocol: any
     icmptype: ''
     icmp6type: ''
-    source_net: crowdsec6_blacklists,crowdsec6_blocklists,crowdsec_blacklists,crowdsec_blocklists,Firehol_v1,Firehol_v2,Firehol_v3
+    # ⚠️ Spamhaus_DROP entrou aqui em 07/09/2026 e o motivo é que ela estava
+    # ÓRFÃ: o alias existia, baixava 1708 prefixos de hora em hora e nenhuma
+    # regra o citava — nem aqui, nem em produção. Blocklist que não bloqueia
+    # é custo de memória e de download sem contrapartida, e pior: passa a
+    # impressão de proteção. Esta é a regra certa para ela porque já é o
+    # bloqueio de entrada das DUAS WANs alimentado por lista de aliases —
+    # mesma natureza, mesmo campo, sem regra nova e sem mudar ordem.
+    source_net: crowdsec6_blacklists,crowdsec6_blocklists,crowdsec_blacklists,crowdsec_blocklists,Firehol_v1,Firehol_v2,Firehol_v3,Spamhaus_DROP
     source_not: '0'
     source_port: ''
     destination_net: any

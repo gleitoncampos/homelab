@@ -1,4 +1,4 @@
-@@ -1457,8 +1503,8 @@
+@@ -1457,13 +1503,13 @@
              <action>block</action>
              <quick>1</quick>
              <interfacenot>0</interfacenot>
@@ -9,6 +9,12 @@
              <ipprotocol>inet</ipprotocol>
              <protocol>any</protocol>
              <icmptype/>
+             <icmp6type/>
+-            <source_net>crowdsec6_blacklists,crowdsec6_blocklists,crowdsec_blacklists,crowdsec_blocklists,Firehol_v1,Firehol_v2,Firehol_v3</source_net>
++            <source_net>crowdsec6_blacklists,crowdsec6_blocklists,crowdsec_blacklists,crowdsec_blocklists,Firehol_v1,Firehol_v2,Firehol_v3,Spamhaus_DROP</source_net>
+             <source_not>0</source_not>
+             <source_port/>
+             <destination_net>any</destination_net>
 @@ -1505,6 +1551,510 @@
              <shaper2/>
              <description/>
