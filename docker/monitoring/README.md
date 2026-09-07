@@ -61,12 +61,17 @@ e `make render-monitoring` passou a afirmar isso — inclusive que cada porta
 declara um formato só. Os três modos de falha são silenciosos: porta sem
 ouvinte, ouvinte sem porta, e formato misturado.
 
-`config-rsyslog.alloy.j2` é a configuração de um coletor intermediário que está
-**sendo desligado**. Ele roda num contêiner fora do Swarm e lê arquivos que o
-rsyslog já gravou — desenho anterior a este, em que os equipamentos enviavam
-para ele em vez de enviarem direto para a stack. Os parsers que valiam a pena
-já foram portados para `config.alloy`; o arquivo continua aqui só até o
-contêiner ser destruído, e sai no mesmo commit que o destruir.
+Existiu aqui um `config-rsyslog.alloy.j2`, configuração de um coletor
+intermediário que rodava fora do Swarm e lia arquivos que o rsyslog já havia
+gravado. Os equipamentos enviavam para ele em vez de enviarem direto para a
+stack. Saiu em 07/09/2026: os cinco passaram a enviar direto, e um `tcpdump`
+de 40 s no coletor não viu um pacote sequer.
+
+⚠️ Três dos quatro parsers dele reconstruíam por expressão regular campos que
+o cabeçalho do syslog já carrega — só faziam sentido porque, ali, a origem era
+ARQUIVO e o cabeçalho havia se perdido no caminho. O quarto lia o console
+serial de uma VM, caminho que deixou de existir. O único que sobreviveu está
+em `config.alloy`, com o motivo escrito ao lado.
 
 ## De onde vem cada métrica — e o que NÃO está nesta pasta
 
@@ -360,7 +365,6 @@ para não disparar junto com toda queda de energia.
 - [Centralizar logs de aplicação no Grafana](https://dev.to/onticdani/how-to-centralize-and-visualize-your-app-logs-in-grafana-483c) · [logs de containers com Loki](https://dev.to/onticdani/centralize-and-visualize-docker-logs-in-grafana-with-loki-27c9)
 - [6 formas de melhorar dashboards de log](https://grafana.com/blog/2023/05/18/6-easy-ways-to-improve-your-log-dashboards-with-grafana-and-grafana-loki/)
 - [Monitorar OpenWrt com Prometheus](https://www.cloudrocket.at/posts/monitor-openwrt-nodes-with-prometheus/) · [com Grafana Cloud](https://grafana.com/blog/2021/02/09/how-i-monitor-my-openwrt-router-with-grafana-cloud-and-prometheus/)
-- [Rotação de log por tamanho no rsyslog](https://www.rsyslog.com/doc/tutorials/log_rotation_fix_size.html)
 - [Setup de referência de homelab](https://giuliomagnifico.blog/post/2024-07-08-home-setup-v5/#log-monitoring-in-grafana)
 - [NUT: manual do usuário](https://networkupstools.org/docs/user-manual.chunked/index.html) · [driver `ragtech`](https://networkupstools.org/docs/man/ragtech.html)
 - [nut_exporter (DRuggeri)](https://github.com/DRuggeri/nut_exporter)

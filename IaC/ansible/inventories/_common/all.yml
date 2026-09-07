@@ -306,12 +306,6 @@ monitoring_sidecar_files:
     group: "root"
     mode: "0644"
 
-# Endereço para onde o Alloy do CT central de rsyslog empurra log. Esse CT está
-# FORA da rede overlay do Swarm, então não resolve `tasks.monitoring_loki`:
-# precisa do endereço do nó manager na LAN. Consumido por
-# `config-rsyslog.alloy.j2`.
-loki_push_url: "http://{{ hostvars[groups['homelab_managers'][0]].ansible_host }}:3100/loki/api/v1/push"
-
 # ----------------------------------------------------------------------
 # Nobreak (NUT — Network UPS Tools)
 # ----------------------------------------------------------------------

@@ -3,14 +3,18 @@
 o que o gate não vê.
 
 Motivo: `yamllint` ignora `.j2` e `docker stack config` só olha `compose.yml`.
-Os dois templates desta stack são carregados — um vira a configuração do
-Prometheus, o outro a do Alloy do CT de rsyslog — e nada os validava. Um laço
-Jinja em volta de um bloco `local.file_match` chegou a gerar dois componentes
-com o mesmo rótulo, o que faz o Alloy recusar a configuração inteira; o
-defeito era invisível com um host por grupo, que é como a produção está hoje.
+Os templates desta stack são carregados e nada os validava. Um laço Jinja em
+volta de um bloco `local.file_match` chegou a gerar dois componentes com o
+mesmo rótulo, o que faz o Alloy recusar a configuração inteira; o defeito era
+invisível com um host por grupo, que é como a produção está hoje.
 
 Por isso a fixture tem DOIS hosts em cada grupo: é a única forma de o laço
 mostrar o problema.
+
+⚠️ O terceiro template validado aqui — `config-rsyslog.alloy.j2`, do coletor
+intermediário — saiu em 07/09/2026, junto com o próprio coletor: os cinco
+equipamentos passaram a enviar syslog direto para a stack, e um `tcpdump` de
+40 s no CT não viu um pacote sequer.
 """
 import re
 import sys
@@ -42,7 +46,6 @@ CONTEXTO = {
     "hostvars": {h: {"ansible_host": ip} for h, ip in ENDERECOS.items()},
     "prometheus_scrape_interval": "15s",
     "nut_ups_name": "nobreak",
-    "loki_push_url": "http://192.0.2.10:3100/loki/api/v1/push",
     "loki_retention_period": "720h",
     "loki_chunk_encoding": "gzip",
 }
@@ -120,25 +123,6 @@ try:
            "schema tsdb preservado")
 except yaml.YAMLError as exc:  # pragma: no cover
     checar(False, f"YAML válido ({exc})")
-
-print("\n== config-rsyslog.alloy.j2 ==")
-alloy_txt = render("config-rsyslog.alloy.j2")
-# Rótulo de componente do Alloy: `tipo.subtipo "rotulo" {`
-componentes = re.findall(r"^([a-z_.]+)\s+\"([^\"]+)\"\s*\{", alloy_txt, re.M)
-repetidos = {c for c in componentes if componentes.count(c) > 1}
-checar(not repetidos, f"nenhum componente com rótulo repetido ({len(componentes)} componentes)")
-if repetidos:
-    print(f"     repetidos: {sorted(repetidos)}")
-checar(
-    alloy_txt.count("/var/log/rsyslog/opnsense/*.log") == 1,
-    "glob do OPNsense aparece uma vez só (linha não é lida em dobro)",
-)
-for host in (GRUPOS["openwrt"] + GRUPOS["omv"] + GRUPOS["proxmox"]
-             + GRUPOS["homelab_managers"]):
-    checar(f"{host}.log" in alloy_txt, f"caminho de log de {host} presente")
-# Não se checa vírgula sobrando antes de `)`: a configuração que roda em
-# produção tem uma em `array.concat(...)` e o Alloy a aceita há meses. Uma
-# asserção que reprova o known-good é asserção errada.
 
 # ----------------------------------------------------------------------
 # O compose NÃO é template, mas depende de duas coisas que vivem fora dele:
