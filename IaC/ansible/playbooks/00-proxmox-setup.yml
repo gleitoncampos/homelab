@@ -221,7 +221,21 @@
     # repositório declarado no novo faz o apt avisar de entrada duplicada e,
     # pior, mantém no ar uma suíte que este playbook acha que já trocou. Por
     # isso o `sources.list` é esvaziado em vez de reescrito.
+    # ⚠️ TAG PRÓPRIA `repositorios`, mesmo motivo do `node_exporter` mais abaixo: o
+    # playbook completo reescreve `/etc/network/interfaces` e `storage.cfg`, e
+    # consertar declaração de repositório num hipervisor em produção não pode
+    # exigir esse risco junto. As pre_tasks deste play não levam `tags: always`,
+    # e a regra "tag não pode desarmar gate" continua valendo — os asserts do
+    # topo protegem a escrita de REDE e de STORAGE, e nenhuma das duas acontece
+    # sob esta tag.
+    #
+    # ⚠️ AS SEIS TASKS SÃO UMA UNIDADE, e a ordem entre elas não é livre. A
+    # primeira ESVAZIA o `sources.list`; as três últimas é que declaram os
+    # repositórios em deb822. Rodar a primeira sem as outras deixa o host SEM
+    # repositório Debian nenhum. Marcar só parte do bloco com a tag produz
+    # exatamente esse estado. Ao acrescentar task aqui, marque-a também.
     - name: Esvaziar o /etc/apt/sources.list legado (o formato válido no PVE 9 é deb822)
+      tags: repositorios
       ansible.builtin.copy:
         dest: /etc/apt/sources.list
         content: |
@@ -239,6 +253,7 @@
     # precisa de Python), atualizar o cache, instalar a biblioteca, e só então
     # declarar os repositórios em deb822.
     - name: Remover repositórios Enterprise e Ceph pagos, nos dois formatos
+      tags: repositorios
       ansible.builtin.file:
         path: "{{ item }}"
         state: absent
@@ -253,14 +268,26 @@
         - /etc/apt/sources.list.d/pve-enterprise.sources
         - /etc/apt/sources.list.d/ceph.sources
         - /etc/apt/sources.list.d/proxmox.sources
+        # Restos da instalação, e o motivo de entrarem aqui não é limpeza: eles
+        # continuam sendo repositório declarado. Hoje estão comentados nos dois
+        # nós, mas quem os comentou foi uma pessoa, não este playbook — e um
+        # `pvetest` reabilitado pela GUI passaria a servir pacote de teste para
+        # um hipervisor de produção sem que nada aqui percebesse. Governar é
+        # apagar, não conferir. Todos ainda citam `bookworm`, o que os torna
+        # inúteis mesmo se alguém os reabilitasse.
+        - /etc/apt/sources.list.d/pve-test.sources
+        - /etc/apt/sources.list.d/pvetest-for-beta.list
+        - /etc/apt/sources.list.d/pve-install-repo.list
 
     - name: Instalar a biblioteca que o módulo deb822_repository exige
+      tags: repositorios
       ansible.builtin.apt:
         name: python3-debian
         state: present
         update_cache: true
 
     - name: "Declarar os repositórios oficiais do Debian em deb822, suíte {{ proxmox_debian_suite }}"
+      tags: repositorios
       ansible.builtin.deb822_repository:
         name: debian
         types: [deb]
@@ -271,6 +298,7 @@
         state: present
 
     - name: "Declarar o repositório de segurança do Debian em deb822, suíte {{ proxmox_debian_suite }}"
+      tags: repositorios
       ansible.builtin.deb822_repository:
         name: debian-security
         types: [deb]
@@ -284,6 +312,7 @@
     # agora é `proxmox-archive-keyring.gpg`. Apontar para o antigo faz o apt
     # rejeitar a assinatura do repositório inteiro.
     - name: Adicionar o repositório PVE No-Subscription oficial (deb822)
+      tags: repositorios
       ansible.builtin.deb822_repository:
         name: pve-no-subscription
         types: [deb]
@@ -293,9 +322,21 @@
         signed_by: /usr/share/keyrings/proxmox-archive-keyring.gpg
         state: present
 
-    - name: Atualizar cache do APT no Proxmox
+    - name: Atualizar o cache do APT depois de trocar os repositórios
+      tags: repositorios
       ansible.builtin.apt:
         update_cache: true
+
+    # ⚠️ SEPARADO do bloco acima, e a separação é o ponto. Trocar a DECLARAÇÃO
+    # de um repositório e ATUALIZAR o sistema inteiro são decisões diferentes,
+    # com riscos diferentes: a primeira é reversível restaurando arquivo, a
+    # segunda sobe `pve-manager` e reinicia serviço num hipervisor com convidado
+    # em cima. Enquanto viajavam na mesma task, não havia como fazer só a
+    # primeira. Continua rodando na execução completa do playbook; o que muda é
+    # `--tags repositorios` não arrastar mais a atualização junto.
+    - name: Atualizar os pacotes do Proxmox para a última versão da suíte
+      tags: atualizar
+      ansible.builtin.apt:
         upgrade: dist
 
     # ⚠️ Até 26/08/2026 NENHUM dos dois hipervisores publicava métrica de

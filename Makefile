@@ -27,7 +27,8 @@ PLAYBOOKS   := $(wildcard $(ANSIBLE_DIR)/playbooks/*.yml $(ANSIBLE_DIR)/playbook
         secrets links snapshot omv-fs discover clean render-opnsense render-monitoring \
         render-proxmox-ifaces render-openwrt-led render-openwrt-network \
         gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade \
-        gates-tailscale gates-cpu-pinning validate-alloy render-traefik
+        gates-tailscale gates-cpu-pinning validate-alloy render-traefik \
+        gates-repositorios
 
 help: ## Lista os alvos
 	@echo "Alvos disponíveis:"
@@ -56,7 +57,7 @@ ssh-keys: ## Instala a chave gerada pelo bootstrap em todo host do inventário (
 test-bootstrap: ## Testa os renderizadores do bootstrap contra os consumidores reais
 	@python3 IaC/bootstrap/test_render.py
 
-check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade gates-tailscale gates-cpu-pinning validate-alloy render-traefik ## Tudo que a CI roda
+check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade gates-tailscale gates-cpu-pinning validate-alloy render-traefik gates-repositorios ## Tudo que a CI roda
 	@echo
 	@echo "✓ check completo"
 
@@ -203,6 +204,18 @@ gates-tailscale: ## Confere que o apply não pode apagar a VPN de acesso remoto
 
 gates-cpu-pinning: ## Afirma que o pinning da VM do firewall recusa VM com mais de 1 vCPU
 	@python3 $(ANSIBLE_DIR)/tests/gates_cpu_pinning.py
+
+# ⚠️ As tasks de repositório do Proxmox são uma UNIDADE: a primeira esvazia
+# /etc/apt/sources.list, as três últimas é que declaram os repositórios em
+# deb822. Como a seleção é por --tags, marcar só parte do bloco deixa o
+# hipervisor SEM repositório Debian nenhum — em silêncio, porque o playbook
+# reporta sucesso e o sintoma só aparece no próximo apt install.
+#
+# O gate também mantém `upgrade: dist` FORA da tag: trocar a declaração de um
+# repositório e atualizar o sistema inteiro têm riscos diferentes e não podem
+# voltar a viajar na mesma task.
+gates-repositorios: ## Afirma que a tag repositorios cobre o bloco inteiro e não arrasta o dist-upgrade
+	@python3 $(ANSIBLE_DIR)/tests/gates_repositorios.py
 
 # ⚠️ A configuração do Alloy NÃO é YAML e nenhum linter deste repositório a
 # enxergava. O arquivo versionado carregava um erro de sintaxe — uma vírgula
