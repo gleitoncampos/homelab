@@ -10,7 +10,7 @@
 +            <action>block</action>
 +            <quick>1</quick>
 +            <interfacenot>0</interfacenot>
-+            <interface>opt1</interface>
++            <interface>opt1,wan</interface>
 +            <direction>in</direction>
 +            <ipprotocol>inet</ipprotocol>
 +            <protocol>any</protocol>
@@ -56,7 +56,7 @@
 +            <tos/>
 +            <shaper1/>
 +            <shaper2/>
-+            <description>Silencia broadcast e multicast do segmento da segunda WAN</description>
++            <description>Silencia broadcast e multicast nas WANs</description>
 +          </rule>
            <rule uuid="cd96ee46-46bf-429f-ba88-7cc0c3d66e4d">
              <enabled>1</enabled>

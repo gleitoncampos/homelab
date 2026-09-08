@@ -193,18 +193,41 @@ else:
                       "seguinte ainda pode casar e logar o mesmo pacote")
     else:
         print(f"  OK a regra {r.get('sequence')} bloqueia o ruído sem logar")
-        # ORDEM: com `quick`, quem casa primeiro decide. Silêncio depois da
-        # blocklist é regra presente e inútil — o pior tipo de verde.
+        # ⚠️ ORDEM, e `sequence` sozinho NÃO a decide. Custou uma aplicação em
+        # produção descobrir: `FilterRuleField.php:getPriority()` devolve 200000
+        # para regra com mais de uma interface, e o comentário do método diz
+        # "first floating then groups and single interface rules are handled
+        # last". `sequence` só ordena DENTRO da mesma faixa.
+        #
+        # A regra de silêncio nasceu com uma interface e sequência 140, contra
+        # uma blocklist floating de sequência 141. Pelo número deveria vir
+        # antes; saiu depois, e com `quick` a blocklist casou primeiro. Gate
+        # verde afirmando a condição necessária e não a suficiente.
+        #
+        # Por isso as DUAS asserções: mesma faixa de prioridade E sequência
+        # menor. Uma sem a outra deixa passar o caso real que já aconteceu.
         bl = next((x for x in regras if x.get("uuid") == REGRA_BLOCKLIST), None)
-        if bl is not None and int(r.get("sequence", 0)) >= int(bl.get("sequence", 0)):
-            falhas.append(
-                f"a regra de silêncio ({r.get('sequence')}) vem DEPOIS da "
-                f"blocklist ({bl.get('sequence')}): com `quick` a blocklist casa "
-                "primeiro e o ruído continua no log"
-            )
+        if bl is None:
+            falhas.append("sem a regra de blocklist não dá para afirmar ordem")
         else:
-            print(f"  OK a regra de silêncio precede a blocklist "
-                  f"({r.get('sequence')} < {bl.get('sequence')})")
+            flut = lambda x: len(_campos(x, "interface")) > 1 or x.get("interfacenot") == "1"
+            if flut(r) != flut(bl):
+                falhas.append(
+                    f"a regra de silêncio e a blocklist estão em FAIXAS de "
+                    f"prioridade diferentes (floating: {flut(r)} contra "
+                    f"{flut(bl)}): `sequence` não as ordena entre si, e a de "
+                    "interface única é avaliada por último aconteça o que "
+                    "acontecer"
+                )
+            elif int(r.get("sequence", 0)) >= int(bl.get("sequence", 0)):
+                falhas.append(
+                    f"a regra de silêncio ({r.get('sequence')}) vem DEPOIS da "
+                    f"blocklist ({bl.get('sequence')}): com `quick` a blocklist "
+                    "casa primeiro e o ruído continua no log"
+                )
+            else:
+                print(f"  OK mesma faixa de prioridade (floating={flut(r)}) e "
+                      f"sequência menor ({r.get('sequence')} < {bl.get('sequence')})")
 
 print("\n== CAMADA 6: a chave de registro não é obrigatória ==")
 # Decisão de 03/09/2026: `preAuthKey` renderiza VAZIO por padrão. Uma auth key

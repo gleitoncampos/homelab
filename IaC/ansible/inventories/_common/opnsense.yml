@@ -1129,7 +1129,22 @@ opnsense_rules:
     action: block
     quick: '1'
     interfacenot: '0'
-    interface: opt1
+    # ⚠️ AS DUAS WANs, e NÃO por precisar das duas — por precisar ser FLOATING.
+    # `FilterRuleField.php:getPriority()` devolve 200000 quando a regra tem mais
+    # de uma interface, e o comentário do método diz: "first floating then
+    # groups and single interface rules are handled last". `sequence` só ordena
+    # DENTRO da mesma faixa.
+    #
+    # Consequência que custou uma aplicação em produção: esta regra nasceu com
+    # `interface: opt1` e `sequence: 140`, contra uma blocklist floating de
+    # sequência 141. Pelo número deveria vir antes; saiu como `@140` contra a
+    # `@102` da blocklist, e com `quick` a blocklist casou primeiro. A regra
+    # existia, estava certa, e não fazia nada.
+    #
+    # O efeito colateral de incluir a WAN de IP público é aceitável e medido:
+    # lá não há segmento compartilhado, e os 3.513 bloqueios diários daquela
+    # interface são todos unicast público — nenhum casa este alias.
+    interface: opt1,wan
     direction: in
     ipprotocol: inet
     protocol: any
@@ -1175,7 +1190,7 @@ opnsense_rules:
     tos: ''
     shaper1: ''
     shaper2: ''
-    description: Silencia broadcast e multicast do segmento da segunda WAN
+    description: Silencia broadcast e multicast nas WANs
   # ⚠️ `direction: in`, e NUNCA `any`. Esta regra casa por ORIGEM contra sete
   # blocklists públicas, e omitir a direção faz o `pf` avaliá-la nos dois
   # sentidos — inclusive na saída, onde a origem é o IP da própria WAN.
