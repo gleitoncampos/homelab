@@ -1,4 +1,67 @@
-@@ -1457,13 +1503,13 @@
+@@ -1449,6 +1513,62 @@
+             <shaper2/>
+             <description>Default allow LAN IPv6 to any rule</description>
+           </rule>
++          <rule uuid="4e81b6a2-5f0c-4d19-a37b-2c95e8410db6">
++            <enabled>1</enabled>
++            <statetype>keep</statetype>
++            <state-policy/>
++            <sequence>140</sequence>
++            <action>block</action>
++            <quick>1</quick>
++            <interfacenot>0</interfacenot>
++            <interface>opt1</interface>
++            <direction>in</direction>
++            <ipprotocol>inet</ipprotocol>
++            <protocol>any</protocol>
++            <icmptype/>
++            <icmp6type/>
++            <source_net>any</source_net>
++            <source_not>0</source_not>
++            <source_port/>
++            <destination_net>BROADCAST_E_MULTICAST</destination_net>
++            <destination_not>0</destination_not>
++            <destination_port/>
++            <divert-to/>
++            <gateway/>
++            <replyto/>
++            <disablereplyto>0</disablereplyto>
++            <log>0</log>
++            <allowopts>0</allowopts>
++            <nosync>0</nosync>
++            <nopfsync>0</nopfsync>
++            <statetimeout/>
++            <udp-first/>
++            <udp-multiple/>
++            <udp-single/>
++            <max-src-nodes/>
++            <max-src-states/>
++            <max-src-conn/>
++            <max/>
++            <max-src-conn-rate/>
++            <max-src-conn-rates/>
++            <overload/>
++            <adaptivestart/>
++            <adaptiveend/>
++            <prio/>
++            <set-prio/>
++            <set-prio-low/>
++            <tag/>
++            <tagged/>
++            <tcpflags1/>
++            <tcpflags2/>
++            <tcpflags_any>0</tcpflags_any>
++            <categories/>
++            <sched/>
++            <tos/>
++            <shaper1/>
++            <shaper2/>
++            <description>Silencia broadcast e multicast do segmento da segunda WAN</description>
++          </rule>
+           <rule uuid="cd96ee46-46bf-429f-ba88-7cc0c3d66e4d">
+             <enabled>1</enabled>
+             <statetype>keep</statetype>
+@@ -1457,13 +1577,13 @@
              <action>block</action>
              <quick>1</quick>
              <interfacenot>0</interfacenot>
@@ -15,7 +78,7 @@
              <source_not>0</source_not>
              <source_port/>
              <destination_net>any</destination_net>
-@@ -1505,6 +1551,566 @@
+@@ -1505,6 +1625,566 @@
              <shaper2/>
              <description/>
            </rule>

@@ -555,6 +555,39 @@ opnsense_aliases:
   # Não reaproveita `opnsense_unbound_privateaddress`: aquela lista existe para
   # a proteção contra rebind do Unbound e carrega faixas de documentação,
   # loopback e IPv6 que não têm o que fazer numa regra de filtro.
+  # ⚠️ Destinos de RUÍDO de segmento compartilhado, e o ponto é que eles se
+  # definem pelo DESTINO, não pela origem. Medido em 07/09/2026 na WAN que está
+  # atrás do NAT do provedor: 908 de 1.012 bloqueios em 21 horas eram broadcast
+  # e multicast de outros assinantes no mesmo segmento — 607 de IGMP para
+  # 224.0.0.1, 201 de broadcast, 12 de SSDP.
+  #
+  # Isso NÃO é problema de blocklist: sem ela o tráfego cairia no deny padrão,
+  # que também loga. Por isso a resposta é uma regra de silêncio por destino, e
+  # não mexer no conteúdo de lista nenhuma.
+  #
+  # Só constantes universais aqui: `224.0.0.0/4` é todo o espaço multicast
+  # (cobre 224.0.0.1 e 239.255.255.250) e `255.255.255.255` é o broadcast
+  # limitado. O broadcast DIRIGIDO da sub-rede (`x.x.x.255`) fica de fora de
+  # propósito — depende do endereçamento do provedor, que é topologia e não
+  # entra em arquivo versionado.
+  - uuid: 9c4d2e77-1a58-4b63-90fe-6d8b3f240a15
+    enabled: '1'
+    name: BROADCAST_E_MULTICAST
+    type: network
+    path_expression: ''
+    proto: ''
+    interface: ''
+    counters: '1'
+    updatefreq: ''
+    content: '224.0.0.0/4
+
+      255.255.255.255/32'
+    password: ''
+    username: ''
+    authtype: ''
+    expire: ''
+    categories: ''
+    description: Destinos de broadcast e multicast (ruido de segmento)
   - uuid: c4f1a8e2-6b30-4d57-9a1c-7e05d2b83f41
     enabled: '1'
     name: REDES_PRIVADAS
@@ -1072,6 +1105,77 @@ opnsense_rules:
     shaper1: ''
     shaper2: ''
     description: Default allow LAN IPv6 to any rule
+  # ⚠️ REGRA DE SILÊNCIO, e ela vem ANTES da blocklist de propósito. `quick: 1`
+  # faz a primeira que casar decidir, então esta precede a de sequência 141.
+  #
+  # Ela NÃO permite nada: bloqueia igual à seguinte. A única diferença é
+  # `log: 0`. O que se ganha é parar de escrever 908 linhas por dia sobre
+  # broadcast e multicast de vizinho de segmento — ruído que existiria mesmo
+  # sem blocklist nenhuma, porque o deny padrão do OPNsense também loga.
+  #
+  # ⚠️ NÃO confundir com liberar a faixa privada. A tentação, ao ver
+  # `Firehol_v1` bloqueando o roteador do provedor, é abrir a faixa privada na
+  # WAN — o que passaria a aceitar tráfego não solicitado dos OUTROS assinantes
+  # do mesmo segmento. Aqui nada é aceito; só se deixa de anotar.
+  #
+  # Fica de fora, e continua logado: o unicast para o endereço desta WAN. São
+  # ~91 pacotes/dia, incluindo tentativa de conexão direta do Tailscale na
+  # 41641. Bloquear é o certo (entrada não solicitada), mas ver é útil.
+  - uuid: 4e81b6a2-5f0c-4d19-a37b-2c95e8410db6
+    enabled: '1'
+    statetype: keep
+    state-policy: ''
+    sequence: '140'
+    action: block
+    quick: '1'
+    interfacenot: '0'
+    interface: opt1
+    direction: in
+    ipprotocol: inet
+    protocol: any
+    icmptype: ''
+    icmp6type: ''
+    source_net: any
+    source_not: '0'
+    source_port: ''
+    destination_net: BROADCAST_E_MULTICAST
+    destination_not: '0'
+    destination_port: ''
+    divert-to: ''
+    gateway: ''
+    replyto: ''
+    disablereplyto: '0'
+    log: '0'
+    allowopts: '0'
+    nosync: '0'
+    nopfsync: '0'
+    statetimeout: ''
+    udp-first: ''
+    udp-multiple: ''
+    udp-single: ''
+    max-src-nodes: ''
+    max-src-states: ''
+    max-src-conn: ''
+    max: ''
+    max-src-conn-rate: ''
+    max-src-conn-rates: ''
+    overload: ''
+    adaptivestart: ''
+    adaptiveend: ''
+    prio: ''
+    set-prio: ''
+    set-prio-low: ''
+    tag: ''
+    tagged: ''
+    tcpflags1: ''
+    tcpflags2: ''
+    tcpflags_any: '0'
+    categories: ''
+    sched: ''
+    tos: ''
+    shaper1: ''
+    shaper2: ''
+    description: Silencia broadcast e multicast do segmento da segunda WAN
   # ⚠️ `direction: in`, e NUNCA `any`. Esta regra casa por ORIGEM contra sete
   # blocklists públicas, e omitir a direção faz o `pf` avaliá-la nos dois
   # sentidos — inclusive na saída, onde a origem é o IP da própria WAN.

@@ -31,7 +31,21 @@ CAMADA 5 — o bloqueio de blocklist cobre as DUAS WANs.
   de IP em blocklist. Corrigido na produção em 03/09/2026; sem esta camada, o
   apply devolve para `wan` e reabre o buraco sem aviso.
 
-Sai 0 só quando as cinco passam.
+CAMADA 5-B — o ruído da WAN atrás de NAT é SILENCIADO, nunca LIBERADO.
+  A segunda WAN está atrás do NAT do provedor e divide o segmento com outros
+  assinantes. Medido em 07/09/2026: 1.012 bloqueios em 21 horas, e 908 deles
+  eram broadcast e multicast de vizinho — 607 de IGMP, 201 de broadcast, 12 de
+  SSDP. Ruído que existiria mesmo sem blocklist, porque o deny padrão do
+  OPNsense também loga.
+
+  ⚠️ A tentação, ao ver `Firehol_v1` bloqueando o roteador do provedor, é
+  LIBERAR a faixa privada naquela interface. Isso passaria a aceitar tráfego
+  não solicitado dos outros assinantes do segmento — troca ruído de log por
+  buraco de firewall. Esta camada existe para impedir exatamente isso: a regra
+  que trata o ruído tem de ser `block` com `log: 0`, e tem de vir ANTES da
+  blocklist, porque com `quick` a primeira que casa decide.
+
+Sai 0 só quando as seis passam.
 """
 import sys
 from pathlib import Path
@@ -48,6 +62,9 @@ PARTIAL = TEMPLATES / "_tailscale.xml.j2"
 SKELETON = TEMPLATES / "config.xml.j2"
 INCLUDE = "{% include '_tailscale.xml.j2' %}"
 REGRA_BLOCKLIST = "cd96ee46-46bf-429f-ba88-7cc0c3d66e4d"
+# A WAN que está atrás do NAT do provedor, e o alias de destino do ruído.
+WAN_ATRAS_DE_NAT = "opt1"
+ALIAS_RUIDO = "BROADCAST_E_MULTICAST"
 
 falhas = []
 dados = yaml.safe_load(COMUM.read_text(encoding="utf-8"))
@@ -131,6 +148,63 @@ else:
             f"a regra de blocklist cobre só {sorted(ifaces)}: a segunda WAN "
             "voltaria a receber tráfego de IP em blocklist"
         )
+
+print("\n== CAMADA 5-B: o ruído é silenciado, não liberado ==")
+
+def _campos(regra, campo):
+    return {x.strip() for x in str(regra.get(campo, "")).split(",")}
+
+# ⚠️ Varre TODAS as regras, não só a que conhecemos: proteger uma regra nomeada
+# deixaria passar uma regra NOVA que cometesse o mesmo erro.
+liberadoras = [r.get("sequence", r.get("uuid", "?")) for r in regras
+               if r.get("action") == "pass"
+               and WAN_ATRAS_DE_NAT in _campos(r, "interface")
+               and r.get("direction") == "in"]
+if liberadoras:
+    falhas.append(
+        f"regra(s) {liberadoras} LIBERAM entrada em `{WAN_ATRAS_DE_NAT}`: aquela "
+        "WAN divide segmento com outros assinantes do provedor, e permitir ali "
+        "aceita tráfego não solicitado deles"
+    )
+else:
+    print(f"  OK nenhuma regra libera entrada em `{WAN_ATRAS_DE_NAT}`")
+
+silencio = [r for r in regras
+            if ALIAS_RUIDO in _campos(r, "destination_net")
+            and WAN_ATRAS_DE_NAT in _campos(r, "interface")]
+if not silencio:
+    falhas.append(
+        f"nenhuma regra usa `{ALIAS_RUIDO}` como destino em `{WAN_ATRAS_DE_NAT}`: "
+        "o ruído de broadcast e multicast do segmento voltaria para o log"
+    )
+elif len(silencio) > 1:
+    falhas.append(f"mais de uma regra de silêncio para `{ALIAS_RUIDO}`: "
+                  f"{[r.get('sequence') for r in silencio]}")
+else:
+    r = silencio[0]
+    if r.get("action") != "block":
+        falhas.append(f"a regra de silêncio é `{r.get('action')}`, não `block`: "
+                      "silenciar o ruído nunca pode virar liberar o ruído")
+    elif str(r.get("log")) != "0":
+        falhas.append("a regra de silêncio está com `log` ligado: ela existe "
+                      "justamente para não escrever essas linhas")
+    elif r.get("quick") != "1":
+        falhas.append("a regra de silêncio não é `quick`: sem isso a blocklist "
+                      "seguinte ainda pode casar e logar o mesmo pacote")
+    else:
+        print(f"  OK a regra {r.get('sequence')} bloqueia o ruído sem logar")
+        # ORDEM: com `quick`, quem casa primeiro decide. Silêncio depois da
+        # blocklist é regra presente e inútil — o pior tipo de verde.
+        bl = next((x for x in regras if x.get("uuid") == REGRA_BLOCKLIST), None)
+        if bl is not None and int(r.get("sequence", 0)) >= int(bl.get("sequence", 0)):
+            falhas.append(
+                f"a regra de silêncio ({r.get('sequence')}) vem DEPOIS da "
+                f"blocklist ({bl.get('sequence')}): com `quick` a blocklist casa "
+                "primeiro e o ruído continua no log"
+            )
+        else:
+            print(f"  OK a regra de silêncio precede a blocklist "
+                  f"({r.get('sequence')} < {bl.get('sequence')})")
 
 print("\n== CAMADA 6: a chave de registro não é obrigatória ==")
 # Decisão de 03/09/2026: `preAuthKey` renderiza VAZIO por padrão. Uma auth key

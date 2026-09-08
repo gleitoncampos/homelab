@@ -1,4 +1,4 @@
-@@ -1281,6 +1271,62 @@
+@@ -1281,6 +1289,62 @@
              <shaper2/>
              <description>Bloqueio Global de Conexao para IPs de Servidores DoH Conhecidos</description>
            </rule>

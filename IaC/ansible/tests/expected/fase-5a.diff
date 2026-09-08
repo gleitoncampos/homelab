@@ -1,4 +1,4 @@
-@@ -1524,7 +2130,7 @@
+@@ -1524,7 +2204,7 @@
        <activeTimeout>1800</activeTimeout>
        <inactiveTimeout>15</inactiveTimeout>
      </Netflow>
@@ -7,7 +7,7 @@
        <rules/>
        <policies/>
        <userDefinedRules/>
-@@ -1780,7 +2386,7 @@
+@@ -1780,7 +2460,7 @@
        <loopbacks version="1.0.0"/>
        <neighbors version="1.0.0"/>
        <vxlans version="1.0.2"/>
@@ -16,7 +16,7 @@
          <disablechecksumoffloading>1</disablechecksumoffloading>
          <disablesegmentationoffloading>1</disablesegmentationoffloading>
          <disablelargereceiveoffloading>1</disablelargereceiveoffloading>
-@@ -1800,7 +2406,7 @@
+@@ -1800,7 +2480,7 @@
            <http_port>8000</http_port>
          </general>
        </ctrl_agent>
@@ -25,7 +25,7 @@
          <general>
            <enabled>0</enabled>
            <manual_config>0</manual_config>
-@@ -1831,7 +2437,7 @@
+@@ -1831,7 +2511,7 @@
          <options/>
          <ha_peers/>
        </dhcp4>
@@ -34,7 +34,7 @@
          <general>
            <enabled>0</enabled>
            <manual_config>0</manual_config>
-@@ -1862,7 +2468,7 @@
+@@ -1862,7 +2542,7 @@
          <pd_pools/>
          <ha_peers/>
        </dhcp6>
@@ -43,7 +43,7 @@
          <general>
            <enabled>0</enabled>
            <manual_config>0</manual_config>
-@@ -1871,9 +2477,9 @@
+@@ -1871,9 +2551,9 @@
          </general>
        </ddns>
      </Kea>
@@ -55,7 +55,7 @@
          <interval>120</interval>
          <startdelay>120</startdelay>
          <mailserver>127.0.0.1</mailserver>
-@@ -2055,7 +2661,7 @@
+@@ -2055,7 +2735,7 @@
          <path/>
        </test>
      </monit>
@@ -64,7 +64,7 @@
        <gateway_item uuid="f42ac827-3c2e-4237-998d-603930653b98">
          <disabled>0</disabled>
          <name>WAN_GW</name>
-@@ -2065,25 +2671,103 @@
+@@ -2065,25 +2745,103 @@
          <gateway/>
          <defaultgw>1</defaultgw>
          <fargw>0</fargw>
@@ -96,13 +96,20 @@
 +        <defaultgw>0</defaultgw>
 +        <fargw>0</fargw>
 +        <monitor_disable>0</monitor_disable>
-+        <monitor_noroute>0</monitor_noroute>
+         <monitor_noroute>0</monitor_noroute>
+-        <monitor_killstates>0</monitor_killstates>
 +        <monitor_killstates>1</monitor_killstates>
-+        <monitor_killstates_priority>0</monitor_killstates_priority>
+         <monitor_killstates_priority>0</monitor_killstates_priority>
+-        <monitor/>
 +        <monitor>8.8.8.8</monitor>
-+        <force_down>0</force_down>
+         <force_down>0</force_down>
+-        <priority>255</priority>
 +        <priority>2</priority>
-+        <weight>1</weight>
+         <weight>1</weight>
+-        <latencylow/>
+-        <latencyhigh/>
+-        <losslow/>
+-        <losshigh/>
 +        <latencylow>200</latencylow>
 +        <latencyhigh>1000</latencyhigh>
 +        <losslow>10</losslow>
@@ -122,20 +129,13 @@
 +        <defaultgw>1</defaultgw>
 +        <fargw>0</fargw>
 +        <monitor_disable>0</monitor_disable>
-         <monitor_noroute>0</monitor_noroute>
--        <monitor_killstates>0</monitor_killstates>
++        <monitor_noroute>0</monitor_noroute>
 +        <monitor_killstates>1</monitor_killstates>
-         <monitor_killstates_priority>0</monitor_killstates_priority>
--        <monitor/>
++        <monitor_killstates_priority>0</monitor_killstates_priority>
 +        <monitor>2606:4700:4700::1111</monitor>
-         <force_down>0</force_down>
--        <priority>255</priority>
++        <force_down>0</force_down>
 +        <priority>1</priority>
-         <weight>1</weight>
--        <latencylow/>
--        <latencyhigh/>
--        <losslow/>
--        <losshigh/>
++        <weight>1</weight>
 +        <latencylow>200</latencylow>
 +        <latencyhigh>1000</latencyhigh>
 +        <losslow>10</losslow>
@@ -177,7 +177,7 @@
        <general>
          <enabled>1</enabled>
          <loglocal>1</loglocal>
-@@ -2096,7 +2780,7 @@
+@@ -2096,7 +2854,7 @@
            <transport>udp4</transport>
            <program>audit,configd.py,dhcpd,filterlog,firewall,dpinger,kernel,ppp,unbound,suricata</program>
            <level>debug,info,notice,warn,err,crit,alert,emerg</level>
@@ -186,7 +186,7 @@
            <hostname>192.0.2.10</hostname>
            <certificate/>
            <port>1514</port>
-@@ -2110,12 +2794,12 @@
+@@ -2110,12 +2868,12 @@
        <queues/>
        <rules/>
      </TrafficShaper>
@@ -201,7 +201,7 @@
          <dnssec>1</dnssec>
          <dns64>0</dns64>
          <dns64prefix/>
-@@ -2150,7 +2834,7 @@
+@@ -2150,7 +2908,7 @@
          <ratelimit_size>4m</ratelimit_size>
          <extendedstatistics>1</extendedstatistics>
          <logqueries>1</logqueries>
@@ -210,7 +210,7 @@
          <logtagqueryreply>1</logtagqueryreply>
          <logservfail>1</logservfail>
          <loglocalactions>0</loglocalactions>
-@@ -2306,7 +2990,7 @@
+@@ -2306,7 +3064,7 @@
        </general>
      </QemuGuestAgent>
      <crowdsec>
@@ -219,7 +219,7 @@
          <agent_enabled>1</agent_enabled>
          <lapi_enabled>1</lapi_enabled>
          <firewall_bouncer_enabled>1</firewall_bouncer_enabled>
-@@ -2320,7 +3004,7 @@
+@@ -2320,7 +3078,7 @@
          <crowdsec_firewall_verbose>0</crowdsec_firewall_verbose>
        </general>
      </crowdsec>
@@ -228,7 +228,7 @@
        <enabled>1</enabled>
        <listenaddress>0.0.0.0</listenaddress>
        <listenport>9100</listenport>
-@@ -2336,7 +3020,7 @@
+@@ -2336,7 +3094,7 @@
        <ntp>0</ntp>
        <zfs>0</zfs>
      </NodeExporter>
@@ -237,7 +237,7 @@
        <general>
          <enabled>1</enabled>
          <promisc>0</promisc>
-@@ -2345,7 +3029,30 @@
+@@ -2345,7 +3103,30 @@
          <interface/>
        </general>
      </Hostwatch>
@@ -269,7 +269,7 @@
    </OPNsense>
    <hasync version="1.0.2">
      <disablepreempt>0</disablepreempt>
-@@ -2359,8 +3066,6 @@
+@@ -2359,8 +3140,6 @@
      <password/>
      <syncitems/>
    </hasync>
@@ -278,7 +278,7 @@
    <gifs version="1.0.0">
      <gif/>
    </gifs>
-@@ -2389,6 +3094,24 @@
+@@ -2389,6 +3168,24 @@
        <vlanif>vtnet0.20</vlanif>
      </vlan>
    </vlans>
@@ -303,7 +303,7 @@
    <staticroutes version="1.0.0">
      <route/>
    </staticroutes>
-@@ -2414,7 +3137,6 @@
+@@ -2414,7 +3211,6 @@
    <wireless>
      <clone/>
    </wireless>
@@ -311,7 +311,7 @@
    <dhcpdv6>
      <lan>
        <enable>-1</enable>
-@@ -2428,8 +3150,7 @@
+@@ -2428,8 +3224,7 @@
      <csr/>
      <prv>RklYVFVSRS1LRVkK</prv>
    </cert>
@@ -321,7 +321,7 @@
      <enable/>
      <regdhcp/>
      <regdhcpstatic/>
-@@ -2487,10 +3208,4 @@
+@@ -2487,10 +3282,4 @@
        <enabled>1</enabled>
      </general>
    </igmpproxy>
