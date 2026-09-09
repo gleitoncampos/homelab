@@ -51,7 +51,30 @@
    Com os cinco upstreams declarados como `dot`, este campo não tem mais
    função: quem encaminha é a zona TLS. Deixá-lo em 1 mantém aberto um caminho
    de vazamento que ninguém precisa. Estado alvo e produção conferidos iguais
-   em 09/09/2026: uma única forward-zone, nenhum forward-addr sem @853. #}
+   em 09/09/2026: uma única forward-zone, nenhum forward-addr sem @853.
+
+   D18 (09/09/2026): cacheminttl vai de vazio (= 0, o default do Unbound) para
+   120. Medido no resolver da produção, num dia cheio: 33.573 respostas, só
+   23,9% vindas do cache. A causa não é tamanho — o `dump_cache` marcava 68 KB
+   contra 8 MB de limite, 1,7% de ocupação. É TTL: os nomes mais repetidos
+   voltam com 44 a 124 segundos, e a taxa de acerto vira uma corrida entre o
+   intervalo das perguntas e o TTL. `google.com`, perguntado a cada ~75 s com
+   TTL de 44 s, acerta 78%; `zws1-1.web.telegram.org`, a cada ~4 min com TTL
+   de 68 s, acerta 0% — expira sempre antes da pergunta seguinte. É também por
+   isso que `prefetch`, que já está em 1, quase não dispara: ele age com 10%
+   de TTL restante, o que aqui são 4 a 12 segundos de janela.
+
+   Simulado sobre o log real, o piso de 120 s leva a taxa a 33,5% (+3.370
+   acertos/dia). Pisos maiores rendem mais — 300 s daria 51,6% — e foram
+   recusados: os domínios que dominam o volume (buscador, CDN de estáticos,
+   mensageiro, telemetria) usam TTL curto justamente para balanceamento e
+   failover, e um piso de minutos os fixa num endereço aposentado por todo
+   esse tempo. 120 s fica perto do menor TTL observado, então corta a repetição
+   sem segurar um registro muito além do que o autoritativo pretendia.
+
+   ⚠️ Isto vale porque serveexpired está em 1 logo acima: com resposta vencida
+   servida na hora e revalidação em segundo plano, o piso não é a única defesa
+   contra latência — é só o que evita a ida desnecessária. #}
     <unboundplus version="1.0.15" description="Unbound configuration">
       <general>
         <enabled>1</enabled>
@@ -116,7 +139,7 @@
         <discardtimeout/>
         <cachemaxttl/>
         <cachemaxnegativettl/>
-        <cacheminttl/>
+        <cacheminttl>120</cacheminttl>
         <infrahostttl/>
         <infrakeepprobing>0</infrakeepprobing>
         <infracachenumhosts/>

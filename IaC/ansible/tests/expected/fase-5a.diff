@@ -210,6 +210,15 @@
          <logtagqueryreply>1</logtagqueryreply>
          <logservfail>1</logservfail>
          <loglocalactions>0</loglocalactions>
+@@ -2169,7 +2927,7 @@
+         <discardtimeout/>
+         <cachemaxttl/>
+         <cachemaxnegativettl/>
+-        <cacheminttl/>
++        <cacheminttl>120</cacheminttl>
+         <infrahostttl/>
+         <infrakeepprobing>0</infrakeepprobing>
+         <infracachenumhosts/>
 @@ -2194,61 +2952,61 @@
          </blocklist>
        </dnsbl>
