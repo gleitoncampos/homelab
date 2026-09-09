@@ -74,7 +74,34 @@
 
    ⚠️ Isto vale porque serveexpired está em 1 logo acima: com resposta vencida
    servida na hora e revalidação em segundo plano, o piso não é a única defesa
-   contra latência — é só o que evita a ida desnecessária. #}
+   contra latência — é só o que evita a ida desnecessária.
+
+   D19 (09/09/2026): `ratelimit` e `ratelimit_size` SAEM. Estavam escritos aqui
+   e nunca chegaram ao resolvedor. Medido no equipamento por quatro caminhos
+   independentes, todos negativos:
+
+     grep -rl ratelimit .../mvc/app/models/OPNsense/Unbound/      -> nenhum
+     grep -rl ratelimit .../service/templates/OPNsense/Unbound/   -> nenhum
+     grep -n  ratelimit /var/unbound/unbound.conf                 -> nenhuma
+     unbound-control get_option ratelimit                         -> 0
+
+   O último é o que fecha o argumento: o binário SUPORTA a opção e está no
+   default (0, desligado). Quem não a expõe é o OPNsense — não há campo no
+   modelo nem no formulário desta versão, e o gerador do `unbound.conf` não lê
+   a tag. Os dois campos viajavam para o config.xml e morriam ali.
+
+   É o mesmo padrão do `type=forward` e do `serveexpiredreplyttl`: valor
+   plausível, escrito sem conferir no motor, que fica anos parecendo proteção.
+   Manter custa mais do que remover — dá a impressão de que há limite de taxa
+   configurado quando não há.
+
+   Se algum dia for preciso de verdade, o caminho NÃO é o config.xml: o
+   `unbound.conf` traz `include: /var/unbound/etc/*.conf`, e um arquivo escrito
+   ali pelo playbook entraria — mesmo padrão já usado pelo drop-in de cron do
+   coletor de métricas, que também vive fora do config.xml de propósito. Não
+   foi feito agora, e é decisão consciente: este resolvedor não atende a WAN,
+   a lista de acesso já restringe a origem, e o pico observado em 09/09/2026
+   foi de ~1,5 consulta por segundo contra o limite de 100 que se pretendia. #}
     <unboundplus version="1.0.15" description="Unbound configuration">
       <general>
         <enabled>1</enabled>
@@ -116,8 +143,6 @@
         <serveexpiredttlreset>1</serveexpiredttlreset>
         <serveexpiredclienttimeout>1800</serveexpiredclienttimeout>
         <qnameminstrict>1</qnameminstrict>
-        <ratelimit>100</ratelimit>
-        <ratelimit_size>4m</ratelimit_size>
         <extendedstatistics>1</extendedstatistics>
         <logqueries>1</logqueries>
         <logreplies>0</logreplies>
