@@ -211,6 +211,25 @@ variable "swarm_gateway" {
   description = "Gateway IPv4 (sem CIDR) da VLAN homelab, usado pelos CTs de produção e dev e pela VM do OMV."
 }
 
+variable "guest_search_domain" {
+  type        = string
+  default     = "home.arpa"
+  description = <<-EOT
+    Domínio de busca escrito no cloud-init de todo convidado, e daí no
+    `search` do resolvedor do sistema. Declarado aqui de propósito: sem este
+    bloco o provider não gerencia o campo, o convidado herda o que estiver no
+    Proxmox e o valor deixa de ter dono.
+
+    O default é `home.arpa` para casar com o domínio de sistema do firewall.
+    NÃO aponte para o domínio que carrega o override curinga do proxy reverso:
+    um cliente que sufixe um nome externo já resolvido - `stun.exemplo.net`
+    virando `stun.exemplo.net.<curinga>` - recebe o IP do proxy em vez de
+    NXDOMAIN, e passa a conversar com o equipamento errado sem erro nenhum.
+    Medido em 09/09/2026: 1.292 consultas por dia nesse formato, vindas de
+    três hosts.
+  EOT
+}
+
 # ------------------------------------------------------------------------------
 # VM 300 - OpenMediaVault (imagem cloud-init Debian 12 genericcloud)
 # ------------------------------------------------------------------------------

@@ -215,6 +215,11 @@ resource "proxmox_virtual_environment_container" "docker_swarm_node01" {
       }
     }
 
+    dns {
+      domain  = var.guest_search_domain
+      servers = [var.swarm_gateway]
+    }
+
     user_account {
       keys = [var.ssh_public_key]
     }
@@ -381,6 +386,11 @@ resource "proxmox_virtual_environment_vm" "omv_nas" {
       }
     }
 
+    dns {
+      domain  = var.guest_search_domain
+      servers = [var.swarm_gateway]
+    }
+
     user_account {
       keys = [var.ssh_public_key]
     }
@@ -429,6 +439,11 @@ resource "proxmox_virtual_environment_container" "docker_swarm_node02" {
         address = var.docker_swarm_node02_ip
         gateway = var.swarm_gateway
       }
+    }
+
+    dns {
+      domain  = var.guest_search_domain
+      servers = [var.swarm_gateway]
     }
 
     user_account {
@@ -515,6 +530,11 @@ resource "proxmox_virtual_environment_container" "docker_dev_node" {
     # de outro agente/PR; NÃO recriado aqui), que roda como root via esta
     # mesma chave e provisiona o usuário de automação antes de qualquer outro
     # playbook assumir `ansible_user=nuvidio`.
+    dns {
+      domain  = var.guest_search_domain
+      servers = [var.swarm_gateway]
+    }
+
     user_account {
       keys = [var.ssh_public_key]
     }
