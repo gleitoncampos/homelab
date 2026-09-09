@@ -210,6 +210,73 @@
          <logtagqueryreply>1</logtagqueryreply>
          <logservfail>1</logservfail>
          <loglocalactions>0</loglocalactions>
+@@ -2199,56 +2957,56 @@
+       <dots>
+         <dot uuid="3894f75d-d0d0-4ad1-b094-c64b460a1f01">
+           <enabled>1</enabled>
+-          <type>forward</type>
++          <type>dot</type>
+           <domain/>
+           <server>1.1.1.1</server>
+           <port>853</port>
+           <verify>one.one.one.one</verify>
+-          <forward_tcp_upstream>1</forward_tcp_upstream>
++          <forward_tcp_upstream>0</forward_tcp_upstream>
+           <forward_first>1</forward_first>
+           <description>Cloudflare Primary DoT</description>
+         </dot>
+         <dot uuid="b1c2d3e4-f5a6-7890-abcd-111122223333">
+           <enabled>1</enabled>
+-          <type>forward</type>
++          <type>dot</type>
+           <domain/>
+           <server>1.0.0.1</server>
+           <port>853</port>
+           <verify>one.one.one.one</verify>
+-          <forward_tcp_upstream>1</forward_tcp_upstream>
++          <forward_tcp_upstream>0</forward_tcp_upstream>
+           <forward_first>1</forward_first>
+           <description>Cloudflare Secondary DoT</description>
+         </dot>
+         <dot uuid="c2d3e4f5-a6b7-8901-bcde-444455556666">
+           <enabled>1</enabled>
+-          <type>forward</type>
++          <type>dot</type>
+           <domain/>
+           <server>9.9.9.10</server>
+           <port>853</port>
+           <verify>dns10.quad9.net</verify>
+-          <forward_tcp_upstream>1</forward_tcp_upstream>
++          <forward_tcp_upstream>0</forward_tcp_upstream>
+           <forward_first>1</forward_first>
+           <description>Quad9 Unfiltered Primary DoT</description>
+         </dot>
+         <dot uuid="d3e4f5a6-b7c8-9012-cdef-777788889999">
+           <enabled>1</enabled>
+-          <type>forward</type>
++          <type>dot</type>
+           <domain/>
+           <server>149.112.112.10</server>
+           <port>853</port>
+           <verify>dns10.quad9.net</verify>
+-          <forward_tcp_upstream>1</forward_tcp_upstream>
++          <forward_tcp_upstream>0</forward_tcp_upstream>
+           <forward_first>1</forward_first>
+           <description>Quad9 Unfiltered Secondary DoT</description>
+         </dot>
+         <dot uuid="e4f5a6b7-c8d9-0123-def0-888888888888">
+           <enabled>1</enabled>
+-          <type>forward</type>
++          <type>dot</type>
+           <domain/>
+           <server>8.8.8.8</server>
+           <port>853</port>
+           <verify>dns.google</verify>
+-          <forward_tcp_upstream>1</forward_tcp_upstream>
++          <forward_tcp_upstream>0</forward_tcp_upstream>
+           <forward_first>1</forward_first>
+           <description>Google Unfiltered Primary DoT</description>
+         </dot>
 @@ -2306,7 +3064,7 @@
        </general>
      </QemuGuestAgent>

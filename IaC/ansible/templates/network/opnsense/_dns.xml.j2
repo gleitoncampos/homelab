@@ -21,7 +21,23 @@
    volume alto para pouco ganho de auditoria; logqueries (a pergunta) continua
    ligado.
    D15: forwarding/enabled já nasce em 1 no template original — não há "0
-   para 1" para aplicar aqui; a decisão descrevia um estado que já era este. #}
+   para 1" para aplicar aqui; a decisão descrevia um estado que já era este.
+
+   ⚠️ D16 (09/09/2026): os cinco upstreams são `<type>dot</type>`, NÃO
+   `<type>forward</type>`. O container `<dots>` do config.xml guarda as
+   entradas das DUAS páginas do Unbound e é o campo `type` que as separa:
+   `forward` é Services → Unbound DNS → **Query Forwarding**, `dot` é
+   Services → Unbound DNS → **DNS over TLS**. Escritos como `forward`, os
+   cinco viravam encaminhamento em CLARO — porta e verify são ignorados
+   nessa página — e o gerador emitia `forward-addr: 8.8.8.8` sem TLS. Foi
+   isso que rodou em produção até 09/09/2026 e vazou ~49 mil consultas/dia
+   para o Google. Medido: com `type=dot`, o `/var/unbound/etc/dot.conf`
+   passa a trazer `forward-tls-upstream: yes` e `forward-addr: <ip>@853#<cn>`.
+
+   forward_tcp_upstream vai a 0 nos cinco: sob DoT o `forward-tls-upstream`
+   já implica TCP, o gerador não emite linha alguma para este campo, e o
+   diálogo de DNS over TLS sequer o expõe — deixá-lo em 1 criaria no
+   config.xml um valor que a interface não consegue reproduzir. #}
     <unboundplus version="1.0.15" description="Unbound configuration">
       <general>
         <enabled>1</enabled>
@@ -116,56 +132,56 @@
       <dots>
         <dot uuid="3894f75d-d0d0-4ad1-b094-c64b460a1f01">
           <enabled>1</enabled>
-          <type>forward</type>
+          <type>dot</type>
           <domain/>
           <server>1.1.1.1</server>
           <port>853</port>
           <verify>one.one.one.one</verify>
-          <forward_tcp_upstream>1</forward_tcp_upstream>
+          <forward_tcp_upstream>0</forward_tcp_upstream>
           <forward_first>1</forward_first>
           <description>Cloudflare Primary DoT</description>
         </dot>
         <dot uuid="b1c2d3e4-f5a6-7890-abcd-111122223333">
           <enabled>1</enabled>
-          <type>forward</type>
+          <type>dot</type>
           <domain/>
           <server>1.0.0.1</server>
           <port>853</port>
           <verify>one.one.one.one</verify>
-          <forward_tcp_upstream>1</forward_tcp_upstream>
+          <forward_tcp_upstream>0</forward_tcp_upstream>
           <forward_first>1</forward_first>
           <description>Cloudflare Secondary DoT</description>
         </dot>
         <dot uuid="c2d3e4f5-a6b7-8901-bcde-444455556666">
           <enabled>1</enabled>
-          <type>forward</type>
+          <type>dot</type>
           <domain/>
           <server>9.9.9.10</server>
           <port>853</port>
           <verify>dns10.quad9.net</verify>
-          <forward_tcp_upstream>1</forward_tcp_upstream>
+          <forward_tcp_upstream>0</forward_tcp_upstream>
           <forward_first>1</forward_first>
           <description>Quad9 Unfiltered Primary DoT</description>
         </dot>
         <dot uuid="d3e4f5a6-b7c8-9012-cdef-777788889999">
           <enabled>1</enabled>
-          <type>forward</type>
+          <type>dot</type>
           <domain/>
           <server>149.112.112.10</server>
           <port>853</port>
           <verify>dns10.quad9.net</verify>
-          <forward_tcp_upstream>1</forward_tcp_upstream>
+          <forward_tcp_upstream>0</forward_tcp_upstream>
           <forward_first>1</forward_first>
           <description>Quad9 Unfiltered Secondary DoT</description>
         </dot>
         <dot uuid="e4f5a6b7-c8d9-0123-def0-888888888888">
           <enabled>1</enabled>
-          <type>forward</type>
+          <type>dot</type>
           <domain/>
           <server>8.8.8.8</server>
           <port>853</port>
           <verify>dns.google</verify>
-          <forward_tcp_upstream>1</forward_tcp_upstream>
+          <forward_tcp_upstream>0</forward_tcp_upstream>
           <forward_first>1</forward_first>
           <description>Google Unfiltered Primary DoT</description>
         </dot>
