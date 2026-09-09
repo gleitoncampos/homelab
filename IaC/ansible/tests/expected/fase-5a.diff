@@ -70,13 +70,20 @@
          <fargw>0</fargw>
 -        <monitor_disable>1</monitor_disable>
 +        <monitor_disable>0</monitor_disable>
-+        <monitor_noroute>0</monitor_noroute>
+         <monitor_noroute>0</monitor_noroute>
+-        <monitor_killstates>0</monitor_killstates>
 +        <monitor_killstates>1</monitor_killstates>
-+        <monitor_killstates_priority>0</monitor_killstates_priority>
+         <monitor_killstates_priority>0</monitor_killstates_priority>
+-        <monitor/>
 +        <monitor>192.0.2.9</monitor>
-+        <force_down>0</force_down>
+         <force_down>0</force_down>
+-        <priority>255</priority>
 +        <priority>1</priority>
-+        <weight>1</weight>
+         <weight>1</weight>
+-        <latencylow/>
+-        <latencyhigh/>
+-        <losslow/>
+-        <losshigh/>
 +        <latencylow>200</latencylow>
 +        <latencyhigh>1000</latencyhigh>
 +        <losslow>10</losslow>
@@ -96,20 +103,13 @@
 +        <defaultgw>0</defaultgw>
 +        <fargw>0</fargw>
 +        <monitor_disable>0</monitor_disable>
-         <monitor_noroute>0</monitor_noroute>
--        <monitor_killstates>0</monitor_killstates>
++        <monitor_noroute>0</monitor_noroute>
 +        <monitor_killstates>1</monitor_killstates>
-         <monitor_killstates_priority>0</monitor_killstates_priority>
--        <monitor/>
++        <monitor_killstates_priority>0</monitor_killstates_priority>
 +        <monitor>8.8.8.8</monitor>
-         <force_down>0</force_down>
--        <priority>255</priority>
++        <force_down>0</force_down>
 +        <priority>2</priority>
-         <weight>1</weight>
--        <latencylow/>
--        <latencyhigh/>
--        <losslow/>
--        <losshigh/>
++        <weight>1</weight>
 +        <latencylow>200</latencylow>
 +        <latencyhigh>1000</latencyhigh>
 +        <losslow>10</losslow>
@@ -210,7 +210,13 @@
          <logtagqueryreply>1</logtagqueryreply>
          <logservfail>1</logservfail>
          <loglocalactions>0</loglocalactions>
-@@ -2199,56 +2957,56 @@
+@@ -2194,61 +2952,61 @@
+         </blocklist>
+       </dnsbl>
+       <forwarding>
+-        <enabled>1</enabled>
++        <enabled>0</enabled>
+       </forwarding>
        <dots>
          <dot uuid="3894f75d-d0d0-4ad1-b094-c64b460a1f01">
            <enabled>1</enabled>

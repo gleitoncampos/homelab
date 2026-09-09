@@ -20,8 +20,9 @@
    D6: logreplies vai de 1 para 0 — o log de cada RESPOSTA de consulta é
    volume alto para pouco ganho de auditoria; logqueries (a pergunta) continua
    ligado.
-   D15: forwarding/enabled já nasce em 1 no template original — não há "0
-   para 1" para aplicar aqui; a decisão descrevia um estado que já era este.
+   D15: REVOGADA por D17 (09/09/2026). Dizia que forwarding/enabled já nascia
+   em 1 e que não havia nada a aplicar. O valor estava certo para o estado de
+   então; deixou de estar quando os upstreams viraram DoT.
 
    ⚠️ D16 (09/09/2026): os cinco upstreams são `<type>dot</type>`, NÃO
    `<type>forward</type>`. O container `<dots>` do config.xml guarda as
@@ -37,7 +38,20 @@
    forward_tcp_upstream vai a 0 nos cinco: sob DoT o `forward-tls-upstream`
    já implica TCP, o gerador não emite linha alguma para este campo, e o
    diálogo de DNS over TLS sequer o expõe — deixá-lo em 1 criaria no
-   config.xml um valor que a interface não consegue reproduzir. #}
+   config.xml um valor que a interface não consegue reproduzir.
+
+   ⚠️ D17 (09/09/2026): forwarding/enabled vai de 1 para 0. É o "Use System
+   Nameservers" da página Query Forwarding, e ele é o OUTRO caminho pelo qual
+   uma consulta sai em claro — independente do DoT. Com ele em 1 e um upstream
+   qualquer ali, o gerador escreve uma SEGUNDA `forward-zone "."` no
+   /var/unbound/etc/dot.conf, sem TLS, ao lado da zona cifrada. Foi o estado
+   observado em produção em 09/09/2026: duas zonas para o mesmo nome, e a
+   precedência entre elas não é contrato do Unbound — muda com a versão.
+
+   Com os cinco upstreams declarados como `dot`, este campo não tem mais
+   função: quem encaminha é a zona TLS. Deixá-lo em 1 mantém aberto um caminho
+   de vazamento que ninguém precisa. Estado alvo e produção conferidos iguais
+   em 09/09/2026: uma única forward-zone, nenhum forward-addr sem @853. #}
     <unboundplus version="1.0.15" description="Unbound configuration">
       <general>
         <enabled>1</enabled>
@@ -127,7 +141,7 @@
         </blocklist>
       </dnsbl>
       <forwarding>
-        <enabled>1</enabled>
+        <enabled>0</enabled>
       </forwarding>
       <dots>
         <dot uuid="3894f75d-d0d0-4ad1-b094-c64b460a1f01">
