@@ -875,6 +875,10 @@ def cifrar_vault(env: str, conteudo: str, dry: bool) -> None:
         die(f"{destino.relative_to(REPO)} não está no .gitignore")
 
     destino.parent.mkdir(parents=True, exist_ok=True)
+    # `--encrypt-vault-id default` é obrigatório: com cwd=ANSIBLE o
+    # ansible.cfg já declara `vault_password_file`, e somado à flag o
+    # ansible-vault enxerga dois vault-ids `default` e recusa cifrar ("The
+    # vault-ids default,default are available to encrypt"). Ler não sofre disso.
     # Passa pelo stdin do ansible-vault em vez de gravar texto puro e cifrar
     # depois: sem arquivo intermediário, não há janela para Ctrl-C deixar o
     # segredo em claro no disco.
@@ -882,6 +886,7 @@ def cifrar_vault(env: str, conteudo: str, dry: bool) -> None:
         [
             "ansible-vault", "encrypt_string",
             "--vault-password-file", str(VAULT_PASS),
+            "--encrypt-vault-id", "default",
             "--stdin-name", "_",
         ],
         input="x", capture_output=True, text=True, cwd=ANSIBLE,
@@ -893,7 +898,8 @@ def cifrar_vault(env: str, conteudo: str, dry: bool) -> None:
     with os.fdopen(fd, "w") as fh:
         fh.write(conteudo)
     r = subprocess.run(
-        ["ansible-vault", "encrypt", "--vault-password-file", str(VAULT_PASS), str(destino)],
+        ["ansible-vault", "encrypt", "--vault-password-file", str(VAULT_PASS),
+         "--encrypt-vault-id", "default", str(destino)],
         capture_output=True, text=True, cwd=ANSIBLE,
     )
     if r.returncode != 0:
