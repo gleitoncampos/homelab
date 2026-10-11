@@ -148,12 +148,15 @@ Guarde os dois no mesmo cofre, e confira a cópia junto com a verificação
 trimestral acima.
 
 `IaC/terraform/proxmox/terraform.tfstate` — **ainda não existe.** Hoje nada
-está sob gestão do Terraform (só provisionamento manual); o arquivo passa a
-existir, e a entrar de fato neste conjunto de recuperação, assim que o
-procedimento de `terraform import` descrito no aviso crítico de
-[`IaC/terraform/proxmox/README.md`](../../IaC/terraform/proxmox/README.md) for
-executado. Até lá, perder a estação de trabalho não perde rastro nenhum de
-Terraform — porque não há rastro para perder.
+está sob gestão do Terraform; o arquivo passa a existir, e a entrar de fato
+neste conjunto de recuperação, **no primeiro `apply` do provisionamento do
+zero** descrito em [`docs/instalacao.md`](../instalacao.md). Não há import: o
+state nasce com os convidados. Até lá, perder a estação de trabalho não perde
+rastro nenhum de Terraform — porque não há rastro para perder.
+
+⚠️ A partir desse primeiro `apply` o state passa a ser **insubstituível**: sem
+ele o Terraform não reconhece nada do que criou, e um `apply` seguinte tenta
+criar tudo de novo por cima. Entra no cofre junto dos demais.
 
 ## Limite conhecido
 

@@ -121,10 +121,20 @@ $EDITOR .githooks/secret-patterns.local.txt   # o bootstrap trunca este arquivo
 make check && make secrets
 ```
 
-⚠️ Guarde no gerenciador de senhas: `IaC/ansible/.ansible_vault_pass`, os dois
-`hosts.ini` e os dois `group_vars/network/99-local.yml`. Sem a senha os vaults
-são irrecuperáveis; sem o `99-local.yml` os playbooks de rede aplicam endereços
-de documentação, sem erro.
+⚠️ **Guarde no gerenciador de senhas, e confira que estão lá antes de seguir:**
+
+| arquivo | sem ele |
+|---|---|
+| `IaC/ansible/.ansible_vault_pass` | os vaults são irrecuperáveis |
+| `IaC/homelab.local.yml` | **a fonte única** — perdê-la obriga a repetir a entrevista inteira |
+| `group_vars/network/99-local.yml` (prod e dev) | os playbooks de rede aplicam endereços de documentação, sem erro |
+| `group_vars/omv/99-local.yml` | a asserção do NAS para na largada |
+| `inventories/*/hosts.ini` | regenerável a partir da fonte única, mas guardar poupa a regeneração |
+
+⚠️ **O arquivo de respostas é o que mais importa e o mais fácil de esquecer**,
+porque é gerado uma vez e nunca mais olhado: ele regenera inventário, tfvars e
+vault. Ver [`runbooks/restauracao.md`](./runbooks/restauracao.md), que o trata
+como "o único que basta guardar".
 
 ## 5. Hipervisor, primeira passada
 
@@ -152,10 +162,16 @@ terraform plan
 terraform apply -target=proxmox_virtual_environment_vm.opnsense
 ```
 
-⚠️ `apply` direto só é seguro num parque vazio. Se algum convidado já existir,
-siga o runbook de `terraform import` em
-[`IaC/terraform/proxmox/README.md`](../IaC/terraform/proxmox/README.md) —
-sem ele o Terraform cria um duplicado com o mesmo IP estático de um nó vivo.
+⚠️ **Este guia pressupõe parque VAZIO, e é o único caminho suportado:** os
+hipervisores chegam recém-instalados e todo convidado nasce daqui. Não há
+adoção de convidado pré-existente, e o runbook de `terraform import` que
+versões anteriores descreviam **foi removido** — ver o aviso crítico em
+[`IaC/terraform/proxmox/README.md`](../IaC/terraform/proxmox/README.md).
+
+⚠️ Se por qualquer motivo o nó de destino **não** estiver vazio, pare: um
+`apply` ali cria convidado duplicado com o mesmo IP estático de um que já roda,
+e os dois passam a disputar o endereço. A garantia é o `plan` dizer `create`
+para todos os recursos e não citar id nenhum já ocupado.
 
 ⚠️ Não acrescente `vlan_id` na `network_device` da OPNsense: a tag 802.1Q some
 antes de chegar no guest e nada no `plan` acusa.
