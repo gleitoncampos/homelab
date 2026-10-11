@@ -120,7 +120,16 @@
       <group>admins</group>
       <noauto>1</noauto>
       <interfaces>lan</interfaces>
-      <kex>curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512</kex>
+      {# D20 (10/10/2026): mlkem768x25519-sha256 e sntrup761x25519-sha512 vêm
+         PRIMEIRO. São troca de chave híbrida pós-quântica, e o OpenSSH 10 já as
+         negocia por padrão — medido no firewall em 09/09/2026, `sshd -T` trazia
+         mlkem768x25519-sha256 no topo de kexalgorithms. A lista anterior não as
+         incluía, então aplicar este template REMOVIA o pós-quântico e rebaixava
+         para curve25519 clássico. Endurecer uma lista de algoritmos a congela:
+         ela estava certa quando foi escrita e apodreceu quando o OpenSSH andou.
+         Conferido com `ssh -Q kex` nos dois lados antes de fixar — servidor
+         10.3p1 e cliente 10.0p2 suportam os seis. #}
+      <kex>mlkem768x25519-sha256,sntrup761x25519-sha512,curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512</kex>
       <ciphers>chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com</ciphers>
       <macs>hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com</macs>
       <keys>ssh-ed25519,rsa-sha2-512,rsa-sha2-256</keys>
