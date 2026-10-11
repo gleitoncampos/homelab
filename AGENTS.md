@@ -57,9 +57,9 @@ mão, carregando junto senha, chave privada e a topologia inteira.
 faz hoje. Ele vai e deve divergir da produção — a divergência é o objetivo, não
 um defeito a corrigir.**
 
-O retrato da produção existe (`prod-snapshot/` coleta, o resultado fica em
-`.local/`) e serve para duas coisas: **backup** e **garimpo**. Nunca para
-decidir o que o repositório deveria dizer.
+O retrato da produção existe (`prod-snapshot/` coleta em `.local/`, e o
+resultado é arquivado na oficina) e serve para duas coisas: **backup** e
+**garimpo**. Nunca para decidir o que o repositório deveria dizer.
 
 Ao comparar produção e repositório, só uma das três leituras é achado:
 
@@ -206,11 +206,8 @@ checar", aplicada ao campo individual de um template de reconciliação.
 │   └── secret-patterns.local.txt.samples.example  # As amostras dos padrões locais
 ├── .gitignore              # vault.yml, hosts.ini, .tfvars, .tfstate, .local/
 ├── .yamllint               # Estilo de YAML; `yes`/`no` truthy é erro
-├── .local/                 # IGNORADO. Diretório padrão de documentação de trabalho
-│   ├── README.local.md     # Índice comentado, com o estado de cada documento
-│   ├── docs/               # Backlog, pré-publicação, pendências, plano de hardening
-│   ├── memoria/            # Symlinks para a memória de longo prazo (~/.claude)
-│   └── snapshot/           # Coleta da produção e o levantamento do que roda
+├── .local/                 # IGNORADO. Só o ponteiro; a documentação vive na oficina
+│   └── README.local.md     # Ponteiro: onde fica a oficina e o que há nela
 ├── .superpowers/           # IGNORADO. Workspace do subagent-driven-development (brief, report, diff)
 ├── .renovaterc.json        # Atualização automática de versão de imagem
 ├── docs/
@@ -294,23 +291,29 @@ Ao acrescentar uma ferramenta:
    acrescente a regra ao `.gitignore` **antes** do primeiro arquivo existir.
 3. Atualize esta árvore e a tabela do [`README.md`](./README.md).
 
-### Regra: documento de trabalho vive em `.local/`
+### Regra: documento de trabalho vive FORA deste repositório
 
-`.local/` é o **diretório padrão de documentação** deste repositório. Análise,
-auditoria, levantamento da produção, plano de execução e qualquer texto que cite
-dado real entram lá — nunca na raiz, nunca em `docs/`. O índice comentado, com o
-estado de cada documento, está em `.local/README.local.md`.
+⚠️ **Mudou em 10/10/2026.** A documentação de trabalho — análise, auditoria,
+levantamento da produção, plano de execução e qualquer texto que cite dado real
+— **saiu de `.local/` e passou a viver numa oficina, fora da árvore do
+repositório.** O ponteiro com o caminho está em `.local/README.local.md`, que
+continua gitignorado.
+
+O motivo da mudança é físico, não estético: `.local/` mantinha, dentro de um
+repositório **público**, material cuja regra de publicação é oposta à de todo o
+resto — e a proteção dependia de uma única linha do `.gitignore`. Separar as
+duas árvores faz a regra se aplicar sozinha.
 
 A divisão:
 
 | onde | o que | versionado |
 |---|---|---|
 | `README.md`, `CLAUDE.md`, `docs/` | o que o sistema **deve ser**: permanente, público, sem dado real | sim |
-| `.local/` | o que **aconteceu**: datado, com hostname, IP e trecho de segredo | não (`.gitignore`) |
-| `.local/memoria/` | symlinks para `~/.claude/.../memory/` — o que precisa estar em contexto antes da próxima conversa | não |
+| a oficina, fora daqui | o que **aconteceu**: datado, com hostname, IP e trecho de segredo | não existe neste repositório |
+| `.local/` | **só o ponteiro**, mais o destino da coleta de `prod-snapshot/` | não (`.gitignore`) |
 
 Regra de decisão: **se o documento perde sentido depois de resolvido, ou cita
-dado real, é `.local/`.** Todo documento novo leva **data no cabeçalho** — sem
+dado real, ele não entra neste repositório — vai para a oficina.** Todo documento novo leva **data no cabeçalho** — sem
 ela, em três meses não há como saber se descreve o estado atual. Documento que
 ficou obsoleto é marcado como tal no índice, não apagado: o raciocínio de por que
 uma decisão foi tomada sobrevive ao fato de ela já ter sido executada.
@@ -331,10 +334,15 @@ As perguntas que já têm dono:
 
 | pergunta | dono |
 |---|---|
-| o que cada equipamento **é** hoje | `.local/docs/INVENTARIO.md` |
-| o que está **quebrado**, e o que queremos **construir** | `.local/docs/TODO-E-ROADMAP.md` |
-| o que **poderia** melhorar (bruto, sem triagem) | `.local/docs/SUGESTOES.md` |
-| **como** se faz | `.local/docs/runbooks/` |
+| o que cada equipamento **é** hoje | `docs/INVENTARIO.md` **da oficina** |
+| o que está **quebrado**, e o que queremos **construir** | `docs/TODO-E-ROADMAP.md` **da oficina** |
+| o que **poderia** melhorar (bruto, sem triagem) | `docs/SUGESTOES.md` **da oficina** |
+| **como** se faz, com dado real | `docs/runbooks/` **da oficina** |
+| **como** se faz, genérico e público | [`docs/runbooks/`](./docs/runbooks/) **deste repositório** |
+
+⚠️ A última linha é a única que vive aqui, e a fronteira é o dado: runbook que
+cita hostname, IP ou fraqueza aberta é da oficina; runbook que descreve
+procedimento sem dado real é público.
 
 O fluxo entre eles não é óbvio e é o que impede a mistura: o inventário descreve
 o estado, as sugestões propõem sobre esse estado, e **só o que sobrevive à
@@ -344,8 +352,8 @@ isso que a parte de backlog triado nasceu vazia.
 #### Registro de execução vive em `docs/historico/`, e a regra é física
 
 Plano executado, spec cumprida, sessão encerrada e auditoria superada **não
-ficam soltos na raiz**: vão para `.local/docs/historico/`, no subdiretório do
-seu tipo (`planos/`, `specs/`, `sessoes/`, `auditorias/`).
+ficam soltos na raiz**: vão para `docs/historico/` **da oficina**, no
+subdiretório do seu tipo (`planos/`, `specs/`, `sessoes/`, `auditorias/`).
 
 A fronteira é um diretório, não uma convenção a lembrar. Antes disso, documento
 vivo e registro de execução dividiam a mesma raiz e só a tabela do índice os
@@ -359,8 +367,8 @@ indexado; alguns seguem em uso ativo mesmo arquivados, e o índice diz quais.
 
 ⚠️ Lista de pendências de segurança, inventário do que ainda está aberto, plano
 de hardening em andamento, runbook de rotação de credencial comprometida — todos
-vivem em `.local/`, sem exceção e independentemente de quão útil pareça
-publicá-los.
+vivem na oficina, fora deste repositório, sem exceção e independentemente de
+quão útil pareça publicá-los.
 
 O critério é este: **se o documento ajuda um atacante mais do que ajuda um
 contribuidor, ele não é público.** Um repositório público publica o que o sistema
@@ -633,7 +641,7 @@ junto.
 Exemplos usam as faixas de documentação da RFC 5737 (`192.0.2.0/24`,
 `198.51.100.0/24`, `203.0.113.0/24`), o MAC de documentação da IANA
 (faixa `00:00:5e:00:53:xx`) e domínios `.example`. Hostname de equipamento, faixa
-interna, e-mail pessoal e chave SSH real ficam em `.local/`, no vault ou no
+interna, e-mail pessoal e chave SSH real ficam na oficina, no vault ou no
 inventário gitignorado.
 
 A regra vale para **conteúdo de arquivo e mensagem de commit**. O e-mail de
