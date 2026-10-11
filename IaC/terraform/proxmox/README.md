@@ -6,68 +6,65 @@ Este diretório centraliza o provisionamento declarativo da **Infraestrutura Vir
 
 ## ⚠️⚠️⚠️ AVISO CRÍTICO - LEIA ANTES DE RODAR QUALQUER `apply` ⚠️⚠️⚠️
 
-**Hoje nada neste diretório está sob gestão do Terraform.** Não existe `.tfstate` nem `terraform.tfvars` - só um `.terraform/` local (cache de provider, gitignorado, sem estado nenhum dentro) pode existir depois de um `terraform init` isolado. Sem `.tfstate`, o Terraform não tem "recurso existente" para nenhum guest: o provisionamento até agora foi feito por caminho manual (via `pveum`/console/scripts ad-hoc direto no Proxmox), inclusive os **CTs 200 e 201** do Docker Swarm, que já rodam em produção.
+**Hoje nada neste diretório está sob gestão do Terraform.** Não existe
+`.tfstate` nem `terraform.tfvars` — só um `.terraform/` local (cache de
+provider, gitignorado) pode existir depois de um `terraform init` isolado.
 
-Isso muda a análise de risco de um jeito específico: o risco imediato de um primeiro `apply` **não é "replacement" de recurso já gerenciado" - é COLISÃO DE VMID**:
+### O alvo é um parque NOVO, não a adoção do que já existe
 
-- Um `apply` direto tenta **criar** os VMIDs 100 (OPNsense), 200/201 (Swarm) e 300 (OMV) do zero.
-- Na melhor hipótese, a API do Proxmox responde `already exists` e o `apply` falha limpo.
-- Na pior hipótese - se o VMID/CTID real no cluster divergir por qualquer motivo do que está hardcoded aqui - o Terraform **cria um CT/VM duplicado** na VLAN homelab **com o MESMO IP ESTÁTICO** de um nó de produção (`docker_swarm_node01_ip`/`node02_ip`), e o Swarm real perde quórum ou entra em split-brain de IP.
+⚠️ **Decisão de 10/10/2026.** O provisionamento é feito **do zero**: os
+convidados nascem deste IaC, nas VLANs do plano de rede, e não há migração de
+convidado pré-existente.
 
-### Procedimento obrigatório antes do primeiro `apply` em produção
+Isso aposenta, por nome, três coisas que versões anteriores deste README
+mandavam fazer — **não as procure, elas foram removidas de propósito**:
 
-1. Confirme os VMIDs/CTIDs reais no cluster (`pvesh get /cluster/resources --type vm` ou a UI web) e confira que batem com 100/200/201/300 usados em `main.tf`. Se não baterem, ajuste o `.tf` para refletir a realidade **antes** de qualquer `import` - importar para o VMID errado não corrige nada.
-2. Rode `terraform import` **antes** de qualquer `plan`/`apply` que toque produção:
-   ```bash
-   terraform import proxmox_virtual_environment_container.docker_swarm_node01 <NOME-DO-NO>/<CTID>
-   terraform import proxmox_virtual_environment_container.docker_swarm_node02 <NOME-DO-NO>/<CTID>
-   ```
-   > ⚠️ Os VMIDs 200/201 escritos em `main.tf` **não** correspondem aos nós do
-   > Swarm no parque atual. A leitura direta dos hipervisores em 25/08/2026
-   > fechou quais guests os ocupam, e o caso é pior do que "estão em uso":
-   > **o VMID 200 é a VM do NAS** e o 201 é um CT de sincronismo, ambos no nó
-   > secundário. Importar `docker_swarm_node01` a partir do 200 traria a VM do
-   > NAS para o state como se fosse um contêiner do Swarm. Refaça o mapeamento
-   > pelo passo 1 antes de rodar qualquer coisa aqui.
-3. Só depois do `import` os blocos `lifecycle { prevent_destroy = true; ignore_changes = [operating_system] }` presentes em `main.tf` para esses dois CTs passam a valer de fato. **Antes do import eles não protegem nada** - sem state prévio, o Terraform não tem "recurso existente" para proteger, ele simplesmente tenta criar um novo.
-4. Rode `terraform plan` e revise linha por linha. Um plan limpo (sem `# forces replacement`, sem diffs inesperados em `disk`/`network_interface`/`features`) é o sinal de que o import capturou o estado real corretamente.
-5. A mesma cautela vale, por analogia, para a VM 100 (OPNsense) caso ela também já exista manualmente no cluster - este runbook documenta o procedimento apenas para os CTs 200/201 porque são os casos confirmados de criação manual, mas **nunca rode `apply` contra um VMID de produção sem antes confirmar, via `plan`, que a ação não é "create".**
+1. O runbook de `terraform import` dos nós do Swarm.
+2. A análise de colisão de VMID contra os convidados que rodam hoje.
+3. A exceção "a VM do NAS é recriada, não importada" — num parque novo, tudo é
+   criado, então a exceção perdeu o contraste que a definia.
 
-### A VM 300 (OMV) é exceção: ela é para ser RECRIADA, não importada
+Duas consequências que continuam valendo, e que a decisão **não** dispensa:
 
-⚠️ **Decisão de 25/08/2026, e ela contradiz de propósito o runbook acima.** A VM
-do NAS não entra no fluxo de import. O `vm_id`, o nome e o número de núcleos
-declarados em `main.tf` são o **alvo**, e divergem por decisão da VM que roda
-hoje — que tem outro VMID, outro nome e um núcleo. Não "corrija" esses campos
-para bater com a produção: fazê-lo transformaria uma recriação limpa numa adoção
-pela metade.
+- **Os hipervisores não formam cluster.** O VMID é único **por nó**, não na
+  frota: um id ocupado num hipervisor pode estar livre no outro. É `node_name`
+  que decide contra qual parque o id é conferido.
+- **Um `apply` contra parque ainda povoado cria convidado duplicado** com o
+  mesmo IP estático de um que já roda, e os dois passam a disputar o endereço.
+  Confirme que o destino está vazio antes do primeiro `apply` — a garantia é o
+  `plan` dizer `create` para todos os recursos e não citar nenhum id ocupado.
 
-O VMID 300 está livre no parque, então a recriação não colide com nada; a VM
-antiga continua existindo até ser removida à mão, depois de conferida.
+### ⚠️ O que a recriação destrói, e o que precisa sair de lá ANTES
 
-⚠️ **O que a recriação preserva e o que ela destrói**, porque a diferença decide
-o procedimento:
+Vale para todo convidado, não só para o NAS. A diferença entre o que sobrevive
+e o que não sobrevive decide a ordem do procedimento.
 
-- **Preserva os discos de dados.** Eles são físicos e entram pelo bloco
-  `hostpci` do recurso, que passa a controladora SATA inteira para o convidado.
-  ⚠️ Sem esse bloco a VM sobe com o disco de sistema e mais nada, **sem erro
-  nenhum**: as montagens são declaradas com `nofail`, então a ausência some em
-  vez de travar o boot.
-- **Destrói o disco de sistema**, e com ele a configuração do OMV: usuários,
-  pastas compartilhadas, exports, e a associação entre cada UUID de filesystem
-  e seu ponto de montagem. Numa instalação nova os discos aparecem no `lsblk`
-  íntegros e nenhum deles montado.
+**Os discos de dados do NAS sobrevivem.** São físicos e entram pelo bloco
+`hostpci` do recurso, que passa a controladora inteira ao convidado. ⚠️ Sem
+esse bloco a VM sobe com o disco de sistema e mais nada, **sem erro nenhum**:
+as montagens são declaradas com `nofail`, então a ausência some em vez de
+travar o boot.
 
-Por isso o `00-omv-setup.yml` tem, antes dos pools do mergerfs, um passo que
-remonta os filesystems declarados em `omv_data_filesystems` — lista gerada por
-`make omv-fs`, nunca digitada à mão. **Gere e instale essa lista ANTES de
-recriar a VM**, enquanto a máquina antiga ainda está no ar: depois de destruída,
-não há de onde coletar os UUIDs.
+**O disco de sistema do NAS é destruído**, e com ele a configuração do OMV:
+usuários, pastas compartilhadas, exports, e **a associação entre cada UUID de
+filesystem e seu ponto de montagem**. Numa instalação nova os discos aparecem
+íntegros no `lsblk` e nenhum deles montado — sem a lista de UUIDs, não há como
+saber qual disco é qual.
+
+⚠️ **Por isso, e esta é a ordem que não pode inverter:**
+
+```bash
+make omv-fs      # coleta os UUIDs do NAS VIVO e propõe o group_vars
+```
+
+**Gere e instale essa lista enquanto a máquina antiga ainda está no ar.**
+Depois de destruída não há de onde coletar, e os dados ficam íntegros e
+inacessíveis. A lista é consumida por `00-omv-setup.yml`, que remonta os
+filesystems antes de montar os pools do mergerfs — ela é **gerada**, nunca
+digitada à mão.
 
 Os compartilhamentos Samba ainda **não** estão no playbook, por decisão
-registrada — uma recriação hoje os perde.
-
-Dos demais, nenhum (VM 100, CT 200, CT 201) deve ser tratado como "seguro para recriar do zero" - apenas o **CT 210 (dev node)**, novo, não tem esse risco por não existir ainda em lugar nenhum.
+registrada: uma recriação hoje os perde, e eles voltam à mão.
 
 ---
 
@@ -76,7 +73,7 @@ Dos demais, nenhum (VM 100, CT 200, CT 201) deve ser tratado como "seguro para r
 ```text
 terraform/
 └── proxmox/
-    ├── README.md                # Este arquivo (Guia de uso, comandos e runbook de import)
+    ├── README.md                # Este arquivo (guia de uso, comandos e ordem do provisionamento)
     ├── providers.tf             # Configuração do provider bpg/proxmox e autenticação API
     ├── main.tf                  # Definição dos recursos nos nós <no-primario> e <no-secundario>
     ├── variables.tf             # Definição de variáveis de entrada (URL, Tokens, Nodes, Chaves SSH, IPs)
@@ -109,7 +106,7 @@ terraform/
    - **Hardware**: 4 CPU Cores, 8GB RAM, 2GB Swap ZRAM, 64GB SSD LVM-Thin.
    - **Rede**: IP Estático (`var.docker_swarm_node01_ip`) na VLAN homelab.
    - **Segurança**: `nesting = true` e `keyctl = true` ativados para suporte completo ao Docker Swarm.
-   - **Já existe em produção** - ver runbook de import no topo deste README.
+   - **Criado do zero pelo IaC** - ver o aviso crítico no topo deste README.
 
 ---
 
@@ -128,7 +125,7 @@ terraform/
    - **Hardware**: 4 CPU Cores, 8GB RAM, 2GB Swap ZRAM, 64GB SSD LVM-Thin.
    - **Rede**: IP Estático (`var.docker_swarm_node02_ip`) na VLAN homelab.
    - **Segurança**: `nesting = true` e `keyctl = true` ativados para ingressar no cluster Docker Swarm.
-   - **Já existe em produção** - ver runbook de import no topo deste README.
+   - **Criado do zero pelo IaC** - ver o aviso crítico no topo deste README.
 
 ---
 
@@ -202,7 +199,10 @@ terraform init   # ou tofu init
 
 Isso gera/atualiza `.terraform.lock.hcl` - **esse arquivo deve ser commitado** (não está no `.gitignore`), para fixar o hash exato do build do provider junto com o range de versão em `providers.tf` (`~> 0.66`).
 
-### 3. Produção (VM 100, CTs 200/201, VM 300) - siga o runbook de import no topo deste README antes de continuar.
+### 3. Produção - confirme que o nó de destino está vazio antes de continuar
+
+O aviso crítico no topo deste README diz o que precisa sair do parque antigo
+ANTES de qualquer destruição, e por que a ordem não pode inverter.
 
 ### 4. Simular o plano de execução
 
@@ -210,7 +210,10 @@ Isso gera/atualiza `.terraform.lock.hcl` - **esse arquivo deve ser commitado** (
 terraform plan   # ou tofu plan
 ```
 
-Revise o plano com atenção redobrada a qualquer linha `# forces replacement` em recursos de produção - isso normalmente indica um `import` mal feito ou uma divergência real entre o `.tf` e o que está no cluster.
+Num parque novo, o plano correto diz `create` para TODOS os recursos. Qualquer
+`# forces replacement`, ou qualquer menção a um id que já existe no nó de
+destino, significa que o destino não está vazio - pare e confira antes de
+aplicar.
 
 ### 5. Aplicar
 
