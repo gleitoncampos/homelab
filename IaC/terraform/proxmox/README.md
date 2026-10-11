@@ -34,10 +34,9 @@ Duas consequências que continuam valendo, e que a decisão **não** dispensa:
   Confirme que o destino está vazio antes do primeiro `apply` — a garantia é o
   `plan` dizer `create` para todos os recursos e não citar nenhum id ocupado.
 
-### ⚠️ O que a recriação destrói, e o que precisa sair de lá ANTES
+### ⚠️ O que a recriação destrói — e o que ela NÃO destrói
 
-Vale para todo convidado, não só para o NAS. A diferença entre o que sobrevive
-e o que não sobrevive decide a ordem do procedimento.
+Vale para todo convidado, não só para o NAS.
 
 **Os discos de dados do NAS sobrevivem.** São físicos e entram pelo bloco
 `hostpci` do recurso, que passa a controladora inteira ao convidado. ⚠️ Sem
@@ -45,26 +44,29 @@ esse bloco a VM sobe com o disco de sistema e mais nada, **sem erro nenhum**:
 as montagens são declaradas com `nofail`, então a ausência some em vez de
 travar o boot.
 
+**E os UUIDs dos filesystems de dados sobrevivem junto**, porque moram no
+superbloco de cada disco, não no disco de sistema. Numa instalação nova o OMV
+os enumera de volta sozinho. ⚠️ Uma versão anterior deste README mandava
+coletá-los **antes** de destruir, sob pena de perdê-los — **isso é falso**, e
+seguir aquela ordem só adiava a destruição sem proteger nada:
+
+- `omv_data_filesystems` não guarda a associação entre UUID e ponto de
+  montagem. É **lista de permissão**: declara QUAIS filesystems montar. Quem
+  escolhe o ponto é o OMV, derivando do próprio UUID.
+- Os pools do mergerfs não leem nada declarado: são **eleitos em tempo de
+  execução** a partir do `lsblk` — SSD contra HDD por rotacionalidade, HDD por
+  tamanho mínimo — com assert de topologia que falha alto se a contagem não
+  bater.
+
+Portanto `make omv-fs`, que gera essa lista, roda igualmente bem **depois** da
+recriação. Ela é sempre **gerada**, nunca digitada à mão.
+
 **O disco de sistema do NAS é destruído**, e com ele a configuração do OMV:
-usuários, pastas compartilhadas, exports, e **a associação entre cada UUID de
-filesystem e seu ponto de montagem**. Numa instalação nova os discos aparecem
-íntegros no `lsblk` e nenhum deles montado — sem a lista de UUIDs, não há como
-saber qual disco é qual.
+usuários, pastas compartilhadas e exports. O playbook `00-omv-setup.yml` os
+recria.
 
-⚠️ **Por isso, e esta é a ordem que não pode inverter:**
-
-```bash
-make omv-fs      # coleta os UUIDs do NAS VIVO e propõe o group_vars
-```
-
-**Gere e instale essa lista enquanto a máquina antiga ainda está no ar.**
-Depois de destruída não há de onde coletar, e os dados ficam íntegros e
-inacessíveis. A lista é consumida por `00-omv-setup.yml`, que remonta os
-filesystems antes de montar os pools do mergerfs — ela é **gerada**, nunca
-digitada à mão.
-
-Os compartilhamentos Samba ainda **não** estão no playbook, por decisão
-registrada: uma recriação hoje os perde, e eles voltam à mão.
+⚠️ **O que a recriação perde de verdade:** os compartilhamentos Samba, que
+ainda **não** estão no playbook, por decisão registrada. Voltam à mão.
 
 ---
 
