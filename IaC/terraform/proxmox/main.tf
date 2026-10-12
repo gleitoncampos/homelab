@@ -39,6 +39,11 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
   # com passthrough PCI a RAM é toda travada no host de qualquer forma). Sem
   # ele (floating = 0) o painel do PVE e o pve-exporter mostram a visão do
   # host, que com passthrough é sempre 100%.
+  #
+  # ⚠️ NESTA VM não resolve: o vtballoon do FreeBSD não envia estatística
+  # (conferido em 12/10/2026 — ballooninfo sem free_mem, painel segue ~100%).
+  # Fica por ser inofensivo e por paridade com a VM 300, onde funciona. A
+  # memória real do firewall vem do node_exporter do OPNsense.
   memory {
     dedicated = 4096 # 4GB RAM
     floating  = 4096
