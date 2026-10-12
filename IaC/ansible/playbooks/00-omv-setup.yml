@@ -416,6 +416,36 @@
             creates: /etc/netplan/50-cloud-init.yaml
           changed_when: true
 
+    # O OMV sobe o SSH com senha e root liberados (`PermitRootLogin yes`,
+    # `PasswordAuthentication yes`). Desligar pelo banco do OMV, não no
+    # sshd_config: o arquivo é gerado pelo salt e o próximo deploy desfaria.
+    # Acesso que sobra: chave, por usuário do grupo _ssh (o do Ansible entra
+    # nele logo após a instalação).
+    - name: Ler a configuração de SSH do OMV
+      ansible.builtin.command:
+        cmd: omv-confdbadm read conf.service.ssh
+      register: omv_ssh
+      changed_when: false
+      check_mode: false
+      when: omv_bin.stat.exists
+
+    - name: Desligar login por senha e login de root no SSH do OMV
+      ansible.builtin.command:
+        argv:
+          - omv-confdbadm
+          - update
+          - conf.service.ssh
+          - "{{ omv_ssh.stdout | from_json
+                | combine({'passwordauthentication': false, 'permitrootlogin': false})
+                | to_json }}"
+      when:
+        - omv_bin.stat.exists
+        - omv_ssh.stdout | default('') | trim is match('^\{')
+        - (omv_ssh.stdout | from_json).passwordauthentication | bool
+          or (omv_ssh.stdout | from_json).permitrootlogin | bool
+      changed_when: true
+      notify: Reimplantar o SSH do OMV
+
     # ------------------------------------------------------------------------
     # Plugins do OMV
     # ------------------------------------------------------------------------
@@ -838,6 +868,11 @@
           Fail2ban e envio de syslog para o Alloy.
 
   handlers:
+    - name: Reimplantar o SSH do OMV
+      ansible.builtin.command:
+        cmd: omv-salt deploy run ssh
+      changed_when: true
+
     # `omv-salt deploy run rsyslog` regenera o diretório /etc/rsyslog.d/ a
     # partir do banco de configuração do OMV. É o único caminho que faz o
     # `openmediavault-remote.conf` refletir o valor novo: editar o arquivo à
