@@ -868,13 +868,16 @@
       no_log: true
       when: nas_disponivel
 
+    # root:www-data 0640 nas duas tasks de /etc/pve não é escolha: é o que o
+    # pmxcfs impõe, e ele recusa chown/chmod. Pedir root:root fazia o conteúdo
+    # ser gravado e a task falhar logo depois, em "chgrp failed".
     - name: Aplicar padronização de armazenamento LVM-Thin (/etc/pve/storage.cfg)  # noqa: no-relative-paths
       ansible.builtin.template:
         src: "{{ playbook_dir }}/../templates/proxmox/proxmox_storage.j2"
         dest: /etc/pve/storage.cfg
         owner: root
-        group: root
-        mode: '0644'
+        group: www-data
+        mode: '0640'
       when: nas_disponivel
 
     - name: Aplicar padronização de Datacenter (Teclado ABNT2 pt-br e E-mail de Alertas)  # noqa: no-relative-paths
@@ -882,8 +885,8 @@
         src: "{{ playbook_dir }}/../templates/proxmox/proxmox_datacenter.j2"
         dest: /etc/pve/datacenter.cfg
         owner: root
-        group: root
-        mode: '0644'
+        group: www-data
+        mode: '0640'
 
     - name: Configurar e-mail oficial do usuário root@pam no Proxmox
       ansible.builtin.command: "pveum user modify root@pam -email {{ proxmox_alert_email }}"
