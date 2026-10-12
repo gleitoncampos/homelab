@@ -258,7 +258,18 @@
       failed_when: false
       check_mode: false
 
+    - name: "[--check] Plugins que a execução real vai instalar"
+      when: ansible_check_mode
+      ansible.builtin.debug:
+        msg: "{{ opn_pkg_check.results | selectattr('rc', 'ne', 0) | map(attribute='item') | list }}"
+
+    # Só na execução real: em `--check` o `pkg install` acima é um `command`,
+    # que o Ansible pula, e todo plugin de um firewall novo aparece ausente —
+    # o abort impedia o --check de chegar ao diff do config.xml, que é o que
+    # ele existe para mostrar. A conferência continua rodando e o aviso abaixo
+    # lista o que a execução real vai instalar.
     - name: Abortar se algum plugin exigido não foi instalado
+      when: not ansible_check_mode
       ansible.builtin.assert:
         that: "item.rc == 0"
         fail_msg: >-
