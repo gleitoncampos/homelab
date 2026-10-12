@@ -498,7 +498,10 @@ resource "proxmox_virtual_environment_container" "docker_swarm_node02" {
 
   disk {
     datastore_id = var.vm_datastore_id
-    size         = 64 # 64GB SSD Storage LVM-Thin
+    # 32 e não 64 como o CT 200: o thin pool do nó secundário tem ~54 GB e
+    # hospeda também o CT 210 e a VM 300. Com 64 aqui eram 160 GB alocados
+    # num pool de 54 (12/10/2026) — cheio, todos os guests do nó travam em I/O.
+    size = 32 # 32GB SSD Storage LVM-Thin
   }
 
   operating_system {
@@ -608,7 +611,7 @@ resource "proxmox_virtual_environment_container" "docker_dev_node" {
 
   disk {
     datastore_id = var.vm_datastore_id
-    size         = var.dev_node_disk_size # 32GB (prod: 64GB)
+    size         = var.dev_node_disk_size # 16GB (prod: 64/32GB)
   }
 
   operating_system {

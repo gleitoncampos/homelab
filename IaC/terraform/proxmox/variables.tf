@@ -238,8 +238,8 @@ variable "omv_cloud_image_checksum_algorithm" {
 
 variable "omv_disk_size" {
   type        = number
-  description = "Tamanho (GB) do disco principal da VM do OMV (a imagem cloud é importada e depois redimensionada para este valor)."
-  default     = 64
+  description = "Tamanho (GB) do disco principal da VM do OMV (a imagem cloud é importada e depois redimensionada para este valor). Só sistema: os dados ficam nos HDDs da controladora. 16 e não 64 para caber no thin pool de ~54 GB do nó secundário."
+  default     = 16
 }
 
 # ------------------------------------------------------------------------------
@@ -271,6 +271,6 @@ variable "dev_node_swap" {
 
 variable "dev_node_disk_size" {
   type        = number
-  description = "Disco (GB) do CT 210 (dev) - deliberadamente menor que produção (200/201)."
-  default     = 32
+  description = "Disco (GB) do CT 210 (dev) - deliberadamente menor que produção (200/201), e pequeno porque divide o thin pool de ~54 GB do nó secundário."
+  default     = 16
 }
