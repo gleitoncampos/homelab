@@ -216,6 +216,12 @@
           - python3-debian
         state: present
 
+    # No --check os pacotes acima não são instalados de fato, e as tasks de
+    # systemd mais abaixo falham com "Could not find the requested service".
+    # Elas passam a rodar no --check só quando o serviço já existe no host.
+    - name: Levantar os serviços existentes (gate das tasks de systemd no --check)
+      ansible.builtin.service_facts:
+
     # ------------------------------------------------------------------------
     # Instalação do OpenMediaVault
     # ------------------------------------------------------------------------
@@ -502,6 +508,7 @@
         name: chrony
         state: restarted
         enabled: true
+      when: not ansible_check_mode or 'chrony.service' in ansible_facts.services
 
     - name: Configurar ZRAM Swap Comprimido em RAM com algoritmo lz4
       ansible.builtin.copy:
@@ -519,6 +526,7 @@
         name: zramswap
         state: restarted
         enabled: true
+      when: not ansible_check_mode or 'zramswap.service' in ansible_facts.services
 
     - name: Configurar Fail2ban para proteção do SSH no OMV
       ansible.builtin.copy:
@@ -540,6 +548,7 @@
         name: fail2ban
         state: started
         enabled: true
+      when: not ansible_check_mode or 'fail2ban.service' in ansible_facts.services
 
     - name: Configurar Blacklist de módulos de Kernel não utilizados (bluetooth, firewire)
       ansible.builtin.copy:
@@ -693,6 +702,7 @@
         name: rsyslog
         state: restarted
         enabled: true
+      when: not ansible_check_mode or 'rsyslog.service' in ansible_facts.services
 
     - name: Agendar fstrim semanal nos domingos às 02:00 AM para manutenção dos SSDs
       ansible.builtin.raw: '(crontab -l 2>/dev/null; echo "0 2 * * 0 /sbin/fstrim -av") | sort -u | crontab -'
