@@ -30,10 +30,26 @@
     # Privilégios mínimos para criar e gerenciar VMs e CTs. NÃO é
     # `Administrator`: uma role embutida com tudo derrota o propósito de ter um
     # usuário dedicado. Se faltar algum, acrescente aqui — nunca troque a role.
+    #
+    # Os cinco do fim, cada um exigido por um endpoint que o plano usa (PVE 9):
+    # Sys.AccessNetwork e Datastore.AllocateTemplate — query-url-metadata e
+    # download-url (ISO e templates); VM.Config.Cloudinit — ip_config e chave
+    # SSH da VM do NAS; VM.GuestAgent.Audit — o provider lê o IP pelo agente;
+    # Mapping.Use — hostpci só é permitido fora do root via PCI mapping.
     tf_privs: >-
       VM.Allocate VM.Config.Disk VM.Config.CPU VM.Config.Memory
       VM.Config.Network VM.Config.Options VM.Config.CDROM VM.Config.HWType
       VM.PowerMgmt VM.Console Datastore.AllocateSpace SDN.Use Sys.Audit
+      Sys.AccessNetwork Datastore.AllocateTemplate VM.Config.Cloudinit
+      VM.GuestAgent.Audit Mapping.Use
+    # Escopo restrito — nunca a raiz "/". /nodes é onde o PVE checa
+    # Sys.AccessNetwork; /mapping/pci, onde checa Mapping.Use.
+    tf_acl_paths:
+      - /vms
+      - /storage
+      - /sdn
+      - /nodes
+      - /mapping/pci
 
   tasks:
     # Listar-e-condicionar em vez de criar-e-engolir-o-erro. `ignore_errors`
@@ -71,13 +87,9 @@
       when: tf_user not in (pve_users.stdout | from_json | map(attribute='userid') | list)
       changed_when: true
 
-    # Escopo restrito: /vms, /storage e /sdn — nunca a raiz "/".
-    - name: Aplicar a role nos escopos necessários
+    - name: Aplicar a role ao usuário nos escopos necessários
       ansible.builtin.command: "pveum aclmod {{ item }} -user {{ tf_user }} -role {{ tf_role }}"
-      loop:
-        - /vms
-        - /storage
-        - /sdn
+      loop: "{{ tf_acl_paths }}"
       changed_when: true
 
     - name: Levantar os tokens já existentes do usuário
@@ -99,19 +111,37 @@
       changed_when: true
       no_log: true
 
+    # ⚠️ Com privsep=1 o token NÃO herda as ACLs do usuário: o efetivo é a
+    # interseção das duas. Só a do usuário deixava o token com `{}` em todo
+    # caminho (`pveum user token permissions`), e o primeiro `terraform apply`
+    # morria em "Permission check failed". Depois da criação: aclmod -token
+    # exige o token existente.
+    - name: Aplicar a role ao token nos mesmos escopos
+      ansible.builtin.command: >-
+        pveum aclmod {{ item }} -token '{{ tf_user }}!{{ tf_token }}' -role {{ tf_role }}
+      loop: "{{ tf_acl_paths }}"
+      changed_when: true
+
+    - name: Ver se o tokens.auto.tfvars já existe na máquina de controle
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../../terraform/proxmox/tokens.auto.tfvars"
+      register: tokens_tfvars
+      delegate_to: localhost
+      become: false
+      run_once: true
+
     - name: Guardar o par id/segredo deste nó
       ansible.builtin.set_fact:
         tf_token_id: "{{ tf_user }}!{{ tf_token }}"
         tf_token_secret: "{{ (token_criado.stdout | from_json).value if not token_criado is skipped else '' }}"
       no_log: true
 
-    # O token existia e nós não temos o segredo. Falhar é o certo: seguir em
-    # frente escreveria uma string vazia por cima de uma credencial que está
-    # funcionando, e o `terraform plan` erraria em "401 authentication failure"
-    # sem qualquer pista de que a causa foi este playbook.
+    # O token existia, nós não temos o segredo E o arquivo não está aqui: aí
+    # falhar é o certo. Com o arquivo presente, reexecutar é o caminho normal
+    # para reconciliar role e ACLs, e o arquivo simplesmente não é reescrito.
     - name: "Abortar se o token já existe e o segredo não está mais disponível"
       ansible.builtin.assert:
-        that: tf_token_secret | length > 0
+        that: tf_token_secret | length > 0 or tokens_tfvars.stat.exists
         fail_msg: >-
           O token {{ tf_user }}!{{ tf_token }} já existe neste nó, e o Proxmox
           só exibe o segredo no momento da criação. Se o
@@ -120,6 +150,18 @@
           este playbook de novo. Se o arquivo existe e está correto, não há
           nada a fazer aqui.
       when: tf_token_secret | length == 0
+
+    # Um nó com token novo e o outro sem: escrever o arquivo apagaria o
+    # segredo do segundo. Ou os dois foram criados agora, ou nenhum.
+    - name: Abortar se só parte dos nós gerou token novo
+      ansible.builtin.assert:
+        that: >-
+          (ansible_play_hosts | map('extract', hostvars, 'tf_token_secret') | select | list | length)
+          in [0, ansible_play_hosts | length]
+        fail_msg: >-
+          Só parte dos nós gerou token novo nesta execução. Rotacione em todos
+          (`pveum user token remove {{ tf_user }} {{ tf_token }}`) e rode de novo.
+      run_once: true
 
     # Um arquivo só, escrito a partir dos fatos dos DOIS nós — daí o
     # `run_once` com `delegate_to`. Aqui ele é correto (ao contrário do que
@@ -133,11 +175,13 @@
       become: false
       run_once: true
       no_log: true
+      when: tf_token_secret | length > 0
 
     - name: Confirmar
       ansible.builtin.debug:
         msg: >-
           🔑 Token de API pronto em {{ inventory_hostname }}
           ({{ tf_user }}!{{ tf_token }}, privsep=1, role {{ tf_role }}).
-          Os segredos foram escritos em
+          {{ 'Os segredos foram escritos em' if tf_token_secret | length > 0
+             else 'Token já existia; role e ACLs reconciliadas, sem tocar em' }}
           IaC/terraform/proxmox/tokens.auto.tfvars (0600, gitignorado).
