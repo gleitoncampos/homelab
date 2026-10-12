@@ -273,6 +273,19 @@ def verifica_render_cria_as_vlans():
     if interfaces is None or dhcpd is None:
         return
 
+    # A lista FIXA do gate 1 (as interfaces que não são VLAN) tem de ser
+    # exatamente o que o template emite. Escrita à mão, ela envelheceu: o
+    # `opt2` do Tailscale entrou no template em 03/09/2026 e o gate passou a
+    # recusar a regra dele, até 12/10/2026.
+    task = _achar(PB_OPNSENSE, GATE_ORFA)
+    expr = str((task or {}).get("vars", {}).get("_ifaces_do_config", ""))
+    m = re.search(r"\[\s*('[^']+'(?:\s*,\s*'[^']+')*)\s*\]", expr)
+    fixas_gate = set(re.findall(r"'([^']+)'", m.group(1))) if m else set()
+    fixas_template = {e.tag for e in interfaces if not e.tag.startswith("vlan")}
+    checar(fixas_gate == fixas_template,
+           f"lista fixa do gate 1 == interfaces fixas do template "
+           f"(gate {sorted(fixas_gate)}, template {sorted(fixas_template)})")
+
     for vlan in vlans:
         nome = f"vlan{vlan['tag']}"
         elemento = interfaces.find(nome)
