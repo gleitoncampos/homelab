@@ -323,6 +323,12 @@
     # firewall, e recuperar exige console. O `visudo -cf` roda ANTES de o
     # arquivo entrar no lugar.
     #
+    # O dono é o admin nomeado, não `ansible_user`: o 1º apply de um firewall
+    # novo roda como root (o admin ainda não existe) e o MESMO apply desliga o
+    # login de root (`permitrootlogin=0`). Gravar para `ansible_user` dava
+    # sudoers ao root e deixava o admin — o usuário de todas as execuções
+    # seguintes — sem sudo sem senha: a 2ª execução não tinha como entrar.
+    #
     # ⚠️ OVO E GALINHA: esta tarefa precisa de sudo para rodar. O primeiro
     # arquivo foi instalado fora de banda em 31/08/2026, pelo qemu-guest-agent
     # a partir do hipervisor (`qm guest exec 100`, que executa como root sem
@@ -334,7 +340,7 @@
         dest: /usr/local/etc/sudoers.d/30-ansible
         content: |
           # Gerado pelo Ansible (01-opnsense-setup.yml). NAO editar a mao.
-          {{ ansible_user }} ALL=(ALL) NOPASSWD: ALL
+          {{ opnsense_admin_username }} ALL=(ALL) NOPASSWD: ALL
         owner: root
         group: wheel
         mode: '0440'

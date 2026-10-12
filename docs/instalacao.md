@@ -268,10 +268,22 @@ reboot, ainda na console:
    (`config.xml.j2`); a da 2ª WAN vai em `passthrough_wan2_interface` no
    `99-local.yml`. O default é um nome Linux, que não existe no FreeBSD.
 
+**Seis segredos do vault ficam vazios de propósito** depois do `make bootstrap`
+e o playbook aborta sem eles: os dois hashes bcrypt (root e admin — gerados no
+próprio firewall, porque bcrypt não sai de openssl nem da stdlib do Python), a
+chave pública do admin, a senha PPPoE e o par de certificado da GUI, todos em
+base64. O formato de cada um está comentado em
+`inventories/vault.yml.example`; preencha com `ansible-vault edit`.
+
+**O 1º apply roda como root** (`-e ansible_user=root`): o inventário entra pelo
+admin nomeado, que ainda não existe — é este apply que o cria, com a chave e o
+sudo sem senha. O mesmo apply desliga o login de root; dali em diante, sem o
+`-e`.
+
 ```bash
 cd ../../ansible
 $EDITOR inventories/prod/group_vars/network/99-local.yml   # topologia real
-ansible-playbook playbooks/network/01-opnsense-setup.yml --check --diff
+ansible-playbook playbooks/network/01-opnsense-setup.yml -e ansible_user=root --check --diff
 ```
 
 > **Aviso de segurança.** Este playbook escreve `/conf/config.xml` inteiro, sem
@@ -280,7 +292,8 @@ ansible-playbook playbooks/network/01-opnsense-setup.yml --check --diff
 > backup remoto da configuração e recusa aplicar com endereço de documentação.
 
 ```bash
-ansible-playbook playbooks/network/01-opnsense-setup.yml
+ansible-playbook playbooks/network/01-opnsense-setup.yml -e ansible_user=root
+ssh <admin>@<lan_ipaddr> sudo -n true && echo admin-ok   # antes de qualquer outra execução
 cd ../terraform/proxmox
 terraform apply -var opnsense_agent_enabled=true -target=proxmox_virtual_environment_vm.opnsense
 ```

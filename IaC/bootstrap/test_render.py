@@ -183,6 +183,9 @@ if shutil.which("ansible-inventory"):
         # Endereco PCI e PER-HOST, no no que tem o dispositivo: o
         # 00-proxmox-api-token.yml cria o mapping onde a variavel existe. Num
         # no errado, o mapping apontaria para o dispositivo de outro host.
+        # O firewall e acessado pelo admin nomeado: o 1o apply desliga o login
+        # de root, e um inventario com root nao entraria na 2a execucao.
+        assert hv["opnsense"].get("ansible_user") == resp["dominio_admin_user"], hv["opnsense"]
         assert hv["no-um"].get("opnsense_wan_pci_id") == "0000:05:00.0", hv["no-um"]
         assert hv["no-um"].get("opnsense_wan2_pci_id") == "0000:04:00.0", hv["no-um"]
         assert "omv_hba_pci_id" not in hv["no-um"], "HBA do NAS vazou para o primario"

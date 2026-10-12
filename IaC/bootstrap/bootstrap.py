@@ -614,7 +614,7 @@ def render_hosts(env: str, resp: dict) -> str:
 {linha("node2", a.get("worker", ""))}
 
 [opnsense]
-{linha("opnsense", a.get("opnsense", ""), "root")}
+{linha("opnsense", a.get("opnsense", ""), resp["dominio_admin_user"])}
 
 [openwrt]
 {linha("openwrt", a.get("openwrt", ""), "root", " ansible_shell_type=sh")}
