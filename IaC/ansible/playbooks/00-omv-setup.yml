@@ -168,11 +168,11 @@
         update_cache: true
         upgrade: dist
 
-    - name: Instalar pacotes de suporte, microcódigo, Fail2ban, SMART, ZRAM e ferramentas CLI
+    - name: Instalar pacotes de suporte, Fail2ban, SMART, ZRAM e ferramentas CLI
       ansible.builtin.apt:
         name:
-          - intel-microcode
-          - amd64-microcode
+          # Sem microcódigo: o NAS é VM, e convidado não carrega microcódigo —
+          # quem o aplica é o hipervisor (00-proxmox-setup.yml).
           - fail2ban
           - smartmontools
           # Sem `cpufrequtils`: saiu do Debian 13 ("No package matching"), e
