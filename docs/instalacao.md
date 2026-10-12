@@ -1,6 +1,6 @@
 # Instalação
 
-Do hardware vazio às stacks no ar, em 14 passos, e como operar depois. As
+Do hardware vazio às stacks no ar, em 15 passos, e como operar depois. As
 premissas de arquitetura estão em [`CLAUDE.md`](../CLAUDE.md).
 
 **Só contribuir com código?** `make hooks` uma vez, depois
