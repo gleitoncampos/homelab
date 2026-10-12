@@ -69,7 +69,7 @@ contra o outro vai acusar diferença, e a diferença é conhecida.
   Wi-Fi, senha do SMB de backup e as duas do NUT. Nenhuma pergunta: 32 bytes
   aleatórios são melhores que qualquer senha escolhida à mão, e quem as lê é o
   Ansible.
-- **7 externas** — Cloudflare, GeoIP, ETPro e afins. Impossíveis de gerar. O
+- **8 externas** — Cloudflare, GeoIP, ETPro, a chave do Tailscale e afins. Impossíveis de gerar. O
   script imprime a URL do console e o comando que as produz, e aceita vazio: o
   `validate_vault.yml` cobra depois.
 - **6 do OPNsense**, que o `01-opnsense-setup.yml` exige. Admin com senha

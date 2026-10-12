@@ -168,6 +168,15 @@ EXTERNAL = [
         "",
     ),
     (
+        # Opcional por desenho: vazio, o partial do Tailscale grava
+        # <preAuthKey/> e a autenticação é feita pela GUI. Mas a variável tem
+        # de EXISTIR — o `{% if %}` do template aborta com "is undefined".
+        "opnsense_tailscale_preauth_key",
+        "Chave de pré-autorização do Tailscale (opcional, vazio = autentica pela GUI)",
+        "https://login.tailscale.com/admin/settings/keys",
+        "Chave viva no vault é credencial de admissão: prefira vazio + GUI",
+    ),
+    (
         "opnsense_etpro_telemetry_token",
         "Token ETPro (opcional, vazio desativa)",
         "https://www.proofpoint.com/us/products/et-pro-ruleset",
@@ -995,9 +1004,11 @@ def completar_vault(destino: Path, existente: dict, conteudo: str, dry: bool) ->
     import yaml
 
     desejado = yaml.safe_load(conteudo) or {}
+    # Ausente entra mesmo vazia: variável opcional precisa EXISTIR para o
+    # template (`{% if x %}` aborta em indefinida). Vazia só é trocada por valor.
     faltam = {
         k: v for k, v in desejado.items()
-        if isinstance(v, str) and v and existente.get(k) in (None, "")
+        if isinstance(v, str) and (k not in existente or (v and existente[k] in (None, "")))
     }
     if not faltam:
         ok(f"{destino.relative_to(REPO)} já completo — nada a acrescentar")

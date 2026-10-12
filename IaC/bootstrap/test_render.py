@@ -132,6 +132,26 @@ assert seg["portainer_admin_password"] in cred, "senha do Portainer deveria esta
 print(f"  OK credenciais: {len(humanas)} humanas, nenhum segredo de maquina vazado")
 print("\n  TODOS OS RENDERS PASSARAM")
 
+# 5a) o que o render do OPNsense consome e SO o vault fornece tem de sair do
+#     bootstrap: chave da fixture, menos o que os group_vars versionados
+#     definem, menos o que o template cobre com `| default`. A
+#     opnsense_tailscale_preauth_key faltava: o apply abortava em "is undefined"
+#     escondido atras de no_log, e o `make render-opnsense` passava porque a
+#     fixture a define.
+_ans = pathlib.Path(__file__).parents[1] / "ansible"
+_fix = set(yaml.safe_load((_ans / "tests/fixtures/opnsense.yml").read_text()))
+_vers = set()
+for _f in list((_ans / "inventories/_common").glob("*.yml")) + [
+        _f for _f in (_ans / "inventories/prod/group_vars").rglob("*.yml")
+        if _f.name not in ("vault.yml",) and not _f.name.startswith("99-")]:
+    _vers |= set(yaml.safe_load(_f.read_text()) or {})
+_comdefault = set(re.findall(r"(\w+)\s*\|\s*default\(",
+                  "".join(t.read_text() for t in (_ans / "templates/network/opnsense").glob("*.j2"))))
+_vk = set(yaml.safe_load(bs.render_vault("prod", resp, seg, pub)))
+_falta = _fix - _vers - _comdefault - _vk
+assert not _falta, f"o render do OPNsense consome e o vault do bootstrap nao gera: {sorted(_falta)}"
+print(f"  OK vault do bootstrap cobre o que so ele fornece ao render do OPNsense ({len(_fix - _vers - _comdefault)} chaves)")
+
 # 5b) segredos do OPNsense: os seis saem preenchidos, sem pergunta quando o
 #     cache ja tem root/PPPoE, e valor existente nunca e trocado.
 import base64 as _b64
@@ -175,7 +195,8 @@ if _sh.which("ansible-vault"):
         out = _sp.run(["ansible-vault", "view", "--vault-password-file", str(senha), str(alvo)],
                       capture_output=True, text=True, check=True, cwd=d).stdout
         v = yaml.safe_load(out)
-        assert v == {"a": "mantido", "b": "$2b$x/y", "c": "Q+/="}, v
+        # d: ausente no vault, entra mesmo vazia (opcional precisa existir)
+        assert v == {"a": "mantido", "b": "$2b$x/y", "c": "Q+/=", "d": ""}, v
         assert "..." not in out, "marcador de fim de documento no meio do vault"
         assert oct(alvo.stat().st_mode)[-3:] == "600"
     print("  OK vault existente: vazio completado, preenchido preservado, 0600")
