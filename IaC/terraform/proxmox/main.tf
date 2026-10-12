@@ -25,10 +25,13 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
   name        = "opnsense-firewall"
   description = "OPNsense Core Firewall & Gateway - Segmentação Multi-VLAN"
 
+  # Sem `affinity` aqui: o PVE só aceita essa opção do root@pam ("only root
+  # can set 'affinity' config") e quem aplica é o token. O pinning no núcleo 0
+  # é escrito como root por ansible/playbooks/00-proxmox-setup.yml, que antes
+  # confere que a VM tem 1 vCPU. Ver o ignore_changes no fim deste recurso.
   cpu {
-    cores    = 1 # 1 núcleo dedicado para teste de performance
-    type     = "host"
-    affinity = "0" # CPU Pinning no Core 0 da CPU Intel N100
+    cores = 1 # 1 núcleo dedicado para teste de performance
+    type  = "host"
   }
 
   memory {
@@ -139,6 +142,12 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
   # Ainda assim, rode `terraform plan` e confira o VMID real no cluster antes
   # do primeiro apply - se ela também já existir manualmente, importe-a
   # primeiro (mesmo procedimento usado para os CTs 200/201).
+
+  # O `affinity: 0` que o Ansible escreve não está declarado aqui; sem isto o
+  # plan seguinte tentaria removê-lo e falharia pelo mesmo motivo de root.
+  lifecycle {
+    ignore_changes = [cpu[0].affinity]
+  }
 }
 
 # ------------------------------------------------------------------------------
