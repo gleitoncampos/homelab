@@ -247,9 +247,13 @@ resource "proxmox_virtual_environment_container" "docker_swarm_node01" {
     swap      = 2048 # 2GB Swap ZRAM
   }
 
+  # Só `nesting` aqui: o PVE só aceita outra feature flag de root@pam
+  # ("changing feature flags (except nesting) is only allowed for root"), e
+  # quem aplica é o token. O `keyctl=1`, que o Docker exige em CT
+  # unprivileged, é gravado como root por ansible/playbooks/00-proxmox-setup.yml
+  # (passo 10, antes do bootstrap do Swarm). Ver `ignore_changes` abaixo.
   features {
     nesting = true # Habilita Nesting para execução segura de Docker Engine dentro do LXC
-    keyctl  = true # Habilita Keyctl para persistência de chaves do Docker Swarm
   }
 
   network_interface {
@@ -282,7 +286,7 @@ resource "proxmox_virtual_environment_container" "docker_swarm_node01" {
   # gerando diff perpétuo sem nenhuma mudança real no CT.
   lifecycle {
     prevent_destroy = true
-    ignore_changes  = [operating_system]
+    ignore_changes  = [operating_system, features] # features: keyctl é do Ansible
   }
 }
 
@@ -474,9 +478,13 @@ resource "proxmox_virtual_environment_container" "docker_swarm_node02" {
     swap      = 2048 # 2GB Swap ZRAM
   }
 
+  # Só `nesting` aqui: o PVE só aceita outra feature flag de root@pam
+  # ("changing feature flags (except nesting) is only allowed for root"), e
+  # quem aplica é o token. O `keyctl=1`, que o Docker exige em CT
+  # unprivileged, é gravado como root por ansible/playbooks/00-proxmox-setup.yml
+  # (passo 10, antes do bootstrap do Swarm). Ver `ignore_changes` abaixo.
   features {
     nesting = true # Habilita Nesting para execução segura de Docker Engine dentro do LXC
-    keyctl  = true # Habilita Keyctl para persistência de chaves do Docker Swarm
   }
 
   network_interface {
@@ -501,7 +509,7 @@ resource "proxmox_virtual_environment_container" "docker_swarm_node02" {
   #   terraform import proxmox_virtual_environment_container.docker_swarm_node02 <node>/201
   lifecycle {
     prevent_destroy = true
-    ignore_changes  = [operating_system]
+    ignore_changes  = [operating_system, features] # features: keyctl é do Ansible
   }
 }
 
@@ -572,9 +580,9 @@ resource "proxmox_virtual_environment_container" "docker_dev_node" {
   # namespaces de rede/mount que o dockerd cria em runtime. Isso já é
   # verdade para os CTs de produção (200/201); o dev node herda a mesma
   # fragilidade de propósito, pela regra de paridade de guest acima.
+  # Só `nesting`, pelo mesmo motivo dos CTs 200/201: `keyctl` é do Ansible.
   features {
     nesting = true
-    keyctl  = true
   }
 
   network_interface {
@@ -613,6 +621,6 @@ resource "proxmox_virtual_environment_container" "docker_dev_node" {
   # desligado fora de janelas de teste). `started` fica fora do controle do
   # Terraform depois do primeiro apply.
   lifecycle {
-    ignore_changes = [started]
+    ignore_changes = [started, features] # features: keyctl é do Ansible
   }
 }
