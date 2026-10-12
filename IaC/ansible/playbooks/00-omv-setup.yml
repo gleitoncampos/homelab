@@ -129,6 +129,15 @@
           - proxmox_backup_share_password
           - omv_admin_password
   tasks:
+    # Lido antes do apt: depois de instalado, as fontes do Debian passam a ser
+    # do OMV (ver "Entregar as fontes do Debian ao OMV", mais abaixo).
+    - name: Verificar se o OMV já está instalado
+      ansible.builtin.command: dpkg-query -W -f=${Status} openmediavault
+      register: omv_installed
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
     # Mesmo racional do 00-proxmox-setup.yml: o Debian 13 usa deb822, e manter
     # o `sources.list` antigo com o mesmo repositório declarado nos dois
     # formatos faz o apt avisar de entrada duplicada — além de deixar viva uma
@@ -142,6 +151,7 @@
         owner: root
         group: root
         mode: '0644'
+      when: "'install ok installed' not in omv_installed.stdout"
 
     - name: "Declarar os repositórios oficiais do Debian em deb822, suíte {{ omv_debian_suite }}"
       ansible.builtin.deb822_repository:
@@ -151,7 +161,11 @@
         suites: "{{ omv_debian_suite }} {{ omv_debian_suite }}-updates"
         components: [main, contrib, non-free, non-free-firmware]
         signed_by: /usr/share/keyrings/debian-archive-keyring.gpg
-        state: present
+        # Com o OMV instalado, o script dele declara as mesmas fontes em
+        # /etc/apt/sources.list e openmediavault-os-security.list, com outro
+        # Signed-By — e o apt recusa a lista inteira ("Conflicting values set
+        # for option Signed-By"). A partir daí a fonte é dele.
+        state: "{{ 'absent' if 'install ok installed' in omv_installed.stdout else 'present' }}"
 
     - name: "Declarar o repositório de segurança do Debian em deb822, suíte {{ omv_debian_suite }}"
       ansible.builtin.deb822_repository:
@@ -161,7 +175,11 @@
         suites: "{{ omv_debian_suite }}-security"
         components: [main, contrib, non-free, non-free-firmware]
         signed_by: /usr/share/keyrings/debian-archive-keyring.gpg
-        state: present
+        # Com o OMV instalado, o script dele declara as mesmas fontes em
+        # /etc/apt/sources.list e openmediavault-os-security.list, com outro
+        # Signed-By — e o apt recusa a lista inteira ("Conflicting values set
+        # for option Signed-By"). A partir daí a fonte é dele.
+        state: "{{ 'absent' if 'install ok installed' in omv_installed.stdout else 'present' }}"
 
     # A imagem genericcloud vem com /var/lib/apt/lists vazio; no --check o
     # update_cache abaixo não roda e toda instalação falha com "No package
@@ -253,13 +271,6 @@
     # repositório existe para evitar. A variável `omv_release` sobreviveu, mas
     # mudou de papel: em vez de DECLARAR a suíte, ela agora CONFERE a que o
     # script escreveu.
-    - name: Verificar se o OMV já está instalado
-      ansible.builtin.command: dpkg-query -W -f=${Status} openmediavault
-      register: omv_installed
-      changed_when: false
-      failed_when: false
-      check_mode: false
-
     - name: Baixar o script de instalação do OMV no commit fixado
       ansible.builtin.get_url:
         url: >-
@@ -300,6 +311,29 @@
       environment:
         DEBIAN_FRONTEND: noninteractive
         APT_LISTCHANGES_FRONTEND: none
+
+    # Primeira execução: o OMV acabou de escrever as fontes dele, e as nossas
+    # (escritas antes, com outro Signed-By) quebram o apt. Ver o `state:` dos
+    # dois deb822_repository no topo.
+    - name: Entregar as fontes do Debian ao OMV
+      ansible.builtin.file:
+        path: "/etc/apt/sources.list.d/{{ item }}.sources"
+        state: absent
+      loop: [debian, debian-security]
+      when:
+        - "'install ok installed' not in omv_installed.stdout"
+        - not ansible_check_mode
+
+    # ⚠️ O OMV reescreve o sshd_config com `AllowGroups root _ssh`. O usuário
+    # do Ansible (`debian`, da imagem cloud) não está no grupo, e a execução
+    # seguinte é recusada com "Permission denied (publickey)". Esta execução
+    # segue viva só porque reaproveita a conexão já aberta.
+    - name: Manter o usuário do Ansible com acesso SSH depois do OMV
+      ansible.builtin.user:
+        name: "{{ ansible_user }}"
+        groups: _ssh
+        append: true
+      when: not ansible_check_mode
 
     - name: "Relatar o que a instalação do OMV faria (modo --check)"
       ansible.builtin.debug:
@@ -353,10 +387,34 @@
           desta e seriam puladas em silêncio.
       when: not ansible_check_mode
 
-    - name: Semear o banco de configuração do OMV
-      ansible.builtin.command: omv-confdbadm populate
+    # ⚠️ Bug do OMV 8.1.1 (presente também no master em 12/10/2026): o
+    # populate.d/40netplan.sh passa o IP como objeto `ipaddress`, e o schema
+    # recusa com "The value '<IP do NAS>' is not a string" — o populate
+    # aborta ali e os scripts seguintes (timezone, nfs, cpupower) não rodam.
+    # Contorno: esconder o netplan da imagem durante o populate. Não perde
+    # nada: a rede deste host é o 50-cloud-init.yaml, que o OMV não toca (o
+    # cleanup dele só apaga `*openmediavault-*`), e sem interface no banco o
+    # deploy de systemd-networkd não escreve rede nenhuma. O `always` devolve
+    # o arquivo mesmo se o populate falhar.
+    - name: Semear o banco de configuração do OMV (sem o netplan da imagem)
       when: omv_bin.stat.exists
-      changed_when: true
+      block:
+        - name: Esconder o netplan da imagem do populate
+          ansible.builtin.command: mv /etc/netplan/50-cloud-init.yaml /root/50-cloud-init.yaml.populate
+          args:
+            removes: /etc/netplan/50-cloud-init.yaml
+          changed_when: true
+
+        - name: Semear o banco de configuração do OMV
+          ansible.builtin.command: omv-confdbadm populate
+          changed_when: true
+      always:
+        - name: Devolver o netplan da imagem
+          ansible.builtin.command: mv /root/50-cloud-init.yaml.populate /etc/netplan/50-cloud-init.yaml
+          args:
+            removes: /root/50-cloud-init.yaml.populate
+            creates: /etc/netplan/50-cloud-init.yaml
+          changed_when: true
 
     # ------------------------------------------------------------------------
     # Plugins do OMV
