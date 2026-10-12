@@ -348,6 +348,9 @@ def perguntar_respostas() -> str:
         "DOMINIO": ask("Domínio do lab (ex.: homelab.example)"),
         "ADMIN_USER": ask("Usuário administrativo do OPNsense", "netadmin"),
         "ADMIN_EMAIL": ask("E-mail para alertas do Proxmox"),
+        # Sem padrão de propósito: é o usuário que 00-node-bootstrap.yml CRIA
+        # nos nós do Swarm e o mesmo pelo qual o hosts.ini os alcança.
+        "SSH_USER": ask("Usuário de sistema nos nós do Swarm"),
     }
 
     # O prefixo vem ANTES da rede de hoje porque os convidados (manager,
@@ -422,7 +425,9 @@ def perguntar_respostas() -> str:
 
     for chave, valor in respostas.items():
         texto = texto.replace(f"@@{chave}@@", valor)
-    return texto
+    # Resposta vazia deixa `chave: ` com espaço no fim, e o yamllint do
+    # `make check` reprova o arquivo inteiro.
+    return "\n".join(linha.rstrip() for linha in texto.splitlines()) + "\n"
 
 
 def carregar_respostas() -> dict:
@@ -571,10 +576,21 @@ def render_vault(env: str, resp: dict, seg: dict, ssh_pub: str) -> str:
     return "\n".join(linhas)
 
 
+def render_local_all(resp: dict) -> str:
+    """group_vars/all/99-local.yml: o que é do operador e não pode morar no
+    00-common.yml versionado. `system_user` precisa ser o mesmo `ssh_user` do
+    hosts.ini — um cria a conta, o outro entra por ela."""
+    return (
+        f"# Gerado por IaC/bootstrap/bootstrap.py em {date.today().isoformat()}.\n"
+        "# NÃO versionado. Vence o 00-common.yml ao lado (ordem alfabética).\n"
+        f"system_user: {resp['ssh_user']!r}\n"
+    )
+
+
 def render_hosts(env: str, resp: dict) -> str:
     a = resp["rede_atual"]
     n = resp["nos"]
-    usuario = resp.get("ssh_user", "nuvidio")
+    usuario = resp["ssh_user"]
 
     def linha(nome: str, ip: str, user: str = "", extra: str = "") -> str:
         if not ip:
@@ -940,17 +956,13 @@ def main() -> None:
         if dry:
             info("[dry-run] parando: sem arquivo de respostas não há o que gerar")
             return
-        editor = os.environ.get("EDITOR", "")
-        print(
-            "\n  O plano de VLANs foi pré-preenchido e precisa da sua revisão —\n"
-            "  48 valores não se preenchem por prompt, mas se revisam de uma vez."
-        )
-        if editor and confirm(f"Abrir {ANSWERS.name} no {editor}?", default=True):
-            subprocess.run([editor, str(ANSWERS)])
-        else:
-            info(f"Revise à mão: {ANSWERS.relative_to(REPO)}")
 
     resp = carregar_respostas()
+    if not resp.get("ssh_user"):
+        die(
+            f"ssh_user ausente em {ANSWERS.relative_to(REPO)}",
+            hint="Rode `make bootstrap ARGS=--reconfigure` para responder de novo.",
+        )
     resp.setdefault("dominio_admin_user", resp.get("admin_user", "netadmin"))
     resp.setdefault("alerta_email", resp.get("email_alerta", ""))
 
@@ -964,6 +976,10 @@ def main() -> None:
         step(f"5. Gerando alvos — {env}")
         cifrar_vault(env, render_vault(env, resp, seg, ssh_pub), dry)
         write(ANSIBLE / "inventories" / env / "hosts.ini", render_hosts(env, resp), mode=0o600, dry=dry)
+        write(
+            ANSIBLE / "inventories" / env / "group_vars" / "all" / "99-local.yml",
+            render_local_all(resp), mode=0o600, dry=dry,
+        )
         if env == "prod":
             write(TERRAFORM / "terraform.tfvars", render_tfvars(resp, seg, ssh_pub), mode=0o600, dry=dry)
             write(REPO / ".githooks" / "secret-patterns.local.txt", render_patterns(resp), mode=0o644, dry=dry)

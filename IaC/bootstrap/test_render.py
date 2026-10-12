@@ -66,6 +66,13 @@ assert cp["all:vars"]["ntp_server_internal"] == "192.0.2.1"
 assert "\n# node2 ansible_host" in ini, "worker vazio deveria sair comentado"
 print(f"  OK hosts.ini: INI valido, secoes={len(cp.sections())}, worker ausente comentado")
 
+# 2b) 99-local.yml de group_vars/all -> system_user e o MESMO ssh_user do
+#     hosts.ini: um cria a conta nos nos, o outro entra por ela.
+loc = yaml.safe_load(bs.render_local_all(resp))
+assert loc == {"system_user": resp["ssh_user"]}, f"99-local inesperado: {loc}"
+assert f"ansible_user={resp['ssh_user']}" in ini, "hosts.ini sem o ssh_user respondido"
+print("  OK 99-local: system_user igual ao ansible_user dos nos")
+
 # 3) tfvars -> TODA variavel sem default do variables.tf, e CIDR nos IPs.
 #    A lista nao e escrita a mao: ela e LIDA do proprio variables.tf. Uma lista
 #    fixa aqui envelhece em silencio — foi o que aconteceu quando o token unico

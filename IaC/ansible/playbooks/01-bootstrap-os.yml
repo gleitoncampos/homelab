@@ -8,6 +8,7 @@
       vars:
         required_secrets:
           - ssh_public_key
+          - system_user
   tasks:
     - name: Configurar fuso horário (Timezone)
       community.general.timezone:

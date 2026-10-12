@@ -11,6 +11,7 @@
 #   terraform/proxmox/terraform.tfvars    IPs-ALVO (onde as VMs serão criadas)
 #   .githooks/secret-patterns.local.txt   hostnames e domínio, para o gate
 #   inventories/*/group_vars/all/vault.yml (só a parte não-secreta)
+#   inventories/*/group_vars/all/99-local.yml  usuário de sistema dos nós
 #
 # ⚠️ Editar aqui e rodar `make bootstrap` de novo REGENERA os alvos. Editar um
 # alvo à mão funciona até a próxima execução sobrescrever. A fonte é esta.
@@ -21,7 +22,7 @@
 dominio: @@DOMINIO@@
 admin_user: @@ADMIN_USER@@
 email_alerta: @@ADMIN_EMAIL@@
-ssh_user: nuvidio
+ssh_user: @@SSH_USER@@
 
 # Hostnames que o gate deve barrar em arquivo versionado, além dos nós Proxmox
 # declarados em `nos:`. Acrescente NAS, firewall, access point.
@@ -106,13 +107,11 @@ proxmox:
 # =============================================================================
 # Rede-ALVO — o plano de VLANs
 # =============================================================================
-# ⚠️ REVISE ANTES DE APLICAR. Este bloco é o destino, não o presente. Ele é
-# consumido pelo Terraform (onde as VMs nascem) e pelo playbook de rede, que
-# SUBSTITUI o /conf/config.xml inteiro do OPNsense e roda rc.reload_all. Um
-# plano errado aqui vira firewall reconfigurado, não um aviso.
-#
-# Enquanto a migração não acontece, é normal e esperado que estes IPs sejam
-# diferentes dos de `rede_atual`.
+# Endereços-alvo dos convidados que o Terraform cria, e o gateway da VLAN 20.
+# O plano de VLANs em si NÃO mora aqui: vive em
+# inventories/<env>/group_vars/network/99-local.yml, editado no passo 7 da
+# instalação. Uma cópia dele neste arquivo não era lida por ninguém e já
+# divergia do plano real.
 rede_alvo:
   cidr: 24
   gateway: "@@ALVO_PREFIXO@@.20.1"
@@ -120,54 +119,3 @@ rede_alvo:
   worker: "@@ALVO_PREFIXO@@.20.11"
   omv: "@@ALVO_PREFIXO@@.20.15"
   dev: "@@ALVO_PREFIXO@@.20.20"
-
-  vlans:
-    - tag: 10
-      name: MGMT
-      descr: Gerenciamento de infraestrutura (OPNsense, Proxmox, Swarm)
-      ip: "@@ALVO_PREFIXO@@.10.1"
-      subnet: 24
-      dhcp_enabled: false
-
-    - tag: 20
-      name: HOMELAB
-      descr: Servidores, Docker Swarm e storage NAS
-      ip: "@@ALVO_PREFIXO@@.20.1"
-      subnet: 24
-      dhcp_enabled: false
-
-    - tag: 30
-      name: TRUSTED
-      descr: Dispositivos pessoais de confiança
-      ip: "@@ALVO_PREFIXO@@.30.1"
-      subnet: 24
-      dhcp_enabled: true
-      dhcp_start: "@@ALVO_PREFIXO@@.30.100"
-      dhcp_end: "@@ALVO_PREFIXO@@.30.254"
-
-    - tag: 40
-      name: IOT
-      descr: Dispositivos IoT, sem acesso às demais VLANs
-      ip: "@@ALVO_PREFIXO@@.40.1"
-      subnet: 24
-      dhcp_enabled: true
-      dhcp_start: "@@ALVO_PREFIXO@@.40.100"
-      dhcp_end: "@@ALVO_PREFIXO@@.40.254"
-
-    - tag: 50
-      name: MEDIA
-      descr: TVs, consoles e streaming
-      ip: "@@ALVO_PREFIXO@@.50.1"
-      subnet: 24
-      dhcp_enabled: true
-      dhcp_start: "@@ALVO_PREFIXO@@.50.100"
-      dhcp_end: "@@ALVO_PREFIXO@@.50.254"
-
-    - tag: 60
-      name: GUEST
-      descr: Visitantes, isolada de tudo exceto internet
-      ip: "@@ALVO_PREFIXO@@.60.1"
-      subnet: 24
-      dhcp_enabled: true
-      dhcp_start: "@@ALVO_PREFIXO@@.60.100"
-      dhcp_end: "@@ALVO_PREFIXO@@.60.254"

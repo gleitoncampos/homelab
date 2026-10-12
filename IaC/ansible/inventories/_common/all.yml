@@ -21,7 +21,10 @@
 
 # Configurações do Sistema Operacional
 timezone: "America/Sao_Paulo"
-system_user: "nuvidio"
+# Placeholder de propósito: o valor real vem do `make bootstrap`, que escreve
+# group_vars/all/99-local.yml (gitignorado) com a mesma resposta usada no
+# hosts.ini. Esquecido, o validate_vault.yml recusa o placeholder.
+system_user: "TROCAR-usuario-de-sistema"
 containers_base_dir: "/srv/containers"
 
 # Diretório onde os compose.yml das stacks são copiados para o host antes do
