@@ -92,7 +92,7 @@
        falha no escuro. #}
 {% for vlan in vlans %}
     <vlan{{ vlan.tag }}>
-      <if>{{ parent_interface | default("vtnet0") }}.{{ vlan.tag }}</if>
+      <if>{{ parent_interface | default("vtnet0") }}_vlan{{ vlan.tag }}</if>
       <descr>{{ vlan.name | e }}</descr>
       <enable>1</enable>
       <spoofmac/>

@@ -292,12 +292,19 @@
        `if` levava o próprio dispositivo (vtnet0.N): VLAN pai de si mesma, e o
        kernel entrava em recursão em vlan_ioctl até estourar a pilha no boot
        ("configuring hardware interfaces"). O firewall antigo não tinha VLAN,
-       por isso nunca tinha sido exercitado. #}
+       por isso nunca tinha sido exercitado.
+
+       O NOME do dispositivo é `<pai>_vlan<tag>`, não `<pai>.<tag>`: o
+       rc.bootup procura interface inexistente ANTES de criar as VLANs, e só
+       pula as que casam o padrão volátil `_vlan|^vlan|^qinq`. Com `vtnet0.10`
+       o boot achava "interface faltando" e reatribuía as NICs sozinho (LAN na
+       igc0), em 12/10/2026. `_vlan<tag>` é o formato legado que o próprio
+       OPNsense preserva; `_interfaces.xml.j2` usa o mesmo nome. #}
     <vlan>
       <if>{{ parent_interface | default("vtnet0") }}</if>
       <tag>{{ vlan.tag }}</tag>
       <descr>{{ vlan.name | e }} - {{ vlan.descr | e }}</descr>
-      <vlanif>{{ parent_interface | default("vtnet0") }}.{{ vlan.tag }}</vlanif>
+      <vlanif>{{ parent_interface | default("vtnet0") }}_vlan{{ vlan.tag }}</vlanif>
     </vlan>
 {% endfor %}
   </vlans>

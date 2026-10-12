@@ -64,7 +64,7 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
   # arquivo quando presente: com `vlan_id` setado, o Proxmox transforma a
   # porta virtual em modo ACCESS e remove (untag) toda tag 802.1Q antes de
   # entregar o frame ao guest. A OPNsense cria internamente subinterfaces
-  # tagged (vtnet0.10, vtnet0.20, vtnet0.30, ...) sobre esta MESMA NIC virtual
+  # tagged (vtnet0_vlan10, vtnet0_vlan20, ...) sobre esta MESMA NIC virtual
   # para cada VLAN - se a tag já foi removida pelo Proxmox, essas
   # subinterfaces nunca recebem nenhum frame. O `terraform plan`/`apply` não
   # falha com `vlan_id` setado: a VM cria, sobe, faz boot normalmente. O que

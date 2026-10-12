@@ -27,7 +27,7 @@
 +      <spoofmac/>
 +    </opt2>
 +    <vlan10>
-+      <if>vtnet0.10</if>
++      <if>vtnet0_vlan10</if>
 +      <descr>MGMT</descr>
 +      <enable>1</enable>
 +      <spoofmac/>
@@ -35,7 +35,7 @@
 +      <subnet>24</subnet>
 +    </vlan10>
 +    <vlan20>
-+      <if>vtnet0.20</if>
++      <if>vtnet0_vlan20</if>
 +      <descr>HOMELAB</descr>
 +      <enable>1</enable>
 +      <spoofmac/>

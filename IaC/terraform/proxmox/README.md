@@ -93,7 +93,7 @@ terraform/
 1. **VM 100 (`opnsense-firewall`)**:
    - **SO**: OPNsense Core Firewall & Primary Router (FreeBSD), instalado via ISO.
    - **Hardware**: 1 CPU Core (Affinity `0` dedicado no Intel N100), 4GB RAM, 32GB SSD (`scsi0`, controlador `virtio-scsi-single`).
-   - **Rede LAN**: `vmbr0` em modo **trunk** (sem `vlan_id` na interface) - a própria OPNsense cria as subinterfaces taggeadas (`vtnet0.10`, `.20`, `.30`, ...) internamente. Ver aviso abaixo.
+   - **Rede LAN**: `vmbr0` em modo **trunk** (sem `vlan_id` na interface) - a própria OPNsense cria as subinterfaces taggeadas (`vtnet0_vlan10`, `_vlan20`, `_vlan30`, ...) internamente. Ver aviso abaixo.
    - **Rede WAN**: PCIe Pass-through (VT-d/IOMMU) da interface física WAN (`enp5s0` no nó primário), via bloco `hostpci` com o PCI mapping `opnsense-wan` (e `opnsense-wan2` para a 2ª WAN), criado como root por `ansible/playbooks/00-proxmox-api-token.yml` a partir do endereço na linha do nó no `hosts.ini`.
    - **Boot**: ISO do OPNsense em storage **local** (`local:iso/...`), com `boot_order = ["scsi0", "ide3"]`. A imagem NÃO precisa mais ser enviada à mão: `proxmox_download_file.opnsense_iso` a baixa de `var.opnsense_iso_url`, confere o SHA256 publicado pelo projeto e descomprime o `.bz2`.
 

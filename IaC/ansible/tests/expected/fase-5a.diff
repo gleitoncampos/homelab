@@ -373,7 +373,8 @@
        <tag>10</tag>
 -      <ifname>vtnet0</ifname>
        <descr>MGMT - Gerenciamento</descr>
-       <vlanif>vtnet0.10</vlanif>
+-      <vlanif>vtnet0.10</vlanif>
++      <vlanif>vtnet0_vlan10</vlanif>
      </vlan>
      <vlan>
 -      <if>vtnet0.20</if>
@@ -381,7 +382,8 @@
        <tag>20</tag>
 -      <ifname>vtnet0</ifname>
        <descr>HOMELAB - Servidores</descr>
-       <vlanif>vtnet0.20</vlanif>
+-      <vlanif>vtnet0.20</vlanif>
++      <vlanif>vtnet0_vlan20</vlanif>
      </vlan>
    </vlans>
 +  <gateways>

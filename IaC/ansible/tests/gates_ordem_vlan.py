@@ -291,8 +291,13 @@ def verifica_render_cria_as_vlans():
     # panic no boot. Aconteceu no 1º apply de 12/10/2026.
     for v in raiz.findall("./vlans/vlan"):
         pai, dev = v.findtext("if"), v.findtext("vlanif")
-        checar(pai and dev and pai != dev and dev == f"{pai}.{v.findtext('tag')}",
+        checar(pai and dev and pai != dev and dev == f"{pai}_vlan{v.findtext('tag')}",
                f"<vlan> {dev}: pai {pai!r} é a interface física, não a própria VLAN")
+        # O rc.bootup checa interface inexistente ANTES de criar as VLANs e só
+        # pula nome que casa este padrão (plugins_devices, `volatile`). Fora
+        # dele, o boot reatribui as NICs sozinho — aconteceu em 12/10/2026.
+        checar(bool(re.search(r"_vlan|^vlan|^qinq", dev or "")),
+               f"<vlan> {dev}: nome casa o padrão volátil do boot (_vlan|^vlan|^qinq)")
         checar(v.find("ifname") is None, f"<vlan> {dev}: sem <ifname>, que o modelo não tem")
 
     for vlan in vlans:
@@ -306,8 +311,8 @@ def verifica_render_cria_as_vlans():
         # cria; divergir aqui produz interface apontando para device que não
         # existe, e o OPNsense sobe sem ela, calado.
         dev = elemento.findtext("if")
-        checar(dev is not None and dev.endswith(f".{vlan['tag']}"),
-               f"<{nome}><if> aponta para o device .{vlan['tag']} (veio {dev})")
+        checar(dev is not None and dev.endswith(f"_vlan{vlan['tag']}"),
+               f"<{nome}><if> aponta para o device _vlan{vlan['tag']} (veio {dev})")
         checar(elemento.findtext("ipaddr") == vlan["ip"],
                f"<{nome}><ipaddr> == {vlan['ip']}")
 
