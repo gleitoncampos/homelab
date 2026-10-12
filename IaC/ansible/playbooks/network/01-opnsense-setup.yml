@@ -156,8 +156,11 @@
         # por VLAN. O nome da interface de VLAN é `vlan<tag>` e NÃO `optN` —
         # `opt1` já é a segunda WAN, e as regras referenciam `vlan10`..`vlan60`
         # como identificador. Trocar a convenção aqui quebra as 13 regras.
+        # ⚠️ A lista fixa ESPELHA os elementos de `_interfaces.xml.j2`: interface
+        # nova lá entra aqui no mesmo commit. `opt2` (Tailscale, 03/09/2026)
+        # ficou de fora e o gate recusou a regra dela até 12/10/2026.
         _ifaces_do_config: >-
-          {{ ['lan', 'wan', 'lo0', 'opt1']
+          {{ ['lan', 'wan', 'lo0', 'opt1', 'opt2']
              + (vlans | map(attribute='tag') | map('string')
                       | map('regex_replace', '^', 'vlan') | list) }}
         # `interface` é lista separada por vírgula no config do OPNsense.
