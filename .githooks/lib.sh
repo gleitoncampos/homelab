@@ -35,6 +35,7 @@ warn_missing_local() {
 # Uso:  split_pattern "$line" && echo "$P_LABEL $P_REGEX $P_EXEMPT"
 split_pattern() {
   local line="$1" rest
+  # shellcheck disable=SC2034  # lido por quem faz `source` deste arquivo
   P_LABEL="${line%%\%\%*}"; rest="${line#*%%}"
   P_REGEX="${rest%%\%\%*}"; P_EXEMPT="${rest#*%%}"
   [[ "$P_EXEMPT" == "$rest" ]] && P_EXEMPT=""

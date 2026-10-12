@@ -29,7 +29,9 @@ mapeamento="$(grep -E '^[^#[:space:]#].*ansible_host=' "${inventario}" || true)"
 [[ -n "${mapeamento}" ]] || { echo "✗ nenhum host com ansible_host= em ${inventario}" >&2; exit 1; }
 
 falhas=0
-while read -r linha; do
+# O laço lê do fd 3, não do stdin: `ssh` e `ssh-copy-id` herdam o stdin e o
+# consomem, e o laço parava no primeiro host sem erro nenhum.
+while read -r linha <&3; do
   [[ -n "${linha}" ]] || continue
   ip="$(grep -oE 'ansible_host=[^[:space:]]+' <<<"${linha}" | cut -d= -f2)"
   usuario="$(grep -oE 'ansible_user=[^[:space:]]+' <<<"${linha}" | cut -d= -f2 || true)"
@@ -52,7 +54,7 @@ while read -r linha; do
     echo "✗ ${nome}: falhou" >&2
     falhas=$((falhas + 1))
   fi
-done <<<"${mapeamento}"
+done 3<<<"${mapeamento}"
 
 # O agente é exigência do provider do Terraform (`ssh { agent = true }` em
 # providers.tf), não conveniência: sem a chave carregada, o upload de imagem
