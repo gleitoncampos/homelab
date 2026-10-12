@@ -163,6 +163,16 @@
         signed_by: /usr/share/keyrings/debian-archive-keyring.gpg
         state: present
 
+    # A imagem genericcloud vem com /var/lib/apt/lists vazio; no --check o
+    # update_cache abaixo não roda e toda instalação falha com "No package
+    # matching". Baixar o índice não muda configuração do host.
+    - name: Popular o índice do APT também no --check
+      ansible.builtin.apt:
+        update_cache: true
+      check_mode: false
+      changed_when: false
+      when: ansible_check_mode
+
     - name: Atualizar cache do APT e pacotes no OMV Host
       ansible.builtin.apt:
         update_cache: true
