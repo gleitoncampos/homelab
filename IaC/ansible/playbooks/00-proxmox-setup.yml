@@ -2,6 +2,11 @@
 - name: "00 - Proxmox VE Host Setup, Hardening, Performance Enterprise e Exportação de Configurações"
   hosts: proxmox
   become: true
+  # Handler notificado antes de uma falha some: a task que notificou já
+  # reporta `ok` na reexecução. Assim o `update-grub` ficou pendente em
+  # 12/10/2026 — /etc/default/grub com o IOMMU, grub.cfg sem, e o reboot
+  # subiria sem IOMMU sem nada acusar.
+  force_handlers: true
 
   vars:
     # Suíte Debian da versão alvo do Proxmox VE: PVE 9 roda sobre Debian 13
