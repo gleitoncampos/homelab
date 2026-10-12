@@ -3,7 +3,7 @@
        <mirror/>
        <flavour/>
 -      <plugins>os-crowdsec,os-etpro-telemetry,os-igmp-proxy,os-isc-dhcp,os-mdns-repeater,os-monit,os-node_exporter,os-qemu-guest-agent,os-speedtest-community,os-theme-cicada,os-upnp</plugins>
-+      <plugins>os-arpwatch,os-crowdsec,os-etpro-telemetry,os-igmp-proxy,os-mdns-repeater,os-monit,os-node_exporter,os-osint,os-qemu-guest-agent,os-speedtest-community,os-tailscale,os-theme-rebellion,os-upnp</plugins>
++      <plugins>os-arpwatch,os-crowdsec,os-etpro-telemetry,os-igmp-proxy,os-mdns-repeater,os-monit,os-node_exporter,os-osint,os-qemu-guest-agent,os-tailscale,os-theme-rebellion,os-upnp</plugins>
        <type/>
        <subscription/>
        <reboot/>

@@ -1527,7 +1527,6 @@ opnsense_plugins:
   - os-node_exporter
   - os-osint
   - os-qemu-guest-agent
-  - os-speedtest-community
   - os-tailscale          # VPN de acesso remoto — roadmap §3.7
   - os-theme-rebellion    # substitui os-theme-cicada
   - os-upnp
