@@ -382,7 +382,10 @@
           - fail2ban
           - smartmontools
           - proxmox-backup-client
-          - cpufrequtils
+          # Sem `cpufrequtils`: o pacote saiu do Debian 13 e o apt falha com
+          # "No package matching". Nem faz falta — o driver é `intel_pstate` e o
+          # kernel do PVE já sobe com o governor `performance`, que era tudo o
+          # que o /etc/default/cpufrequtils pedia.
           - ksmtuned
           - chrony
           - zram-tools
@@ -466,15 +469,6 @@
         name: fail2ban
         state: started
         enabled: true
-
-    - name: Configurar CPU Performance Governor no Proxmox Host
-      ansible.builtin.copy:
-        dest: /etc/default/cpufrequtils
-        content: |
-          GOVERNOR="performance"
-        owner: root
-        group: root
-        mode: '0644'
 
     - name: Desativar serviços de High Availability (HA) em nó único Proxmox (Economia de CPU/RAM)
       ansible.builtin.systemd:
