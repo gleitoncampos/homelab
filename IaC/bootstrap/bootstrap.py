@@ -184,6 +184,33 @@ EXTERNAL = [
     ),
 ]
 
+# Senha que uma PESSOA digita é perguntada, com sugestão: Enter aceita a
+# sugestão, ou digita-se outra. A sugestão usa o alfabeto do Wi-Fi (sem
+# ambiguidade visual, sem símbolo): a base64 de antes não passava pelo teclado
+# ABNT da console do noVNC, e a senha do admin do OPNsense ficou impossível de
+# digitar lá em 12/10/2026. Limites: os do validate_vault.yml (Portainer e
+# Grafana >= 16) e os do WPA2 (8 a 63).
+LIMITES_SENHA = {
+    "portainer_admin_password": (16, None),
+    "grafana_admin_password": (16, None),
+    "wifi_main_password": (8, 63),
+    "wifi_iot_password": (8, 63),
+    "wifi_media_password": (8, 63),
+    "wifi_guest_password": (8, 63),
+}
+
+# Nome de cada rede Wi-Fi, perguntado como as senhas. O padrão vem do arquivo
+# de respostas. Os quatro nomes de EXEMPLO são recusados: o validate_vault.yml
+# os barra (reescreveriam os SSID da casa com nomes publicados no repositório),
+# e a lista espelha `vault_example_ssids` de lá.
+WIFI_SSIDS = [
+    ("wifi_main_ssid", "main", "Nome do Wi-Fi principal"),
+    ("wifi_iot_ssid", "iot", "Nome do Wi-Fi IoT"),
+    ("wifi_media_ssid", "media", "Nome do Wi-Fi mídia"),
+    ("wifi_guest_ssid", "guest", "Nome do Wi-Fi visitantes"),
+]
+SSID_EXEMPLO = {"homelab-main", "homelab-iot", "homelab-media", "homelab-guest"}
+
 # Os seis que o 01-opnsense-setup.yml exige (validate_vault). Até 12/10/2026
 # ficavam vazios "porque bcrypt não sai da stdlib" — mas sai do módulo `bcrypt`
 # ou do `mkpasswd` (pacote whois), e os vazios obrigavam a um `ansible-vault
@@ -263,7 +290,7 @@ def cert_autoassinado(dominio: str) -> tuple[str, str]:
 
 
 def segredos_opnsense(existente: dict | None, ssh_pub: str, dominio: str,
-                      cache: dict) -> tuple[dict, list[tuple[str, str, str]]]:
+                      cache: dict, trocar: bool = False) -> tuple[dict, list[tuple[str, str, str]]]:
     """Valor já presente no vault é preservado. `cache` faz prod e dev
     compartilharem o mesmo valor — e perguntar uma vez só."""
     e = existente or {}
@@ -271,29 +298,42 @@ def segredos_opnsense(existente: dict | None, ssh_pub: str, dominio: str,
     humanas: list[tuple[str, str, str]] = []
 
     pw = e.get("opnsense_admin_password", "")
-    if e.get("opnsense_admin_password_hash"):
+    tem_hash = bool(e.get("opnsense_admin_password_hash"))
+    if tem_hash and not trocar:
         out["opnsense_admin_password_hash"] = e["opnsense_admin_password_hash"]
     else:
         # Hash e senha nascem juntos: senha nova com hash antigo seria
         # credencial entregue que não abre nada.
-        pw = pw or cache.setdefault("admin_pw", gen("senha"))
-        out["opnsense_admin_password_hash"] = cache.setdefault("admin_hash", bcrypt_hash(pw))
+        if "admin_pw" not in cache:
+            novo = perguntar_senha("OPNsense — admin nomeado (GUI, SSH e sudo)",
+                                   gen("wifi"), atual=tem_hash)
+            cache["admin_pw"] = pw if novo is None else novo
+            cache["admin_hash"] = (e["opnsense_admin_password_hash"] if novo is None
+                                   else bcrypt_hash(novo))
+        pw = cache["admin_pw"]
+        out["opnsense_admin_password_hash"] = cache["admin_hash"]
     out["opnsense_admin_password"] = pw
     if pw:
         humanas.append(("OPNsense — admin nomeado (GUI e sudo)", "opnsense_admin_password", pw))
 
-    if e.get("opnsense_root_password_hash"):
+    tem_root = bool(e.get("opnsense_root_password_hash"))
+    if tem_root and not trocar:
         out["opnsense_root_password_hash"] = e["opnsense_root_password_hash"]
     else:
         if "root_hash" not in cache:
             print("\n  OPNsense: a senha de root que você definiu na instalação. O apply")
             print("  a grava como hash; outra senha aqui troca a de root do firewall.")
+            if tem_root:
+                print(f"    {_c('90', 'Enter mantém a atual.')}")
             while True:
-                a = ask_secret("Senha de root do OPNsense")
+                a = ask_secret("Senha de root do OPNsense", obrigatorio=not tem_root)
+                if not a:
+                    cache["root_hash"] = e["opnsense_root_password_hash"]
+                    break
                 if a == ask_secret("Repita"):
+                    cache["root_hash"] = bcrypt_hash(a)
                     break
                 print("    (não conferem)")
-            cache["root_hash"] = bcrypt_hash(a)
         out["opnsense_root_password_hash"] = cache["root_hash"]
 
     if e.get("opnsense_pppoe_password_b64"):
@@ -335,6 +375,38 @@ def ask(label: str, default: str = "", *, obrigatorio: bool = True) -> str:
         if v or not obrigatorio:
             return v
         print("    (obrigatório)")
+
+
+def perguntar_senha(descricao: str, sugestao: str, *, atual: bool = False,
+                    minimo: int = 8, maximo: int | None = None) -> str | None:
+    """Senha que uma pessoa usa. Enter aceita a sugestão — ou, com `atual`,
+    mantém a do vault (devolve None, sem exibi-la). Digitada: sem eco, duas
+    vezes, dentro dos limites."""
+    print(f"\n  {descricao}")
+    if atual:
+        print(f"    {_c('90', 'Enter mantém a atual.')}")
+    else:
+        print(f"    sugestão: {sugestao}   {_c('90', '(Enter aceita)')}")
+    while True:
+        v = ask_secret("Senha", obrigatorio=False)
+        if not v:
+            return None if atual else sugestao
+        if len(v) < minimo or (maximo and len(v) > maximo):
+            faixa = f"{minimo} a {maximo}" if maximo else f"no mínimo {minimo}"
+            print(f"    (precisa ter {faixa} caracteres)")
+            continue
+        if v == ask_secret("Repita"):
+            return v
+        print("    (não conferem)")
+
+
+def perguntar_ssid(descricao: str, padrao: str) -> str:
+    while True:
+        v = ask(descricao, "" if padrao.lower() in SSID_EXEMPLO else padrao)
+        if v.lower() in SSID_EXEMPLO:
+            print("    (nome de exemplo do repositório — o validate_vault.yml o recusa)")
+            continue
+        return v
 
 
 def ask_secret(label: str, *, obrigatorio: bool = True) -> str:
@@ -566,27 +638,54 @@ def carregar_respostas() -> dict:
 # Fase 3 — segredos
 # ---------------------------------------------------------------------------
 def montar_segredos(existente: dict | None, ssh_pub: str, dominio: str,
-                    cache: dict) -> tuple[dict, list[tuple[str, str, str]]]:
-    """Devolve (segredos, credenciais_humanas). Chave já presente no vault
-    anterior é PRESERVADA — este script nunca rotaciona sozinho."""
+                    cache: dict, resp: dict | None = None, trocar: bool = False,
+                    ) -> tuple[dict, list[tuple[str, str, str]], set[str]]:
+    """Devolve (segredos, credenciais_humanas, trocadas). Chave já presente no
+    vault é PRESERVADA — salvo, com `trocar`, as que uma pessoa digita, que
+    são perguntadas de novo (Enter mantém). `trocadas` são as que mudaram e
+    precisam sobrescrever o vault."""
     step("3. Segredos")
+    e = existente or {}
     segredos: dict[str, str] = {}
     humanas: list[tuple[str, str, str]] = []
+    trocadas: set[str] = set()
     preservadas = 0
 
     for chave, tipo, humano, descricao in GENERATED:
-        if existente and existente.get(chave):
-            segredos[chave] = existente[chave]
-            preservadas += 1
-            if humano:
-                humanas.append((descricao, chave, existente[chave]))
+        if not humano:
+            if e.get(chave):
+                segredos[chave] = e[chave]
+                preservadas += 1
+            else:
+                segredos[chave] = gen(tipo)
             continue
-        valor = gen(tipo)
+        if e.get(chave) and not trocar:
+            valor = e[chave]
+            preservadas += 1
+        else:
+            if chave not in cache:
+                minimo, maximo = LIMITES_SENHA.get(chave, (8, None))
+                novo = perguntar_senha(descricao, gen("wifi"), atual=bool(e.get(chave)),
+                                       minimo=minimo, maximo=maximo)
+                cache[chave] = e[chave] if novo is None else novo
+            valor = cache[chave]
+            if valor != e.get(chave):
+                trocadas.add(chave)
         segredos[chave] = valor
-        if humano:
-            humanas.append((descricao, chave, valor))
+        humanas.append((descricao, chave, valor))
 
-    ok(f"{len(GENERATED) - preservadas} gerados, {preservadas} preservados do vault atual")
+    ok(f"{len(GENERATED) - preservadas} definidos agora, {preservadas} preservados do vault atual")
+
+    wifi_resp = (resp or {}).get("wifi", {}) or {}
+    for chave, campo, descricao in WIFI_SSIDS:
+        if e.get(chave) and not trocar:
+            segredos[chave] = e[chave]
+            continue
+        if chave not in cache:
+            cache[chave] = perguntar_ssid(descricao, e.get(chave) or wifi_resp.get(campo, ""))
+        segredos[chave] = cache[chave]
+        if segredos[chave] != e.get(chave):
+            trocadas.add(chave)
 
     pendentes = [
         (c, l, u, n) for c, l, u, n in EXTERNAL if not (existente or {}).get(c)
@@ -607,10 +706,14 @@ def montar_segredos(existente: dict | None, ssh_pub: str, dominio: str,
     for chave, *_ in EXTERNAL:
         segredos.setdefault(chave, (existente or {}).get(chave, ""))
 
-    opn, opn_humanas = segredos_opnsense(existente, ssh_pub, dominio, cache)
+    opn, opn_humanas = segredos_opnsense(existente, ssh_pub, dominio, cache, trocar)
     segredos.update(opn)
     humanas += opn_humanas
-    return segredos, humanas
+    for k in ("opnsense_admin_password", "opnsense_admin_password_hash",
+              "opnsense_root_password_hash"):
+        if opn.get(k) and opn[k] != e.get(k):
+            trocadas.add(k)
+    return segredos, humanas, trocadas
 
 
 # ---------------------------------------------------------------------------
@@ -647,7 +750,8 @@ def render_vault(env: str, resp: dict, seg: dict, ssh_pub: str) -> str:
         "# ansible/.ansible_vault_pass (gitignorado — faça backup dele!).",
         "#",
         "# Editar:  ansible-vault edit inventories/%s/group_vars/all/vault.yml" % env,
-        "# Rodar o bootstrap de novo NÃO sobrescreve este arquivo.",
+        "# Rodar o bootstrap de novo só COMPLETA este arquivo (chave vazia ou",
+        "# ausente); valor preenchido só muda com `make bootstrap ARGS=--senhas`.",
         "",
         f"homelab_domain: {d}",
         f"ssh_public_key: {ssh_pub!r}",
@@ -661,10 +765,10 @@ def render_vault(env: str, resp: dict, seg: dict, ssh_pub: str) -> str:
     linhas += [
         "",
         "# SSIDs — nome da rede, não segredo, mas ficam junto da senha.",
-        f"wifi_main_ssid: {resp.get('wifi', {}).get('main', 'homelab')!r}",
-        f"wifi_iot_ssid: {resp.get('wifi', {}).get('iot', 'homelab-iot')!r}",
-        f"wifi_media_ssid: {resp.get('wifi', {}).get('media', 'homelab-media')!r}",
-        f"wifi_guest_ssid: {resp.get('wifi', {}).get('guest', 'homelab-guest')!r}",
+        f"wifi_main_ssid: {seg.get('wifi_main_ssid') or resp.get('wifi', {}).get('main', 'homelab')!r}",
+        f"wifi_iot_ssid: {seg.get('wifi_iot_ssid') or resp.get('wifi', {}).get('iot', 'homelab-iot')!r}",
+        f"wifi_media_ssid: {seg.get('wifi_media_ssid') or resp.get('wifi', {}).get('media', 'homelab-media')!r}",
+        f"wifi_guest_ssid: {seg.get('wifi_guest_ssid') or resp.get('wifi', {}).get('guest', 'homelab-guest')!r}",
         "",
         "# OPNsense — hashes bcrypt e valores em base64 (como o config.xml guarda).",
         f"opnsense_admin_username: {resp['dominio_admin_user']!r}",
@@ -995,7 +1099,8 @@ def vault_existente(env: str) -> dict | None:
         return None
 
 
-def completar_vault(destino: Path, existente: dict, conteudo: str, dry: bool) -> None:
+def completar_vault(destino: Path, existente: dict, conteudo: str, dry: bool,
+                    sobrescrever: set[str] | frozenset = frozenset()) -> None:
     """Vault existente: só entra chave AUSENTE ou VAZIA nele. Valor preenchido
     nunca é tocado — rotação é decisão, não efeito colateral. Antes, vault
     existente era pulado inteiro: chave nova no bootstrap só entrava com
@@ -1008,7 +1113,8 @@ def completar_vault(destino: Path, existente: dict, conteudo: str, dry: bool) ->
     # template (`{% if x %}` aborta em indefinida). Vazia só é trocada por valor.
     faltam = {
         k: v for k, v in desejado.items()
-        if isinstance(v, str) and (k not in existente or (v and existente[k] in (None, "")))
+        if isinstance(v, str) and (k not in existente or (v and existente[k] in (None, ""))
+                                   or (k in sobrescrever and v != existente.get(k)))
     }
     if not faltam:
         ok(f"{destino.relative_to(REPO)} já completo — nada a acrescentar")
@@ -1046,13 +1152,14 @@ def completar_vault(destino: Path, existente: dict, conteudo: str, dry: bool) ->
     ok(f"{destino.relative_to(REPO)} completado: {', '.join(sorted(faltam))}")
 
 
-def cifrar_vault(env: str, conteudo: str, dry: bool, existente: dict | None = None) -> None:
+def cifrar_vault(env: str, conteudo: str, dry: bool, existente: dict | None = None,
+                 sobrescrever: set[str] | frozenset = frozenset()) -> None:
     destino = ANSIBLE / "inventories" / env / "group_vars" / "all" / "vault.yml"
     if destino.exists():
         if existente is None:
             warn(f"{destino.relative_to(REPO)} existe mas não abriu — NÃO tocado")
             return
-        completar_vault(destino, existente, conteudo, dry)
+        completar_vault(destino, existente, conteudo, dry, sobrescrever)
         return
     if dry:
         info(f"[dry-run] cifraria {destino.relative_to(REPO)}")
@@ -1100,6 +1207,8 @@ def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--dry-run", action="store_true", help="mostra o que faria, sem escrever")
     p.add_argument("--reconfigure", action="store_true", help="repergunta e reescreve o arquivo de respostas")
+    p.add_argument("--senhas", action="store_true",
+                   help="repergunta as senhas de pessoa e os nomes de Wi-Fi (Enter mantém o atual)")
     args = p.parse_args()
     dry = args.dry_run
 
@@ -1135,10 +1244,15 @@ def main() -> None:
     cache_opnsense: dict = {}
     for env in ENVS:
         existente = vault_existente(env)
-        seg, humanas = montar_segredos(existente, ssh_pub, resp["dominio"], cache_opnsense)
+        seg, humanas, trocadas = montar_segredos(existente, ssh_pub, resp["dominio"],
+                                                 cache_opnsense, resp, args.senhas)
+        # dev tem senhas próprias para o que isola ambiente (render_vault gera
+        # outras a cada execução): trocar em prod não pode reescrevê-las em dev.
+        if env == "dev":
+            trocadas -= {"portainer_admin_password", "grafana_admin_password"}
 
         step(f"5. Gerando alvos — {env}")
-        cifrar_vault(env, render_vault(env, resp, seg, ssh_pub), dry, existente)
+        cifrar_vault(env, render_vault(env, resp, seg, ssh_pub), dry, existente, trocadas)
         write(ANSIBLE / "inventories" / env / "hosts.ini", render_hosts(env, resp), mode=0o600, dry=dry)
         write(
             ANSIBLE / "inventories" / env / "group_vars" / "all" / "99-local.yml",

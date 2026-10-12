@@ -65,10 +65,14 @@ inclui SSID, nome de usuário e outras chaves que o bootstrap não trata. Ou sej
 o exemplo não é um retrato fiel do que o `make bootstrap` produz — conferir um
 contra o outro vai acusar diferença, e a diferença é conhecida.
 
-- **15 geráveis** — senhas de banco, chaves de assinatura, JWT, senhas de
-  Wi-Fi, senha do SMB de backup e as duas do NUT. Nenhuma pergunta: 32 bytes
-  aleatórios são melhores que qualquer senha escolhida à mão, e quem as lê é o
-  Ansible.
+- **Geradas sem pergunta** — senhas de banco, chaves de assinatura, JWT e as
+  duas do NUT: quem as lê é o Ansible, e 32 bytes aleatórios bastam.
+- **Perguntadas, com sugestão** — toda senha que uma PESSOA digita (Portainer,
+  Grafana, as quatro do Wi-Fi, SMB do backup, 2º admin do NAS, admin do
+  OPNsense) e os quatro nomes de Wi-Fi. Enter aceita a sugestão; a sugestão
+  usa só letras e dígitos, porque a console do noVNC com teclado ABNT troca
+  símbolos. Nome de Wi-Fi de exemplo do repositório é recusado.
+  `make bootstrap ARGS=--senhas` pergunta todas de novo (Enter mantém a atual).
 - **8 externas** — Cloudflare, GeoIP, ETPro, a chave do Tailscale e afins. Impossíveis de gerar. O
   script imprime a URL do console e o comando que as produz, e aceita vazio: o
   `validate_vault.yml` cobra depois.

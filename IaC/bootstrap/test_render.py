@@ -155,6 +155,11 @@ print(f"  OK vault do bootstrap cobre o que so ele fornece ao render do OPNsense
 # 5b) segredos do OPNsense: os seis saem preenchidos, sem pergunta quando o
 #     cache ja tem root/PPPoE, e valor existente nunca e trocado.
 import base64 as _b64
+# Perguntas viram stubs: "Enter" = aceita a sugestão, ou mantém a atual.
+_enter = lambda d, sug, **k: None if k.get("atual") else sug
+bs.perguntar_senha = _enter
+_ssid_real = bs.perguntar_ssid
+bs.perguntar_ssid = lambda d, padrao: padrao or "rede-teste"
 cache = {"root_hash": bs.bcrypt_hash("raiz-teste"), "pppoe": _b64.b64encode(b"ppp").decode()}
 opn, opn_h = bs.segredos_opnsense(None, pub, "homelab.example", cache)
 assert all(opn[k] for k in bs.OPNSENSE_SEGREDOS), [k for k in bs.OPNSENSE_SEGREDOS if not opn[k]]
@@ -179,6 +184,33 @@ assert all(opn3[k] == "existente" for k in bs.OPNSENSE_SEGREDOS), "valor existen
 assert not h3 and not opn3["opnsense_admin_password"], "senha entregue sem o hash correspondente"
 print("  OK segredos do OPNsense: 6 preenchidos, hash confere, existente preservado")
 
+# 5d) senhas de PESSOA e nomes de Wi-Fi: perguntados (Enter aceita a sugestão),
+#     sugestão digitável em teclado ABNT, e --senhas troca só o que mudou.
+_resp_w = {**resp, "wifi": {"main": "casa", "iot": "homelab-iot", "media": "tv", "guest": "visita"}}
+bs.perguntar_ssid = _ssid_real
+bs.ask = lambda label, default="", obrigatorio=True: default or "casa-iot"  # Enter; padrao vazio -> digita
+bs.ask_secret = lambda label, obrigatorio=True: ""             # externos (Cloudflare...): Enter
+bs.step = lambda *_a: None
+seg2, hum2, troc2 = bs.montar_segredos(None, pub, "homelab.example", {**cache}, _resp_w)
+_humanas = {c for c, t, h, d in bs.GENERATED if h}
+assert _humanas | {"opnsense_admin_password"} <= {c for _d, c, _v in hum2}, hum2
+for _d, c, v in hum2:
+    assert re.fullmatch(r"[A-Za-z0-9]+", v), f"sugestao de {c} tem simbolo (nao passa no teclado ABNT da console)"
+assert seg2["wifi_iot_ssid"] == "casa-iot" and seg2["wifi_main_ssid"] == "casa", seg2["wifi_iot_ssid"]
+assert {"wifi_main_ssid", "wifi_main_password"} <= troc2
+_v2 = yaml.safe_load(bs.render_vault("prod", _resp_w, seg2, pub))
+assert _v2["wifi_iot_ssid"] == "casa-iot", "render_vault nao usou o SSID escolhido"
+# existente + --senhas + Enter em tudo: nada muda
+_ex = {**seg2}
+_, _, troc3 = bs.montar_segredos(_ex, pub, "homelab.example", {**cache}, _resp_w, trocar=True)
+assert not troc3, f"Enter deveria manter tudo, mudou: {troc3}"
+# existente + --senhas + senha nova digitada: so ela muda
+bs.perguntar_senha = lambda d, sug, **k: "NovaSenhaDoWifi2026" if "principal" in d else _enter(d, sug, **k)
+seg4, _, troc4 = bs.montar_segredos(_ex, pub, "homelab.example", {**cache}, _resp_w, trocar=True)
+assert troc4 == {"wifi_main_password"}, troc4
+bs.perguntar_senha = _enter
+print(f"  OK senhas de pessoa perguntadas ({len(hum2)}), sugestao digitavel, --senhas troca so o que mudou")
+
 # 5c) vault existente e COMPLETADO: chave vazia/ausente entra, preenchida fica.
 import subprocess as _sp, tempfile as _tf, shutil as _sh
 if _sh.which("ansible-vault"):
@@ -199,6 +231,11 @@ if _sh.which("ansible-vault"):
         assert v == {"a": "mantido", "b": "$2b$x/y", "c": "Q+/=", "d": ""}, v
         assert "..." not in out, "marcador de fim de documento no meio do vault"
         assert oct(alvo.stat().st_mode)[-3:] == "600"
+        # --senhas: chave PREENCHIDA so muda se estiver em `sobrescrever`
+        bs.completar_vault(alvo, v, "a: 'TROCADA'\nb: 'outra'\n", False, {"a"})
+        v2 = yaml.safe_load(_sp.run(["ansible-vault", "view", "--vault-password-file", str(senha), str(alvo)],
+                                    capture_output=True, text=True, check=True, cwd=d).stdout)
+        assert v2["a"] == "TROCADA" and v2["b"] == "$2b$x/y", v2
     print("  OK vault existente: vazio completado, preenchido preservado, 0600")
 else:
     print("  – ansible-vault ausente, completar_vault pulado")

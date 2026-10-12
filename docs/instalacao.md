@@ -156,7 +156,7 @@ lspci -nn | grep -i ethernet
 ## 4. Segredos e inventário
 
 ```bash
-make bootstrap
+make bootstrap                    # pergunta senhas de pessoa e nomes de Wi-Fi (Enter aceita a sugestão)
 $EDITOR .githooks/secret-patterns.local.txt   # o bootstrap trunca este arquivo
 make check && make secrets
 ```
