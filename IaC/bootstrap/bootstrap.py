@@ -350,17 +350,31 @@ def perguntar_respostas() -> str:
         "ADMIN_EMAIL": ask("E-mail para alertas do Proxmox"),
     }
 
-    print(_c("1", "\n  Rede de HOJE — é por onde o Ansible vai alcançar os hosts."))
+    # O prefixo vem ANTES da rede de hoje porque os convidados (manager,
+    # worker, NAS, dev) não existem antes do Terraform: num parque novo — o
+    # único caminho suportado — eles nascem já no endereço-alvo, e é nele que
+    # o Ansible os alcança. O padrão é esse endereço; Enter aceita.
+    print(
+        _c("1", "\n  Rede-ALVO — o plano de VLANs.")
+        + "\n  O prefixo abaixo vira <prefixo>.<vlan>.x nos endereços-alvo."
+    )
+    prefixo = ask("Prefixo das VLANs (ex.: 192.168)", "192.168")
+    respostas["ALVO_PREFIXO"] = prefixo
+
+    print(
+        _c("1", "\n  Rede de HOJE — é por onde o Ansible vai alcançar os hosts.")
+        + "\n  Convidados criados pelo Terraform já vêm com o endereço-alvo."
+    )
     respostas |= {
         "ATUAL_GATEWAY": ask("Gateway atual (quem roteia hoje)"),
-        "ATUAL_MANAGER": ask("IP do nó manager do Swarm"),
-        "ATUAL_WORKER": ask("IP do worker (vazio se não houver)", obrigatorio=False),
+        "ATUAL_MANAGER": ask("IP do nó manager do Swarm", f"{prefixo}.20.10"),
+        "ATUAL_WORKER": ask("IP do worker", f"{prefixo}.20.11", obrigatorio=False),
         "ATUAL_HV1": ask("IP do hypervisor primário"),
         "ATUAL_HV2": ask("IP do hypervisor secundário", obrigatorio=False),
-        "ATUAL_OMV": ask("IP do NAS/OMV", obrigatorio=False),
+        "ATUAL_OMV": ask("IP do NAS/OMV", f"{prefixo}.20.15", obrigatorio=False),
         "ATUAL_OPNSENSE": ask("IP do OPNsense", obrigatorio=False),
         "ATUAL_OPENWRT": ask("IP do OpenWrt", obrigatorio=False),
-        "ATUAL_DEV": ask("IP do CT de desenvolvimento", obrigatorio=False),
+        "ATUAL_DEV": ask("IP do CT de desenvolvimento", f"{prefixo}.20.20", obrigatorio=False),
     }
 
     # Papéis diferentes que às vezes coincidem: o gateway roteia, o servidor NTP
@@ -403,13 +417,6 @@ def perguntar_respostas() -> str:
             obrigatorio=False,
         ),
     }
-
-    print(
-        _c("1", "\n  Rede-ALVO — o plano de VLANs.")
-        + "\n  O prefixo abaixo vira 192.168.<vlan>.x no arquivo gerado;"
-        "\n  revise o plano inteiro no editor ao final."
-    )
-    respostas["ALVO_PREFIXO"] = ask("Prefixo das VLANs (ex.: 192.168)", "192.168")
 
     respostas["DATA"] = date.today().isoformat()
 
