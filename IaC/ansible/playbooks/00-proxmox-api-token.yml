@@ -31,17 +31,19 @@
     # `Administrator`: uma role embutida com tudo derrota o propósito de ter um
     # usuário dedicado. Se faltar algum, acrescente aqui — nunca troque a role.
     #
-    # Os cinco do fim, cada um exigido por um endpoint que o plano usa (PVE 9):
+    # Os seis do fim, cada um exigido por um endpoint que o plano usa (PVE 9):
     # Sys.AccessNetwork e Datastore.AllocateTemplate — query-url-metadata e
     # download-url (ISO e templates); VM.Config.Cloudinit — ip_config e chave
     # SSH da VM do NAS; VM.GuestAgent.Audit — o provider lê o IP pelo agente;
-    # Mapping.Use — hostpci só é permitido fora do root via PCI mapping.
+    # Mapping.Use — hostpci só é permitido fora do root via PCI mapping;
+    # VM.Audit — ler o status da VM recém-criada (sem ele o apply cria a VM e
+    # falha em seguida, deixando-a `tainted` no state).
     tf_privs: >-
       VM.Allocate VM.Config.Disk VM.Config.CPU VM.Config.Memory
       VM.Config.Network VM.Config.Options VM.Config.CDROM VM.Config.HWType
       VM.PowerMgmt VM.Console Datastore.AllocateSpace SDN.Use Sys.Audit
       Sys.AccessNetwork Datastore.AllocateTemplate VM.Config.Cloudinit
-      VM.GuestAgent.Audit Mapping.Use
+      VM.GuestAgent.Audit Mapping.Use VM.Audit
     # Escopo restrito — nunca a raiz "/". /nodes é onde o PVE checa
     # Sys.AccessNetwork; /mapping/pci, onde checa Mapping.Use.
     tf_acl_paths:
