@@ -212,8 +212,11 @@ ssh root@<IP-DO-NO> 'grep -o intel_iommu=on /proc/cmdline; dmesg | grep -e DMAR 
 cd ../terraform/proxmox
 terraform init
 terraform plan
-terraform apply -target=proxmox_virtual_environment_vm.opnsense
+terraform apply -var opnsense_agent_enabled=false -target=proxmox_virtual_environment_vm.opnsense
 ```
+
+O `-var ...=false` é só desta criação: o FreeBSD ainda não tem o guest agent,
+e com ele ligado o apply espera até o timeout. O passo 7 o liga pelo default.
 
 ⚠️ **Não aplique um plano salvo sem `-target`** (`terraform plan -out=x` seguido
 de `terraform apply x`): ele cria todos os convidados agora, na VLAN que ainda
@@ -294,7 +297,7 @@ ansible-playbook playbooks/network/01-opnsense-setup.yml -e ansible_user=root --
 ansible-playbook playbooks/network/01-opnsense-setup.yml -e ansible_user=root
 ssh <admin>@<lan_ipaddr> sudo -n true && echo admin-ok   # antes de qualquer outra execução
 cd ../terraform/proxmox
-terraform apply -var opnsense_agent_enabled=true -target=proxmox_virtual_environment_vm.opnsense
+terraform apply -target=proxmox_virtual_environment_vm.opnsense   # agente pelo default (true)
 ```
 
 ## 8. Demais convidados

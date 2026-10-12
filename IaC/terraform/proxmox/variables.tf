@@ -149,8 +149,8 @@ variable "vlan_homelab" {
 # das que ainda não bootaram nesta altura.
 variable "opnsense_agent_enabled" {
   type        = bool
-  description = "Liga o QEMU Guest Agent na VM do firewall. Falso na fase 1 (a ISO ainda vai ser instalada e o pacote os-qemu-guest-agent não existe no guest); passe `-var opnsense_agent_enabled=true` na fase 2, depois que playbooks/network/01-opnsense-setup.yml instalou o pacote."
-  default     = false
+  description = "Liga o QEMU Guest Agent na VM do firewall. Só a CRIAÇÃO (fase 1, ISO ainda não instalada, sem os-qemu-guest-agent no guest) passa `-var opnsense_agent_enabled=false`; daí em diante vale o default, depois que playbooks/network/01-opnsense-setup.yml instalou o pacote."
+  default     = true
 }
 
 variable "opnsense_iso_url" {

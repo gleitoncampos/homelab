@@ -40,13 +40,16 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
 
   # As duas fases da OPNsense, agora por VARIÁVEL e não por edição do arquivo.
   #
-  # Fase 1 (instalação via ISO): agente DESLIGADO, que é o default. Ninguém
-  # instalou o `os-qemu-guest-agent` dentro do FreeBSD ainda, e com
+  # Fase 1 (instalação via ISO), e SÓ ela, com o agente desligado:
+  #   terraform apply -var opnsense_agent_enabled=false -target=...opnsense
+  # Ninguém instalou o `os-qemu-guest-agent` dentro do FreeBSD ainda, e com
   # `agent.enabled = true` junto de `started = true` o apply fica preso
   # esperando um agente inexistente até o timeout.
   #
-  # Fase 2, depois que o playbook de rede instalou o pacote:
-  #   terraform apply -var opnsense_agent_enabled=true
+  # Fase 2 em diante: o default (true). Até 12/10/2026 o default era false e a
+  # fase 2 passava `-var ...=true` — todo `plan` posterior sem o `-var`
+  # (o do passo 8, por exemplo) desligava o agente de novo. O caso especial é
+  # a criação, uma vez; o estado normal é o default.
   #
   # ⚠️ Antes disto o README mandava editar `agent.enabled` NESTE arquivo como
   # passo operacional. Editar fonte versionada para operar é o que o CLAUDE.md
