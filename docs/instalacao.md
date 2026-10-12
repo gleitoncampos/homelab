@@ -311,10 +311,20 @@ terraform apply -target=proxmox_virtual_environment_vm.opnsense   # agente pelo 
 
 ## 8. Demais convidados
 
+⚠️ NAS com dados: colete os filesystems ANTES deste apply (ver "Passo 9, duas
+armadilhas"): `make omv-fs ARGS=--hipervisor`.
+
 ```bash
-terraform plan     # nenhuma linha "# forces replacement"
+terraform plan     # nenhuma linha "# forces replacement"; a VM 100 sem mudança
 terraform apply
+cd ../../ansible
+ansible-playbook playbooks/00-proxmox-setup.yml --tags docker_ct
 ```
+
+O último comando completa os CTs do Docker: grava `keyctl=1` (o Docker exige em
+CT unprivileged, e o PVE só aceita essa feature do root — o Terraform, que
+aplica com token, cria só com `nesting`) e reinicia cada CT que a ganhou.
+Confira: `ssh <no> pct config 200 | grep features` → `keyctl=1,nesting=1`.
 
 ## 9. NAS
 

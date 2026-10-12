@@ -486,16 +486,32 @@
         - pve-ha-crm
         - pve-ha-lrm
 
-    - name: Remover o aviso/popup de assinatura (No Subscription NAG Popup) na Web GUI (Idempotente)
-      ansible.builtin.shell: |
-        if ! grep -q "void({ //Ext.Msg.show" /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js; then
-          sed -Ezi.bak "s/(Ext.Msg.show\(\{\s+title: gettext\('No valid sub)/void\(\{ \/\/\1/g" /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
-          systemctl restart pveproxy.service
-        fi
-      args:
-        executable: /bin/bash
+    # O aviso de assinatura sai por um script que também roda depois de TODO
+    # dpkg (gancho no apt): antes era um `sed` único, e a próxima atualização
+    # do proxmox-widget-toolkit trazia o aviso de volta até o playbook rodar
+    # de novo. O script cobre também a GUI móvel (pve-yew-mobile-gui).
+    - name: Instalar o script que remove o aviso de assinatura (web e móvel)
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../templates/proxmox/pve-remove-nag.sh"  # noqa: no-relative-paths
+        dest: /usr/local/bin/pve-remove-nag.sh
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Reaplicar a remoção do aviso depois de todo dpkg
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/no-nag-script
+        content: |
+          // Gerado pelo Ansible (00-proxmox-setup.yml). NAO editar a mao.
+          DPkg::Post-Invoke { "/usr/local/bin/pve-remove-nag.sh || true"; };
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Remover o aviso de assinatura agora
+      ansible.builtin.command: /usr/local/bin/pve-remove-nag.sh
       register: nag_patch
-      changed_when: "'Ext.Msg.show' not in nag_patch.stdout"
+      changed_when: "'aplicado' in nag_patch.stdout"
 
     # Nenhum dos três vem instalado por padrão no Proxmox. Condicionar à presença
     # real é o que permite remover o ignore_errors sem quebrar o play num host
@@ -745,14 +761,18 @@
     # aplica com token, cria os CTs só com `nesting` e ignora `features`. Os
     # VMIDs são os do main.tf (200/201 Swarm, 210 dev). Roda no passo 10,
     # antes do bootstrap do Swarm (passo 12); a feature só vale no próximo
-    # start, daí o reboot de quem acabou de ganhá-la.
+    # start, daí o reboot de quem acabou de ganhá-la. Tag `docker_ct`: o passo 8
+    # do guia roda só este bloco logo depois do `terraform apply`, e os CTs
+    # ficam completos na criação — o passo 10 apenas confere.
     - name: Levantar os CTs do Docker presentes neste nó
+      tags: docker_ct
       ansible.builtin.stat:
         path: "/etc/pve/lxc/{{ item }}.conf"
       loop: "{{ proxmox_docker_ctids | default([200, 201, 210]) }}"
       register: docker_ct_conf
 
     - name: Ler a configuração de cada CT do Docker
+      tags: docker_ct
       ansible.builtin.command: "pct config {{ item.item }}"
       loop: "{{ docker_ct_conf.results | selectattr('stat.exists') | list }}"
       loop_control:
@@ -762,6 +782,7 @@
       check_mode: false
 
     - name: Separar os CTs do Docker ainda sem keyctl
+      tags: docker_ct
       ansible.builtin.set_fact:
         docker_ct_sem_keyctl: >-
           {{ docker_ct_cfg.results
@@ -769,11 +790,13 @@
              | map(attribute='item.item') | list }}
 
     - name: Habilitar keyctl nos CTs do Docker (exige root; o token do Terraform não pode)
+      tags: docker_ct
       ansible.builtin.command: "pct set {{ item }} --features nesting=1,keyctl=1"
       loop: "{{ docker_ct_sem_keyctl }}"
       changed_when: true
 
     - name: Reiniciar os CTs que acabaram de ganhar keyctl
+      tags: docker_ct
       ansible.builtin.shell: |
         set -euo pipefail
         if pct status {{ item }} | grep -q running; then pct reboot {{ item }}; fi
