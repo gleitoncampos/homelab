@@ -34,8 +34,14 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
     type  = "host"
   }
 
+  # `floating` = `dedicated`: liga o dispositivo balloon só para o convidado
+  # REPORTAR a memória em uso, sem nunca encolher a VM (mínimo = máximo — e
+  # com passthrough PCI a RAM é toda travada no host de qualquer forma). Sem
+  # ele (floating = 0) o painel do PVE e o pve-exporter mostram a visão do
+  # host, que com passthrough é sempre 100%.
   memory {
     dedicated = 4096 # 4GB RAM
+    floating  = 4096
   }
 
   # As duas fases da OPNsense, agora por VARIÁVEL e não por edição do arquivo.
@@ -329,8 +335,10 @@ resource "proxmox_virtual_environment_vm" "omv_nas" {
     type  = "host"
   }
 
+  # `floating` = `dedicated`: balloon só para estatística, como na VM 100.
   memory {
     dedicated = 4096 # 4GB RAM
+    floating  = 4096
   }
 
   # A imagem "genericcloud" do Debian NÃO traz o qemu-guest-agent (manifesto
