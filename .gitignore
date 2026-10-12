@@ -34,6 +34,9 @@ IaC/ansible/inventories/*/hosts.ini
 *.tfstate.*
 *.tfplan
 tfplan*
+# Qualquer nome que o `-out=` receba: o guia e as sessões usaram
+# `passo8.plan`, `redim.plan`... e eles ficaram fora do ignore até 12/10/2026.
+IaC/terraform/**/*.plan
 .terraform/
 crash.log
 crash.*.log
