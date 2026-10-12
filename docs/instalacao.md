@@ -75,8 +75,8 @@ a do usuário de compartilhamento Samba e a do segundo administrador
 ## 1. Máquina de controle
 
 ```bash
-sudo dnf install -y git make python3 ansible-core terraform yamllint ShellCheck libxml2
-sudo apt install -y git make python3 ansible-core yamllint shellcheck libxml2-utils
+sudo dnf install -y git make python3 ansible-core terraform yamllint ShellCheck libxml2 whois
+sudo apt install -y git make python3 ansible-core yamllint shellcheck libxml2-utils whois
 ```
 
 ## 2. Proxmox nos dois nós
@@ -268,12 +268,11 @@ reboot, ainda na console:
    (`config.xml.j2`); a da 2ª WAN vai em `passthrough_wan2_interface` no
    `99-local.yml`. O default é um nome Linux, que não existe no FreeBSD.
 
-**Seis segredos do vault ficam vazios de propósito** depois do `make bootstrap`
-e o playbook aborta sem eles: os dois hashes bcrypt (root e admin — gerados no
-próprio firewall, porque bcrypt não sai de openssl nem da stdlib do Python), a
-chave pública do admin, a senha PPPoE e o par de certificado da GUI, todos em
-base64. O formato de cada um está comentado em
-`inventories/vault.yml.example`; preencha com `ansible-vault edit`.
+**Os segredos do OPNsense vêm do `make bootstrap`**: ele pergunta a senha de
+root que você definiu acima e a senha PPPoE, e gera o resto (senha do admin, no
+arquivo de credenciais; chave do admin; certificado da GUI). Vault de uma
+execução anterior é completado, não sobrescrito — rode `make bootstrap` de novo
+se ele ainda não tinha esses campos.
 
 **O 1º apply roda como root** (`-e ansible_user=root`): o inventário entra pelo
 admin nomeado, que ainda não existe — é este apply que o cria, com a chave e o

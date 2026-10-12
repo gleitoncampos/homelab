@@ -46,7 +46,7 @@ pub = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTE homelab"
 for env in ("prod", "dev"):
     txt = bs.render_vault(env, resp, seg, pub)
     d = yaml.safe_load(txt)
-    faltando = [k for k, *_ in bs.GENERATED if k not in d] + [k for k in bs.PENDING_HASHES if k not in d]
+    faltando = [k for k, *_ in bs.GENERATED if k not in d] + [k for k in bs.OPNSENSE_SEGREDOS if k not in d]
     assert not faltando, f"vault {env} sem: {faltando}"
     assert d["homelab_domain"] == "homelab.example"
     print(f"  OK vault/{env}: YAML valido, {len(d)} chaves")
@@ -131,6 +131,56 @@ assert seg["postgres_paperless_password"] not in cred, "VAZOU senha de banco no 
 assert seg["portainer_admin_password"] in cred, "senha do Portainer deveria estar"
 print(f"  OK credenciais: {len(humanas)} humanas, nenhum segredo de maquina vazado")
 print("\n  TODOS OS RENDERS PASSARAM")
+
+# 5b) segredos do OPNsense: os seis saem preenchidos, sem pergunta quando o
+#     cache ja tem root/PPPoE, e valor existente nunca e trocado.
+import base64 as _b64
+cache = {"root_hash": bs.bcrypt_hash("raiz-teste"), "pppoe": _b64.b64encode(b"ppp").decode()}
+opn, opn_h = bs.segredos_opnsense(None, pub, "homelab.example", cache)
+assert all(opn[k] for k in bs.OPNSENSE_SEGREDOS), [k for k in bs.OPNSENSE_SEGREDOS if not opn[k]]
+assert opn["opnsense_admin_password_hash"].startswith(("$2b$", "$2y$"))
+try:
+    import bcrypt as _bc
+    assert _bc.checkpw(opn["opnsense_admin_password"].encode(), opn["opnsense_admin_password_hash"].encode()), \
+        "hash do admin nao confere com a senha entregue nas credenciais"
+except ImportError:
+    pass  # sem o modulo, o hash veio do mkpasswd; o prefixo acima ja foi conferido
+assert _b64.b64decode(opn["opnsense_admin_authorizedkeys_b64"]).decode().strip() == pub
+assert _b64.b64decode(opn["opnsense_gui_cert_crt_b64"]).startswith(b"-----BEGIN CERTIFICATE-----")
+assert b"PRIVATE KEY" in _b64.b64decode(opn["opnsense_gui_cert_key_b64"])
+assert [c for _d, c, _v in opn_h] == ["opnsense_admin_password"], opn_h
+# prod e dev no mesmo cache: mesmo valor, sem regerar
+opn2, _ = bs.segredos_opnsense(None, pub, "homelab.example", cache)
+assert opn2 == opn, "dev saiu com segredos do OPNsense diferentes de prod"
+# hash existente sem senha guardada: NAO inventa senha nova que nao abre nada
+ex = {k: "existente" for k in bs.OPNSENSE_SEGREDOS}
+opn3, h3 = bs.segredos_opnsense(ex, pub, "homelab.example", {})
+assert all(opn3[k] == "existente" for k in bs.OPNSENSE_SEGREDOS), "valor existente foi trocado"
+assert not h3 and not opn3["opnsense_admin_password"], "senha entregue sem o hash correspondente"
+print("  OK segredos do OPNsense: 6 preenchidos, hash confere, existente preservado")
+
+# 5c) vault existente e COMPLETADO: chave vazia/ausente entra, preenchida fica.
+import subprocess as _sp, tempfile as _tf, shutil as _sh
+if _sh.which("ansible-vault"):
+    with _tf.TemporaryDirectory() as d:
+        d = pathlib.Path(d)
+        senha = d / "pass"; senha.write_text("teste\n")
+        alvo = d / "vault.yml"
+        _sp.run(["ansible-vault", "encrypt", "--vault-password-file", str(senha),
+                 "--encrypt-vault-id", "default", "--output", str(alvo)],
+                input="a: 'mantido'\nb: ''  # PENDENTE\n", text=True, check=True, cwd=d)
+        bs.VAULT_PASS, bs.ANSIBLE, bs.REPO = senha, d, d
+        bs.completar_vault(alvo, {"a": "mantido", "b": ""},
+                           "a: 'NOVO'\nb: '$2b$x/y'\nc: 'Q+/='\nd: ''\n", False)
+        out = _sp.run(["ansible-vault", "view", "--vault-password-file", str(senha), str(alvo)],
+                      capture_output=True, text=True, check=True, cwd=d).stdout
+        v = yaml.safe_load(out)
+        assert v == {"a": "mantido", "b": "$2b$x/y", "c": "Q+/="}, v
+        assert "..." not in out, "marcador de fim de documento no meio do vault"
+        assert oct(alvo.stat().st_mode)[-3:] == "600"
+    print("  OK vault existente: vazio completado, preenchido preservado, 0600")
+else:
+    print("  – ansible-vault ausente, completar_vault pulado")
 
 # 6) o validador REAL do hosts.ini: ansible-inventory, nao configparser
 import subprocess, tempfile, os, json, shutil

@@ -175,11 +175,20 @@ EXTERNAL = [
     ),
 ]
 
-# O OPNsense exige bcrypt, que não sai de openssl nem da stdlib do Python. A
-# senha é gerada aqui; o hash tem de ser calculado no próprio firewall. Deixar
-# um marcador é melhor que gerar um hash de algoritmo errado, que produziria
-# firewall sem acesso à GUI depois do apply.
-PENDING_HASHES = ["opnsense_root_password_hash", "opnsense_admin_password_hash"]
+# Os seis que o 01-opnsense-setup.yml exige (validate_vault). Até 12/10/2026
+# ficavam vazios "porque bcrypt não sai da stdlib" — mas sai do módulo `bcrypt`
+# ou do `mkpasswd` (pacote whois), e os vazios obrigavam a um `ansible-vault
+# edit` à mão. Agora: admin com senha gerada; root com a senha que você definiu
+# na instalação (perguntada); chave do admin = a chave SSH do bootstrap;
+# certificado da GUI autoassinado; senha PPPoE perguntada.
+OPNSENSE_SEGREDOS = [
+    "opnsense_root_password_hash",
+    "opnsense_admin_password_hash",
+    "opnsense_admin_authorizedkeys_b64",
+    "opnsense_pppoe_password_b64",
+    "opnsense_gui_cert_crt_b64",
+    "opnsense_gui_cert_key_b64",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +210,105 @@ def gen(kind: str) -> str:
         alfabeto = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
         return "".join(secrets.choice(alfabeto) for _ in range(24))
     raise ValueError(kind)
+
+
+def bcrypt_hash(senha: str) -> str:
+    """bcrypt pelo módulo `bcrypt`, senão pelo `mkpasswd` — senha sempre pelo
+    stdin, nunca por argumento (apareceria no `ps`)."""
+    try:
+        import bcrypt
+
+        h = bcrypt.hashpw(senha.encode(), bcrypt.gensalt()).decode()
+    except ImportError:
+        mk = shutil.which("mkpasswd")
+        if not mk:
+            die("sem bcrypt para os hashes do OPNsense",
+                hint="Instale o pacote `whois` (traz o mkpasswd) ou `python3-bcrypt`.")
+        r = subprocess.run([mk, "-m", "bcrypt", "-s"], input=senha,
+                           capture_output=True, text=True)
+        h = r.stdout.strip()
+    if not h.startswith(("$2b$", "$2y$")):
+        die("hash bcrypt em formato inesperado — firewall ficaria sem GUI")
+    return h
+
+
+def cert_autoassinado(dominio: str) -> tuple[str, str]:
+    """Par PEM da GUI do OPNsense, em base64 (é como o config.xml guarda). A
+    chave privada só toca um diretório temporário 0700, apagado na saída."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as d:
+        k, c = Path(d) / "k", Path(d) / "c"
+        r = subprocess.run(
+            ["openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt",
+             "ec_paramgen_curve:prime256v1", "-nodes", "-days", "825",
+             "-subj", f"/CN={dominio}",
+             "-addext", f"subjectAltName=DNS:{dominio},DNS:*.{dominio}",
+             "-keyout", str(k), "-out", str(c)],
+            capture_output=True, text=True,
+        )
+        if r.returncode != 0:
+            die("openssl falhou ao gerar o certificado da GUI", hint=r.stderr.strip()[:200])
+        return (base64.b64encode(c.read_bytes()).decode(),
+                base64.b64encode(k.read_bytes()).decode())
+
+
+def segredos_opnsense(existente: dict | None, ssh_pub: str, dominio: str,
+                      cache: dict) -> tuple[dict, list[tuple[str, str, str]]]:
+    """Valor já presente no vault é preservado. `cache` faz prod e dev
+    compartilharem o mesmo valor — e perguntar uma vez só."""
+    e = existente or {}
+    out: dict[str, str] = {}
+    humanas: list[tuple[str, str, str]] = []
+
+    pw = e.get("opnsense_admin_password", "")
+    if e.get("opnsense_admin_password_hash"):
+        out["opnsense_admin_password_hash"] = e["opnsense_admin_password_hash"]
+    else:
+        # Hash e senha nascem juntos: senha nova com hash antigo seria
+        # credencial entregue que não abre nada.
+        pw = pw or cache.setdefault("admin_pw", gen("senha"))
+        out["opnsense_admin_password_hash"] = cache.setdefault("admin_hash", bcrypt_hash(pw))
+    out["opnsense_admin_password"] = pw
+    if pw:
+        humanas.append(("OPNsense — admin nomeado (GUI e sudo)", "opnsense_admin_password", pw))
+
+    if e.get("opnsense_root_password_hash"):
+        out["opnsense_root_password_hash"] = e["opnsense_root_password_hash"]
+    else:
+        if "root_hash" not in cache:
+            print("\n  OPNsense: a senha de root que você definiu na instalação. O apply")
+            print("  a grava como hash; outra senha aqui troca a de root do firewall.")
+            while True:
+                a = ask_secret("Senha de root do OPNsense")
+                if a == ask_secret("Repita"):
+                    break
+                print("    (não conferem)")
+            cache["root_hash"] = bcrypt_hash(a)
+        out["opnsense_root_password_hash"] = cache["root_hash"]
+
+    if e.get("opnsense_pppoe_password_b64"):
+        out["opnsense_pppoe_password_b64"] = e["opnsense_pppoe_password_b64"]
+    else:
+        if "pppoe" not in cache:
+            print(f"    {_c('90', 'Conta do PROVEDOR. Enter deixa em branco; o playbook acusa depois.')}")
+            v = ask_secret("Senha PPPoE do provedor", obrigatorio=False)
+            cache["pppoe"] = base64.b64encode(v.encode()).decode() if v else ""
+        out["opnsense_pppoe_password_b64"] = cache["pppoe"]
+
+    out["opnsense_admin_authorizedkeys_b64"] = (
+        e.get("opnsense_admin_authorizedkeys_b64")
+        or base64.b64encode((ssh_pub.strip() + "\n").encode()).decode())
+
+    if e.get("opnsense_gui_cert_crt_b64") and e.get("opnsense_gui_cert_key_b64"):
+        out["opnsense_gui_cert_crt_b64"] = e["opnsense_gui_cert_crt_b64"]
+        out["opnsense_gui_cert_key_b64"] = e["opnsense_gui_cert_key_b64"]
+    else:
+        if "cert" not in cache:
+            cache["cert"] = cert_autoassinado(dominio)
+        out["opnsense_gui_cert_crt_b64"], out["opnsense_gui_cert_key_b64"] = cache["cert"]
+
+    return out, humanas
 
 
 # ---------------------------------------------------------------------------
@@ -448,7 +556,8 @@ def carregar_respostas() -> dict:
 # ---------------------------------------------------------------------------
 # Fase 3 — segredos
 # ---------------------------------------------------------------------------
-def montar_segredos(existente: dict | None) -> tuple[dict, list[tuple[str, str, str]]]:
+def montar_segredos(existente: dict | None, ssh_pub: str, dominio: str,
+                    cache: dict) -> tuple[dict, list[tuple[str, str, str]]]:
     """Devolve (segredos, credenciais_humanas). Chave já presente no vault
     anterior é PRESERVADA — este script nunca rotaciona sozinho."""
     step("3. Segredos")
@@ -489,6 +598,9 @@ def montar_segredos(existente: dict | None) -> tuple[dict, list[tuple[str, str, 
     for chave, *_ in EXTERNAL:
         segredos.setdefault(chave, (existente or {}).get(chave, ""))
 
+    opn, opn_humanas = segredos_opnsense(existente, ssh_pub, dominio, cache)
+    segredos.update(opn)
+    humanas += opn_humanas
     return segredos, humanas
 
 
@@ -545,25 +657,14 @@ def render_vault(env: str, resp: dict, seg: dict, ssh_pub: str) -> str:
         f"wifi_media_ssid: {resp.get('wifi', {}).get('media', 'homelab-media')!r}",
         f"wifi_guest_ssid: {resp.get('wifi', {}).get('guest', 'homelab-guest')!r}",
         "",
-        "# OPNsense",
+        "# OPNsense — hashes bcrypt e valores em base64 (como o config.xml guarda).",
         f"opnsense_admin_username: {resp['dominio_admin_user']!r}",
         "opnsense_admin_fullname: 'Administrador do homelab'",
-        "",
-        "# ⚠️ bcrypt NÃO sai de openssl nem da stdlib do Python. Gere no próprio",
-        "#    firewall e cole aqui com `ansible-vault edit`:",
-        "#      ssh root@<opnsense> -- php -r 'echo password_hash(\"SENHA\","
-        " PASSWORD_BCRYPT).\"\\n\";'",
-        "#    Deve começar com $2y$ ou $2b$. Formato errado = firewall sem GUI.",
+        f"opnsense_admin_password: {seg.get('opnsense_admin_password', '')!r}",
     ]
-    for chave in PENDING_HASHES:
-        linhas.append(f"{chave}: ''  # PENDENTE")
+    for chave in OPNSENSE_SEGREDOS:
+        linhas.append(f"{chave}: {seg.get(chave, '')!r}")
     linhas += [
-        "",
-        "# Base64 do PEM/valor inteiro. Vazio desativa a funcionalidade.",
-        "opnsense_admin_authorizedkeys_b64: ''",
-        "opnsense_pppoe_password_b64: ''",
-        "opnsense_gui_cert_crt_b64: ''",
-        "opnsense_gui_cert_key_b64: ''",
         "",
         "# Topologia consumida pelo template do OPNsense.",
         "dhcp_static_maps: []",
@@ -885,11 +986,62 @@ def vault_existente(env: str) -> dict | None:
         return None
 
 
-def cifrar_vault(env: str, conteudo: str, dry: bool) -> None:
+def completar_vault(destino: Path, existente: dict, conteudo: str, dry: bool) -> None:
+    """Vault existente: só entra chave AUSENTE ou VAZIA nele. Valor preenchido
+    nunca é tocado — rotação é decisão, não efeito colateral. Antes, vault
+    existente era pulado inteiro: chave nova no bootstrap só entrava com
+    `ansible-vault edit`, e o segredo externo digitado na reexecução era
+    perguntado e descartado."""
+    import yaml
+
+    desejado = yaml.safe_load(conteudo) or {}
+    faltam = {
+        k: v for k, v in desejado.items()
+        if isinstance(v, str) and v and existente.get(k) in (None, "")
+    }
+    if not faltam:
+        ok(f"{destino.relative_to(REPO)} já completo — nada a acrescentar")
+        return
+    if dry:
+        info(f"[dry-run] completaria {destino.relative_to(REPO)}: {', '.join(sorted(faltam))}")
+        return
+    r = subprocess.run(
+        ["ansible-vault", "view", "--vault-password-file", str(VAULT_PASS), str(destino)],
+        capture_output=True, text=True, cwd=ANSIBLE,
+    )
+    if r.returncode != 0:
+        die("não consegui abrir o vault para completar", hint=r.stderr.strip()[:200])
+    texto = r.stdout
+    for k, v in faltam.items():
+        # Aspas simples de YAML, não yaml_valor: safe_dump de escalar fecha
+        # com `...`, que no meio do arquivo encerra o documento.
+        linha = f"{k}: '" + v.replace("'", "''") + "'"
+        texto, n = re.subn(rf"(?m)^{re.escape(k)}:.*$", lambda _m: linha, texto)
+        if n == 0:
+            texto = texto.rstrip("\n") + "\n" + linha + "\n"
+    # Cifra pelo stdin para um temporário ao lado e troca no fim: nem texto
+    # em claro no disco, nem vault pela metade se algo falhar no meio.
+    tmp = destino.with_suffix(".yml.novo")
+    r = subprocess.run(
+        ["ansible-vault", "encrypt", "--vault-password-file", str(VAULT_PASS),
+         "--encrypt-vault-id", "default", "--output", str(tmp)],
+        input=texto, capture_output=True, text=True, cwd=ANSIBLE,
+    )
+    if r.returncode != 0:
+        tmp.unlink(missing_ok=True)
+        die("falha ao cifrar o vault completado", hint=r.stderr.strip()[:200])
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, destino)
+    ok(f"{destino.relative_to(REPO)} completado: {', '.join(sorted(faltam))}")
+
+
+def cifrar_vault(env: str, conteudo: str, dry: bool, existente: dict | None = None) -> None:
     destino = ANSIBLE / "inventories" / env / "group_vars" / "all" / "vault.yml"
     if destino.exists():
-        warn(f"{destino.relative_to(REPO)} já existe — NÃO sobrescrito")
-        info("Para acrescentar chave nova: ansible-vault edit no arquivo")
+        if existente is None:
+            warn(f"{destino.relative_to(REPO)} existe mas não abriu — NÃO tocado")
+            return
+        completar_vault(destino, existente, conteudo, dry)
         return
     if dry:
         info(f"[dry-run] cifraria {destino.relative_to(REPO)}")
@@ -969,12 +1121,13 @@ def main() -> None:
     garantir_senha_vault(dry)
     ssh_pub = garantir_chave_ssh(dry)
 
+    cache_opnsense: dict = {}
     for env in ENVS:
         existente = vault_existente(env)
-        seg, humanas = montar_segredos(existente)
+        seg, humanas = montar_segredos(existente, ssh_pub, resp["dominio"], cache_opnsense)
 
         step(f"5. Gerando alvos — {env}")
-        cifrar_vault(env, render_vault(env, resp, seg, ssh_pub), dry)
+        cifrar_vault(env, render_vault(env, resp, seg, ssh_pub), dry, existente)
         write(ANSIBLE / "inventories" / env / "hosts.ini", render_hosts(env, resp), mode=0o600, dry=dry)
         write(
             ANSIBLE / "inventories" / env / "group_vars" / "all" / "99-local.yml",
@@ -996,14 +1149,10 @@ def main() -> None:
   2. Faça backup de {VAULT_PASS.relative_to(REPO)}.
      Sem ela os vaults são irrecuperáveis, e não há segunda cópia.
 
-  3. Os dois hashes bcrypt do OPNsense ficaram PENDENTES. bcrypt não sai de
-     openssl nem da stdlib; gere no próprio firewall e cole com
-     `ansible-vault edit`. Formato errado = firewall sem acesso à GUI.
-
-  4. Instale a chave pública nos hosts, e confira:
+  3. Instale a chave pública nos hosts, e confira:
        cd IaC/ansible && ansible -m ping all
 
-  5. Valide o repositório:
+  4. Valide o repositório:
        make check
 """
     )

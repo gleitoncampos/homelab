@@ -72,9 +72,14 @@ contra o outro vai acusar diferença, e a diferença é conhecida.
 - **7 externas** — Cloudflare, GeoIP, ETPro e afins. Impossíveis de gerar. O
   script imprime a URL do console e o comando que as produz, e aceita vazio: o
   `validate_vault.yml` cobra depois.
-- **2 pendentes** — os hashes bcrypt do OPNsense. bcrypt não sai de `openssl`
-  nem da stdlib do Python; gerar um hash de algoritmo errado produziria firewall
-  sem acesso à GUI depois do apply, então o script deixa marcador e instrução.
+- **6 do OPNsense**, que o `01-opnsense-setup.yml` exige. Admin com senha
+  gerada (vai para o arquivo de credenciais) e hash bcrypt dela; root com a
+  senha que você definiu na instalação do firewall (perguntada, com
+  confirmação); chave do admin = a chave SSH deste bootstrap; certificado da GUI
+  autoassinado (`openssl`); senha PPPoE perguntada (Enter deixa vazia). O bcrypt
+  vem do módulo `bcrypt` do Python ou do `mkpasswd` (pacote `whois`) — o script
+  confere o prefixo `$2b$`/`$2y$`, porque hash de outro algoritmo deixaria o
+  firewall sem GUI.
 
 **Segredo já existente é preservado.** O script lê o vault atual e reaproveita
 o que estiver lá. Rotação é decisão, não efeito colateral de rodar um comando.
@@ -107,8 +112,9 @@ As demais nunca são exibidas. Para consultar uma:
   qualquer usuário; segredo entra por `getpass`, sem eco.
 - **O vault nunca passa por arquivo em texto puro no disco.** Falha no meio da
   escrita remove o arquivo parcial em vez de deixar um vault pela metade.
-- **Vault existente nunca é sobrescrito.** Para acrescentar chave, use
-  `ansible-vault edit`.
+- **Vault existente é completado, nunca sobrescrito.** Só entra chave ausente
+  ou vazia nele; valor preenchido não é tocado. Recifra pelo stdin para um
+  temporário ao lado e troca no fim.
 - **Chave SSH pergunta sobre passphrase**, com o padrão sendo *com*. Chave sem
   passphrase dá acesso root à frota inteira num arquivo.
 
