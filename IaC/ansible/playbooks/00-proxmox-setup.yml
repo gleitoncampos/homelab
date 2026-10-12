@@ -862,8 +862,12 @@
         group: root
         mode: '0644'
 
+    # Fora do --check: lá o copy acima é só simulado, a unit não existe e o
+    # systemd falharia em "Could not find the requested service" — cortando o
+    # --check antes do diff das interfaces de rede, que vem mais abaixo.
     - name: Ativar o timer de trim dos CTs
       tags: docker_ct
+      when: not ansible_check_mode
       ansible.builtin.systemd:
         name: pct-fstrim.timer
         state: started
