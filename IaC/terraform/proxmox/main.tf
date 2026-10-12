@@ -333,12 +333,14 @@ resource "proxmox_virtual_environment_vm" "omv_nas" {
     dedicated = 4096 # 4GB RAM
   }
 
-  # Diferente da OPNsense: a imagem cloud "genericcloud" do Debian já vem com
-  # o pacote qemu-guest-agent pré-instalado de fábrica, então não há o
-  # problema de "esperar um agente que ninguém instalou" - o agente sobe
-  # junto com o primeiro boot do cloud-init.
+  # A imagem "genericcloud" do Debian NÃO traz o qemu-guest-agent (manifesto
+  # oficial da imagem conferido em 12/10/2026; o comentário anterior afirmava
+  # o contrário, e o apply esperou 18 min pelo agente). Quem o instala é o
+  # 00-omv-setup.yml (passo 9). Até lá, o `timeout` curto faz criação e
+  # refresh desistirem em 2 min com um aviso, em vez de 15.
   agent {
     enabled = true
+    timeout = "2m"
   }
 
   network_device {

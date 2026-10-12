@@ -175,8 +175,13 @@
           - amd64-microcode
           - fail2ban
           - smartmontools
-          - cpufrequtils
+          # Sem `cpufrequtils`: saiu do Debian 13 ("No package matching"), e
+          # numa VM o governor é do hipervisor, não do convidado.
           - chrony
+          # A imagem genericcloud do Debian NÃO traz o agente (manifesto
+          # oficial conferido em 12/10/2026), e sem ele o Terraform espera o
+          # timeout inteiro a cada refresh da VM 300.
+          - qemu-guest-agent
           # Explícito: o Debian 13 não o instala por padrão, e sem ele não
           # existe /etc/rsyslog.d — a task de envio de log para o Alloy, mais
           # abaixo, falharia por diretório inexistente.
@@ -525,15 +530,6 @@
         name: fail2ban
         state: started
         enabled: true
-
-    - name: Configurar CPU Performance Governor no OMV Host
-      ansible.builtin.copy:
-        dest: /etc/default/cpufrequtils
-        content: |
-          GOVERNOR="performance"
-        owner: root
-        group: root
-        mode: '0644'
 
     - name: Configurar Blacklist de módulos de Kernel não utilizados (bluetooth, firewire)
       ansible.builtin.copy:
