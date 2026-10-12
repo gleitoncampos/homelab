@@ -805,6 +805,71 @@
       loop: "{{ docker_ct_sem_keyctl }}"
       changed_when: true
 
+    # Trim semanal dos CTs. O `fstrim.timer` do host não alcança o rootfs dos
+    # CTs, e dentro de um CT unprivileged o trim não é permitido: sem isto, o
+    # que o Docker apaga nunca volta ao thin pool — e o do nó secundário é
+    # pequeno (~54 GB). Ideia do community-scripts (tools/pve/fstrim.sh), que
+    # é manual; aqui é timer. Só CT rodando: `pct fstrim` não opera parado.
+    # Script à parte: no ExecStart o próprio systemd expande `$`, e o laço com
+    # awk ficaria à mercê de duas camadas de aspas.
+    - name: Instalar o script de trim dos CTs
+      tags: docker_ct
+      ansible.builtin.copy:
+        dest: /usr/local/sbin/pct-fstrim-all
+        content: |
+          #!/bin/sh
+          # Gerado pelo Ansible (00-proxmox-setup.yml). NAO editar a mao.
+          for id in $(pct list | awk 'NR>1 && $2=="running" {print $1}'); do
+              pct fstrim "$id" || echo "fstrim falhou no CT $id"
+          done
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Instalar o serviço de trim dos CTs
+      tags: docker_ct
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/pct-fstrim.service
+        content: |
+          # Gerado pelo Ansible (00-proxmox-setup.yml). NAO editar a mao.
+          [Unit]
+          Description=fstrim dos containers LXC (devolve blocos ao thin pool)
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/local/sbin/pct-fstrim-all
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Agendar o trim dos CTs (semanal)
+      tags: docker_ct
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/pct-fstrim.timer
+        content: |
+          # Gerado pelo Ansible (00-proxmox-setup.yml). NAO editar a mao.
+          [Unit]
+          Description=fstrim semanal dos containers LXC
+
+          [Timer]
+          OnCalendar=weekly
+          RandomizedDelaySec=1h
+          Persistent=true
+
+          [Install]
+          WantedBy=timers.target
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Ativar o timer de trim dos CTs
+      tags: docker_ct
+      ansible.builtin.systemd:
+        name: pct-fstrim.timer
+        state: started
+        enabled: true
+        daemon_reload: true
+
     # ⚠️ `proxmox_wan_interface` é a única variável desta família que falha
     # CALADA. As outras quatro (`proxmox_gateway_ip`, `backup_storage`,
     # `proxmox_backup_share`, `proxmox_lan_prefix`) têm assert ou default
