@@ -205,7 +205,7 @@
     - name: "Abortar se nenhuma interface física foi descoberta para a bridge"
       ansible.builtin.assert:
         that:
-          - ansible_interfaces | select('match', '^(en|eth)')
+          - ansible_interfaces | select('match', '^(en|eth|nic)[a-z0-9]+$')
             | reject('equalto', proxmox_wan_interface | default('')) | list | length > 0
         fail_msg: >-
           Nenhuma interface física sobrou para a bridge vmbr0 depois de excluir

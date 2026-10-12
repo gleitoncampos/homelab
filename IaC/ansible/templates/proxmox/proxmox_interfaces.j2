@@ -7,6 +7,11 @@
   no nó primário — no secundário, com nomes de interface diferentes, este
   arquivo tiraria o host da rede sem que nada no playbook acusasse.
 
+  Nomes aceitos: `en*`/`eth*` (PVE 8) e `nicN` (PVE 9, que fixa os nomes
+  por .link em /usr/local/lib/systemd/network/). O `$` exclui subinterface
+  com ponto — `nic0.20` é a VLAN que o próprio Proxmox cria enquanto a bridge
+  não é VLAN-aware, e virar porta da bridge derrubaria a rede.
+
   Excluídas da bridge: a loopback, as interfaces virtuais criadas pelo próprio
   Proxmox (vmbr/tap/veth/fw/bond) e a NIC de WAN, que é dedicada à VM do
   firewall via PCIe pass-through. A WAN só precisa ser declarada em
@@ -19,7 +24,7 @@
   "'vlans' is undefined" na primeira execução real contra um hipervisor.
 -#}
 {% set fisicas = ansible_interfaces
-     | select('match', '^(en|eth)')
+     | select('match', '^(en|eth|nic)[a-z0-9]+$')
      | reject('equalto', proxmox_wan_interface | default(''))
      | sort %}
 

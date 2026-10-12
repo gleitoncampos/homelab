@@ -50,6 +50,7 @@ CAMADA 3 — a declaração da interface de WAN (verifica_gate_wan).
 Sai 0 só quando AS TRÊS camadas passam. Sai != 0 se qualquer checagem falhar —
 inclusive se a Camada 1 ou a 3 não encontrarem o assert que protegem.
 """
+import pathlib
 import re
 import sys
 from pathlib import Path
@@ -346,10 +347,26 @@ def verifica_gate_wan():
            f"(veio {portas(omitida)})")
 
 
+def verifica_nomes_pve9():
+    """PVE 9 nomeia as NICs `nicN`; até 12/10/2026 o filtro era `^(en|eth)` e
+    a bridge sairia sem porta nenhuma. Subinterface com ponto (`nic0.20`, que o
+    Proxmox cria para VLAN enquanto a bridge não é VLAN-aware) não pode entrar."""
+    print("== nomes de NIC do PVE 9 ==")
+    facts = ["lo", "nic0", "nic1", "nic0.20", "nic1.20", "vmbr0", "vmbr0v20",
+             "tap100i0", "fwbr100i0", "fwln100i0", "veth200i0"]
+    texto = render({**FIXTURE_BOA, "ansible_interfaces": facts, "proxmox_wan_interface": ""})
+    m = re.search(r"^\s*bridge-ports\s+(.+)$", texto, re.M)
+    portas = m.group(1).split() if m else []
+    checar(portas == ["nic0", "nic1"], f"bridge com nic0 e nic1, sem subinterface (veio {portas})")
+    pb = (pathlib.Path(__file__).parents[1] / "playbooks/00-proxmox-setup.yml").read_text()
+    checar("'^(en|eth|nic)[a-z0-9]+$'" in pb, "o assert do playbook usa o mesmo filtro do template")
+
+
 def main():
     verifica_gate_no_playbook()
     verifica_render_template()
     verifica_gate_wan()
+    verifica_nomes_pve9()
 
     print()
     if falhas:
