@@ -294,6 +294,8 @@ if shutil.which("ansible-inventory"):
         # O firewall e acessado pelo admin nomeado: o 1o apply desliga o login
         # de root, e um inventario com root nao entraria na 2a execucao.
         assert hv["opnsense"].get("ansible_user") == resp["dominio_admin_user"], hv["opnsense"]
+        # NAS: imagem cloud do Debian, chave no usuario `debian`, root recusado
+        assert hv["omv"].get("ansible_user") == "debian", hv["omv"]
         assert hv["no-um"].get("opnsense_wan_pci_id") == "0000:05:00.0", hv["no-um"]
         assert hv["no-um"].get("opnsense_wan2_pci_id") == "0000:04:00.0", hv["no-um"]
         assert "omv_hba_pci_id" not in hv["no-um"], "HBA do NAS vazou para o primario"

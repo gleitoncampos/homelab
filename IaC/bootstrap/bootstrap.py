@@ -803,6 +803,9 @@ def render_local_all(resp: dict) -> str:
     )
 
 
+# O NAS nasce da imagem cloud do Debian: o cloud-init põe a chave no usuário
+# padrão `debian` (sudo sem senha) e recusa root ("Please login as the user
+# debian"). O 00-omv-setup.yml usa `become`, então entra por ele.
 def render_hosts(env: str, resp: dict) -> str:
     a = resp["rede_atual"]
     n = resp["nos"]
@@ -838,7 +841,7 @@ def render_hosts(env: str, resp: dict) -> str:
 {linha(n.get("secundario", {}).get("nome", "hv2"), a.get("hypervisor2", ""), "root", _storage(resp, 2) + _pci(resp, 2))}
 
 [omv]
-{linha("omv", a.get("omv", ""), "root")}
+{linha("omv", a.get("omv", ""), "debian")}
 
 [homelab:children]
 homelab_managers
