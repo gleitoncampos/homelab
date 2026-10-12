@@ -50,6 +50,13 @@
       - /sdn
       - /nodes
       - /mapping/pci
+    # Os nomes são o contrato com o Terraform (`mapping =` nos blocos hostpci
+    # de main.tf). Cada endereço vem da linha do nó no hosts.ini, escrito pelo
+    # bootstrap; nó sem a variável não cria aquele mapping.
+    tf_pci_mappings:
+      - {name: opnsense-wan, path: "{{ opnsense_wan_pci_id | default('') }}"}
+      - {name: opnsense-wan2, path: "{{ opnsense_wan2_pci_id | default('') }}"}
+      - {name: omv-hba, path: "{{ omv_hba_pci_id | default('') }}"}
 
   tasks:
     # Listar-e-condicionar em vez de criar-e-engolir-o-erro. `ignore_errors`
@@ -90,6 +97,55 @@
     - name: Aplicar a role ao usuário nos escopos necessários
       ansible.builtin.command: "pveum aclmod {{ item }} -user {{ tf_user }} -role {{ tf_role }}"
       loop: "{{ tf_acl_paths }}"
+      changed_when: true
+
+    # hostpci com endereço cru só é aceito do root@pam ("only root can set
+    # 'hostpciN' config for non-mapped devices", PVE::API2::Qemu). O token passa
+    # pelo mapping, com Mapping.Use. Criar o mapping exige root — daqui.
+    - name: Exigir endereço PCI completo (domínio:barramento:dispositivo.função)
+      ansible.builtin.assert:
+        that: item.path is match('^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\\.[0-7]$')
+        fail_msg: >-
+          {{ item.name }}: endereço "{{ item.path }}" fora do formato
+          0000:05:00.0 (o sysfs não aceita a forma curta 0000:05:00).
+        quiet: true
+      loop: "{{ tf_pci_mappings | selectattr('path') | list }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Descrever cada dispositivo PCI deste nó no formato de mapping
+      ansible.builtin.shell: |
+        set -euo pipefail
+        d=/sys/bus/pci/devices/{{ item.path }}
+        hex() { sed 's/^0x//' "$1"; }
+        printf 'node=%s,path=%s,id=%s:%s,subsystem-id=%s:%s,iommugroup=%s\n' \
+          "$(hostname)" "{{ item.path }}" "$(hex $d/vendor)" "$(hex $d/device)" \
+          "$(hex $d/subsystem_vendor)" "$(hex $d/subsystem_device)" \
+          "$(basename "$(readlink -f $d/iommu_group)")"
+      args:
+        executable: /bin/bash
+      loop: "{{ tf_pci_mappings | selectattr('path') | list }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: pci_maps
+      changed_when: false
+      check_mode: false
+
+    - name: Levantar os mappings PCI existentes
+      ansible.builtin.command: "pvesh get /cluster/mapping/pci --output-format json"
+      register: pve_pci_maps
+      changed_when: false
+      check_mode: false
+
+    - name: Criar ou reconciliar o mapping PCI
+      ansible.builtin.command: >-
+        pvesh {{ 'set /cluster/mapping/pci/' ~ item.item.name
+                 if item.item.name in (pve_pci_maps.stdout | from_json | map(attribute='id') | list)
+                 else 'create /cluster/mapping/pci --id ' ~ item.item.name }}
+        --map '{{ item.stdout }}'
+      loop: "{{ pci_maps.results }}"
+      loop_control:
+        label: "{{ item.item.name }} → {{ item.stdout }}"
       changed_when: true
 
     - name: Levantar os tokens já existentes do usuário

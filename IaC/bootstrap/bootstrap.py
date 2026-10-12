@@ -620,8 +620,8 @@ def render_hosts(env: str, resp: dict) -> str:
 {linha("openwrt", a.get("openwrt", ""), "root", " ansible_shell_type=sh")}
 
 [proxmox]
-{linha(n["primario"]["nome"], a.get("hypervisor1", ""), "root", _wan(resp) + _storage(resp, 1))}
-{linha(n.get("secundario", {}).get("nome", "hv2"), a.get("hypervisor2", ""), "root", _storage(resp, 2))}
+{linha(n["primario"]["nome"], a.get("hypervisor1", ""), "root", _wan(resp) + _storage(resp, 1) + _pci(resp, 1))}
+{linha(n.get("secundario", {}).get("nome", "hv2"), a.get("hypervisor2", ""), "root", _storage(resp, 2) + _pci(resp, 2))}
 
 [omv]
 {linha("omv", a.get("omv", ""), "root")}
@@ -675,6 +675,16 @@ def _wan(resp: dict) -> str:
     homônima e em uso no secundário, que ficaria fora da bridge sem erro."""
     wan = (resp.get("proxmox", {}) or {}).get("wan_interface") or ""
     return f" proxmox_wan_interface={wan}" if wan else ""
+
+
+def _pci(resp: dict, no: int) -> str:
+    """Endereço PCI de cada dispositivo em passthrough, na linha do nó que o
+    tem: as WANs no primário, a controladora SATA do NAS no secundário. Quem lê
+    é o `00-proxmox-api-token.yml`, que cria o PCI mapping como root — o token
+    do Terraform só pode usar hostpci por mapping. Valores reais, não defaults:
+    um endereço errado aqui passa o dispositivo errado para a VM."""
+    chaves = ("opnsense_wan_pci_id", "opnsense_wan2_pci_id") if no == 1 else ("omv_hba_pci_id",)
+    return "".join(f" {k}={resp[k]}" for k in chaves if resp.get(k))
 
 
 def _storage(resp: dict, no: int) -> str:
@@ -759,16 +769,6 @@ proxmox_node_primary   = "{n["primario"]["nome"]}"
 proxmox_node_secondary = "{n.get("secundario", {}).get("nome", "")}"
 
 ssh_public_key = "{ssh_pub}"
-
-# Endereço PCI (lspci no nó primário) da NIC de WAN em passthrough.
-opnsense_wan_pci_id = "{resp.get("opnsense_wan_pci_id", "0000:05:00.0")}"
-
-# Endereço PCI (lspci no nó primário) da SEGUNDA NIC de WAN (CLARO) em passthrough.
-opnsense_wan2_pci_id = "{resp.get("opnsense_wan2_pci_id", "0000:04:00.0")}"
-
-# Endereço PCI (lspci no nó secundário) da controladora SATA passada para a VM
-# do OMV. Por ela entram todos os discos de dados do NAS.
-omv_hba_pci_id = "{resp.get("omv_hba_pci_id", "0000:05:00.0")}"
 
 docker_swarm_node01_ip = "{ip("manager")}"
 docker_swarm_node02_ip = "{ip("worker")}"

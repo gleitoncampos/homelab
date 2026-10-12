@@ -111,21 +111,25 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
   # `amd_iommu=on`) na cmdline do kernel Proxmox, e a interface NÃO deve
   # aparecer no `bridge-ports` de nenhuma bridge (ver
   # ansible/templates/proxmox/proxmox_interfaces.j2: enp5s0 fica `inet
-  # manual`, dedicada ao passthrough). O endereço PCI é específico de cada
-  # host físico - ver variables.tf (var.opnsense_wan_pci_id, sem default).
+  # manual`, dedicada ao passthrough).
+  #
+  # Por PCI mapping, não por endereço: o PVE só aceita endereço cru do
+  # root@pam, e quem aplica isto é o token. Os mappings (nome -> endereço do
+  # host) são criados como root por ansible/playbooks/00-proxmox-api-token.yml,
+  # a partir do hosts.ini; os nomes abaixo são o contrato com ele.
   hostpci {
-    device = "hostpci0"
-    id     = var.opnsense_wan_pci_id
-    pcie   = false
-    rombar = true
+    device  = "hostpci0"
+    mapping = "opnsense-wan"
+    pcie    = false
+    rombar  = true
   }
 
-  # hostpci1 = segunda WAN (CLARO), adicionada 29/08/2026, endereço via variável.
+  # hostpci1 = segunda WAN (CLARO), adicionada 29/08/2026.
   hostpci {
-    device = "hostpci1"
-    id     = var.opnsense_wan2_pci_id
-    pcie   = false
-    rombar = true
+    device  = "hostpci1"
+    mapping = "opnsense-wan2"
+    pcie    = false
+    rombar  = true
   }
 
   started = true
@@ -353,10 +357,11 @@ resource "proxmox_virtual_environment_vm" "omv_nas" {
   #
   # `pcie = true` (e não `false` como no OPNsense): esta VM é q35 e a
   # controladora é PCIe. O OPNsense usa i440fx com uma NIC PCI, daí a diferença.
+  # Por PCI mapping, pelo mesmo motivo do hostpci da VM 100.
   hostpci {
-    device = "hostpci0"
-    id     = var.omv_hba_pci_id
-    pcie   = true
+    device  = "hostpci0"
+    mapping = "omv-hba"
+    pcie    = true
   }
 
   disk {

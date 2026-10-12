@@ -180,6 +180,15 @@ if shutil.which("ansible-inventory"):
         # storage inexistente ali.
         assert hv["no-um"].get("backup_storage") == "nas-bkp-1", hv["no-um"].get("backup_storage")
         assert hv["no-dois"].get("backup_storage") == "nas-bkp-2", hv["no-dois"].get("backup_storage")
+        # Endereco PCI e PER-HOST, no no que tem o dispositivo: o
+        # 00-proxmox-api-token.yml cria o mapping onde a variavel existe. Num
+        # no errado, o mapping apontaria para o dispositivo de outro host.
+        assert hv["no-um"].get("opnsense_wan_pci_id") == "0000:05:00.0", hv["no-um"]
+        assert hv["no-um"].get("opnsense_wan2_pci_id") == "0000:04:00.0", hv["no-um"]
+        assert "omv_hba_pci_id" not in hv["no-um"], "HBA do NAS vazou para o primario"
+        assert hv["no-dois"].get("omv_hba_pci_id") == "0000:05:00.0", hv["no-dois"]
+        assert "opnsense_wan_pci_id" not in hv["no-dois"], "WAN vazou para o secundario"
+        assert "pci_id" not in tf, "endereco PCI voltou ao tfvars: o hostpci e por mapping"
         assert "backup_storage" not in gv, "id do storage vazou para [all:vars]"
         # Uma ocorrencia so, e na linha do primario. Duas significaria que ela
         # tambem foi parar no secundario, que nao faz passthrough.

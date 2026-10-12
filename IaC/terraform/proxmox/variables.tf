@@ -171,27 +171,6 @@ variable "opnsense_iso_file_name" {
   default     = "OPNsense-26.7-dvd-amd64.iso"
 }
 
-variable "opnsense_wan_pci_id" {
-  type        = string
-  description = <<-EOT
-    Endereço PCI (formato "0000:05:00" ou "0000:05:00.0") da NIC física de WAN
-    (enp5s0 no nó primário) usada em passthrough VT-d/IOMMU para a VM do
-    OPNsense. Não tem default: é específico do hardware de cada host, obtido
-    via `lspci` no nó primário - nunca é o mesmo endereço em duas máquinas
-    diferentes, então não existe valor "genérico" seguro para default aqui.
-  EOT
-}
-
-variable "opnsense_wan2_pci_id" {
-  type        = string
-  description = <<-EOT
-    Endereço PCI (formato "0000:04:00") da SEGUNDA NIC de WAN (CLARO) em
-    passthrough VT-d/IOMMU para a VM do OPNsense. Sem default pelo mesmo motivo
-    da primeira (opnsense_wan_pci_id): é específico do hardware do host, obtido
-    via `lspci`, e nunca é o mesmo endereço em duas máquinas diferentes.
-  EOT
-}
-
 # ------------------------------------------------------------------------------
 # CT 200 / CT 201 - Docker Swarm (produção)
 # ------------------------------------------------------------------------------
@@ -237,24 +216,6 @@ variable "guest_search_domain" {
 variable "omv_nas_ip" {
   type        = string
   description = "IP estático (CIDR) da VM 300 (OpenMediaVault) na VLAN homelab. É a única rota pela qual ansible/playbooks/00-omv-setup.yml alcança a máquina - sem IP determinístico via cloud-init, o playbook não tem para onde conectar."
-}
-
-variable "omv_hba_pci_id" {
-  type        = string
-  description = <<-EOT
-    Endereço PCI (formato "0000:05:00" ou "0000:05:00.0") da controladora SATA
-    física passada para a VM do OMV. É por ela que entram TODOS os discos de
-    dados do NAS - o disco de sistema é virtual, e vem do vm_datastore_id.
-
-    Sem default, pelo mesmo motivo de opnsense_wan_pci_id: o endereço é do
-    hardware do host, obtido com `lspci` no nó secundário, e nunca é o mesmo em
-    duas máquinas. Um default "genérico" aqui passaria um dispositivo errado
-    para a VM.
-
-    ⚠️ Sem esta variável a VM sobe SEM disco de dados nenhum: o OMV inicia só
-    com o disco de sistema, e as montagens dos discos de dados falham em
-    silêncio porque estão declaradas com `nofail`.
-  EOT
 }
 
 variable "omv_cloud_image_url" {
