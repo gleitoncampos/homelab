@@ -328,6 +328,20 @@ Confira: `ssh <no> pct config 200 | grep features` → `keyctl=1,nesting=1`.
 
 ## 9. NAS
 
+⚠️ **Antes, a rede dos hipervisores** — a 2ª passada (passo 10) já aqui, só que
+ela adia o storage porque o NAS ainda não existe. Sem ela o NAS é inalcançável:
+enquanto o `vmbr0` não é VLAN-aware, os convidados da VLAN 20 ficam numa bridge
+(`vmbr0v20`) que o firewall, no `vmbr0`, não enxerga.
+
+```bash
+cd ../../ansible
+ansible-playbook playbooks/00-proxmox-setup.yml --check --diff   # ler o diff do /etc/network/interfaces
+ansible-playbook playbooks/00-proxmox-setup.yml                  # termina dizendo storage ADIADO — esperado
+ssh root@<no> reboot                                              # nos dois: os convidados sobem já no vmbr0 VLAN-aware
+```
+
+Prova: do firewall, `ping` em cada IP da VLAN 20 (os CTs e o NAS).
+
 O playbook instala o OMV, semeia a configuração e cria o usuário SMB.
 
 ```bash
@@ -340,6 +354,9 @@ Na UI do OMV, crie a pasta compartilhada com o nome que você deu em
 `proxmox_backup_share`.
 
 ## 10. Hipervisor, segunda passada
+
+Com o NAS no ar, roda de novo — agora entra o storage de backup que a execução
+de antes do passo 9 adiou.
 
 > **Aviso de segurança.** Esta passada reescreve `/etc/network/interfaces` e
 > `/etc/pve/storage.cfg` por inteiro e desliga o `systemd-resolved`. Valor errado
