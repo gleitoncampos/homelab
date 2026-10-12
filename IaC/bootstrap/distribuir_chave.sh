@@ -15,7 +15,7 @@ set -euo pipefail
 ambiente="${1:-prod}"
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 inventario="${repo}/IaC/ansible/inventories/${ambiente}/hosts.ini"
-chave="${repo}/.local/ssh/homelab_ed25519"
+chave="${HOME}/.ssh/homelab_ed25519"   # o mesmo SSH_KEY do bootstrap.py
 
 [[ -f "${inventario}" ]] || { echo "✗ inventário ausente: ${inventario}" >&2
   echo "  rode 'make bootstrap' antes" >&2; exit 1; }
@@ -63,7 +63,7 @@ if [[ -n "${SSH_AUTH_SOCK:-}" ]]; then
   ssh-add "${chave}" 2>/dev/null && echo "✓ chave carregada no ssh-agent"
 else
   echo "⚠️  sem ssh-agent nesta sessão. O provider do Terraform exige um:"
-  echo "    eval \"\$(ssh-agent -s)\" && ssh-add ${chave#"${repo}/"}"
+  echo "    eval \"\$(ssh-agent -s)\" && ssh-add ${chave}"
 fi
 
 [[ "${falhas}" -eq 0 ]] || { echo "✗ ${falhas} host(s) falharam" >&2; exit 1; }

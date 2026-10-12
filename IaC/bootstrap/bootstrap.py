@@ -50,7 +50,9 @@ ANSWERS = IAC / "homelab.local.yml"
 ANSWERS_TEMPLATE = HERE / "templates" / "answers.yml.tmpl"
 CREDENTIALS = HERE / "CREDENCIAIS.local.txt"
 VAULT_PASS = ANSIBLE / ".ansible_vault_pass"
-SSH_KEY = REPO / ".local" / "ssh" / "homelab_ed25519"
+# Fora do repositório, na pasta de chaves do usuário: chave privada não é
+# artefato do projeto, e dentro dele dependia de uma linha do .gitignore.
+SSH_KEY = Path.home() / ".ssh" / "homelab_ed25519"
 
 ENVS = ("prod", "dev")
 
@@ -824,7 +826,7 @@ def garantir_chave_ssh(dry: bool) -> str:
     step("4. Chave SSH")
     pub = SSH_KEY.with_suffix(".pub") if SSH_KEY.suffix else Path(f"{SSH_KEY}.pub")
     if pub.exists():
-        ok(f"já existe: {pub.relative_to(REPO)}")
+        ok(f"já existe: {pub}")
         return pub.read_text().strip()
     if dry:
         info("[dry-run] geraria par ed25519")
@@ -835,9 +837,7 @@ def garantir_chave_ssh(dry: bool) -> str:
         "     Com passphrase, use ssh-agent para não digitar a cada play.\n"
     )
     com_passphrase = confirm("Proteger a chave com passphrase?", default=True)
-    SSH_KEY.parent.mkdir(parents=True, exist_ok=True)
-    if not gitignored(SSH_KEY.parent):
-        die(f"{SSH_KEY.parent.relative_to(REPO)} não está no .gitignore")
+    SSH_KEY.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
 
     cmd = ["ssh-keygen", "-t", "ed25519", "-f", str(SSH_KEY), "-C", "homelab"]
     if not com_passphrase:
@@ -847,7 +847,7 @@ def garantir_chave_ssh(dry: bool) -> str:
     if subprocess.run(cmd).returncode != 0:
         die("ssh-keygen falhou")
     os.chmod(SSH_KEY, 0o600)
-    ok(f"par gerado em {SSH_KEY.relative_to(REPO)}")
+    ok(f"par gerado em {SSH_KEY}")
     return Path(f"{SSH_KEY}.pub").read_text().strip()
 
 

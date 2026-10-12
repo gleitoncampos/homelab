@@ -87,7 +87,6 @@ SECURITY-AUDIT.local.md
 # O arquivo de respostas não tem segredo, mas tem a topologia inteira.
 IaC/homelab.local.yml
 IaC/bootstrap/CREDENCIAIS.local.txt
-.local/ssh/
 
 # Workspace do subagent-driven-development (brief, report, diff)
 .superpowers/
