@@ -70,20 +70,13 @@
          <fargw>0</fargw>
 -        <monitor_disable>1</monitor_disable>
 +        <monitor_disable>0</monitor_disable>
-         <monitor_noroute>0</monitor_noroute>
--        <monitor_killstates>0</monitor_killstates>
++        <monitor_noroute>0</monitor_noroute>
 +        <monitor_killstates>1</monitor_killstates>
-         <monitor_killstates_priority>0</monitor_killstates_priority>
--        <monitor/>
++        <monitor_killstates_priority>0</monitor_killstates_priority>
 +        <monitor>192.0.2.9</monitor>
-         <force_down>0</force_down>
--        <priority>255</priority>
++        <force_down>0</force_down>
 +        <priority>1</priority>
-         <weight>1</weight>
--        <latencylow/>
--        <latencyhigh/>
--        <losslow/>
--        <losshigh/>
++        <weight>1</weight>
 +        <latencylow>200</latencylow>
 +        <latencyhigh>1000</latencyhigh>
 +        <losslow>10</losslow>
@@ -129,13 +122,20 @@
 +        <defaultgw>1</defaultgw>
 +        <fargw>0</fargw>
 +        <monitor_disable>0</monitor_disable>
-+        <monitor_noroute>0</monitor_noroute>
+         <monitor_noroute>0</monitor_noroute>
+-        <monitor_killstates>0</monitor_killstates>
 +        <monitor_killstates>1</monitor_killstates>
-+        <monitor_killstates_priority>0</monitor_killstates_priority>
+         <monitor_killstates_priority>0</monitor_killstates_priority>
+-        <monitor/>
 +        <monitor>2606:4700:4700::1111</monitor>
-+        <force_down>0</force_down>
+         <force_down>0</force_down>
+-        <priority>255</priority>
 +        <priority>1</priority>
-+        <weight>1</weight>
+         <weight>1</weight>
+-        <latencylow/>
+-        <latencyhigh/>
+-        <losslow/>
+-        <losshigh/>
 +        <latencylow>200</latencylow>
 +        <latencyhigh>1000</latencyhigh>
 +        <losslow>10</losslow>
@@ -364,7 +364,23 @@
    <gifs version="1.0.0">
      <gif/>
    </gifs>
-@@ -2389,6 +3166,24 @@
+@@ -2375,20 +3152,36 @@
+   </virtualip>
+   <vlans version="1.0.0">
+     <vlan>
+-      <if>vtnet0.10</if>
++      <if>vtnet0</if>
+       <tag>10</tag>
+-      <ifname>vtnet0</ifname>
+       <descr>MGMT - Gerenciamento</descr>
+       <vlanif>vtnet0.10</vlanif>
+     </vlan>
+     <vlan>
+-      <if>vtnet0.20</if>
++      <if>vtnet0</if>
+       <tag>20</tag>
+-      <ifname>vtnet0</ifname>
+       <descr>HOMELAB - Servidores</descr>
        <vlanif>vtnet0.20</vlanif>
      </vlan>
    </vlans>
@@ -389,7 +405,7 @@
    <staticroutes version="1.0.0">
      <route/>
    </staticroutes>
-@@ -2414,7 +3209,6 @@
+@@ -2414,7 +3207,6 @@
    <wireless>
      <clone/>
    </wireless>
@@ -397,7 +413,7 @@
    <dhcpdv6>
      <lan>
        <enable>-1</enable>
-@@ -2428,8 +3222,7 @@
+@@ -2428,8 +3220,7 @@
      <csr/>
      <prv>RklYVFVSRS1LRVkK</prv>
    </cert>
@@ -407,7 +423,7 @@
      <enable/>
      <regdhcp/>
      <regdhcpstatic/>
-@@ -2487,10 +3280,4 @@
+@@ -2487,10 +3278,4 @@
        <enabled>1</enabled>
      </general>
    </igmpproxy>

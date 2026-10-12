@@ -286,6 +286,15 @@ def verifica_render_cria_as_vlans():
            f"lista fixa do gate 1 == interfaces fixas do template "
            f"(gate {sorted(fixas_gate)}, template {sorted(fixas_template)})")
 
+    # <vlans>: `if` é o PAI, `vlanif` o dispositivo (modelo Interfaces/Vlan.xml).
+    # `if` == `vlanif` faz a VLAN pai de si mesma: recursão em vlan_ioctl e
+    # panic no boot. Aconteceu no 1º apply de 12/10/2026.
+    for v in raiz.findall("./vlans/vlan"):
+        pai, dev = v.findtext("if"), v.findtext("vlanif")
+        checar(pai and dev and pai != dev and dev == f"{pai}.{v.findtext('tag')}",
+               f"<vlan> {dev}: pai {pai!r} é a interface física, não a própria VLAN")
+        checar(v.find("ifname") is None, f"<vlan> {dev}: sem <ifname>, que o modelo não tem")
+
     for vlan in vlans:
         nome = f"vlan{vlan['tag']}"
         elemento = interfaces.find(nome)

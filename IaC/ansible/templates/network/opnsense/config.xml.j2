@@ -287,10 +287,15 @@
   </virtualip>
   <vlans version="1.0.0">
 {% for vlan in vlans %}
+    {# `if` é a interface PAI e `vlanif` o dispositivo criado — modelo
+       OPNsense/Interfaces/Vlan.xml; `ifname` não existe nele. Até 12/10/2026
+       `if` levava o próprio dispositivo (vtnet0.N): VLAN pai de si mesma, e o
+       kernel entrava em recursão em vlan_ioctl até estourar a pilha no boot
+       ("configuring hardware interfaces"). O firewall antigo não tinha VLAN,
+       por isso nunca tinha sido exercitado. #}
     <vlan>
-      <if>{{ parent_interface | default("vtnet0") }}.{{ vlan.tag }}</if>
+      <if>{{ parent_interface | default("vtnet0") }}</if>
       <tag>{{ vlan.tag }}</tag>
-      <ifname>{{ parent_interface | default("vtnet0") }}</ifname>
       <descr>{{ vlan.name | e }} - {{ vlan.descr | e }}</descr>
       <vlanif>{{ parent_interface | default("vtnet0") }}.{{ vlan.tag }}</vlanif>
     </vlan>
