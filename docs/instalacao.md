@@ -50,6 +50,8 @@ firewall e do NAS, então a primeira passada os adia e avisa; a segunda aplica.
 | 11 | access point | `network/02-openwrt-setup.yml` |
 | 12 | nós Swarm | `00-node-bootstrap` → `01` → `02` |
 | 13 | stacks | `03`, `04`, `05` |
+| 14 | backup | `06-backup.yml` |
+| 15 | nobreak | `07-nut-ups.yml` |
 
 ### Passo 9, duas armadilhas
 
@@ -67,8 +69,6 @@ depois.
 ⚠️ **O passo exige duas senhas no vault**, e sem elas o play aborta na largada:
 a do usuário de compartilhamento Samba e a do segundo administrador
 (`omv_admin_password`). As duas saem do `make bootstrap`.
-| 14 | backup | `06-backup.yml` |
-| 15 | nobreak | `07-nut-ups.yml` |
 
 ---
 
@@ -90,24 +90,64 @@ Anote os dois hostnames: viram `proxmox_node_primary` e
 
 Sem `pvecm`: os nós ficam independentes.
 
+### Internet dos nós antes do firewall existir
+
+Os passos 5 e 6 baixam pacotes e a ISO do OPNsense **pelo hipervisor**, e o
+firewall só existe no passo 7. Até lá, a máquina de controle é o gateway: no
+instalador, gateway = o IP dela na LAN, DNS público. Na máquina de controle
+(Fedora/firewalld), a cada boot dela — as regras são de runtime:
+
+```bash
+sudo firewall-cmd --zone=<zona-de-saida> --add-masquerade
+# Com Docker instalado: ele põe a chain FORWARD em policy DROP, e o NAT não
+# passa mesmo com o masquerade ligado.
+sudo iptables -I DOCKER-USER -i <nic-da-lan> -o <nic-de-saida> -j ACCEPT
+sudo iptables -I DOCKER-USER -i <nic-de-saida> -o <nic-da-lan> -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+```
+
+Prova: `ping 1.1.1.1` a partir de um nó. O `apt update` dá `401` no
+`enterprise.proxmox.com` até o passo 5 — esperado, o playbook troca o
+repositório. Desfazer depois do passo 10: `--remove-masquerade` e as duas
+regras com `-D`.
+
+### Reinstalação: chave de host nova
+
+Host reinstalado (nó ou firewall) apresenta chave de host nova, e o SSH recusa
+com `REMOTE HOST IDENTIFICATION HAS CHANGED`. Confira o fingerprint **pela
+console** antes de aceitar — é contra isso que o aviso protege:
+
+```bash
+ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub         # na console (OPNsense: /conf/sshd/)
+ssh-keygen -R <ip>                                        # na máquina de controle, se bater
+```
+
 ## 3. Acesso e token de API
 
 ```bash
 git clone <url-do-repo> homelab && cd homelab
 make hooks
-make bootstrap ARGS=--dry-run    # gera a chave SSH
+make bootstrap                   # chave SSH, hosts.ini, vault e tfvars; o passo 4 confere e guarda
 make ssh-keys                    # ssh-copy-id em cada host; pede a senha de root
 cd IaC/ansible && ansible-playbook playbooks/00-proxmox-api-token.yml
 ```
 
+`make ssh-keys` falha nos convidados, que ainda não existem — esperado; só os
+dois hipervisores precisam passar aqui.
+
 O playbook cria usuário, role e token nos dois nós e escreve
-`IaC/terraform/proxmox/tokens.auto.tfvars`.
+`IaC/terraform/proxmox/tokens.auto.tfvars`. Cria também os PCI mappings das
+NICs de WAN e da controladora do NAS: o Terraform aplica com o token, e o PVE só
+aceita `hostpci` por endereço do `root@pam`. Pode ser reexecutado: com o arquivo
+presente, reconcilia role, ACLs e mappings sem tocar no segredo.
 
 ⚠️ O segredo do token é exibido uma única vez. Se o arquivo for perdido:
 `pveum user token remove terraform@pve terraform` no nó, e rode o playbook de
 novo.
 
-No shell de um dos nós, anote o endereço PCI da NIC de WAN:
+No shell de cada nó, confira os endereços PCI (formato completo, `0000:05:00.0`)
+das NICs de WAN e da controladora SATA do NAS. O bootstrap **não** os pergunta:
+saem com os valores do template em `IaC/homelab.local.yml`. Diferindo, corrija
+lá e rode `make bootstrap` de novo, antes deste playbook:
 
 ```bash
 lspci -nn | grep -i ethernet
@@ -130,6 +170,12 @@ make check && make secrets
 | `group_vars/network/99-local.yml` (prod e dev) | os playbooks de rede aplicam endereços de documentação, sem erro |
 | `group_vars/omv/99-local.yml` | a asserção do NAS para na largada |
 | `inventories/*/hosts.ini` | regenerável a partir da fonte única, mas guardar poupa a regeneração |
+| `inventories/*/group_vars/all/vault.yml` | os segredos aleatórios gerados pelo bootstrap |
+| `IaC/terraform/proxmox/tokens.auto.tfvars` | rotacionar o token nos dois nós |
+| `~/.ssh/homelab_ed25519` | repetir o `make ssh-keys` com senha |
+
+Guarde `.ansible_vault_pass` e `vault.yml` em entradas separadas: juntos, abrem
+todos os segredos.
 
 ⚠️ **O arquivo de respostas é o que mais importa e o mais fácil de esquecer**,
 porque é gerado uma vez e nunca mais olhado: ele regenera inventário, tfvars e
@@ -144,13 +190,20 @@ ansible-playbook playbooks/00-proxmox-setup.yml --check --diff
 ansible-playbook playbooks/00-proxmox-setup.yml
 ```
 
+O `--check` para em "Garantir serviço do Fail2ban": em modo de simulação o
+pacote não é instalado de verdade, e o serviço não existe. Limite do `--check`,
+não defeito — siga para a execução real.
+
 Termina avisando que rede, DNS e storage ficaram para o bloco 10. Esperado.
 
-Reinicie os nós — o IOMMU só vale depois do boot:
+Reinicie os nós — o IOMMU só vale depois do boot. Antes, confira que o GRUB
+gerado já tem o parâmetro (se uma execução anterior falhou no meio, rode
+`update-grub` à mão):
 
 ```bash
+ssh root@<IP-DO-NO> 'grep -c intel_iommu=on /boot/grub/grub.cfg'   # > 0
 ssh root@<IP-DO-NO> reboot
-dmesg | grep -e DMAR -e IOMMU | head
+ssh root@<IP-DO-NO> 'grep -o intel_iommu=on /proc/cmdline; dmesg | grep -e DMAR -e IOMMU | head'
 ```
 
 ## 6. VM do firewall
@@ -161,6 +214,21 @@ terraform init
 terraform plan
 terraform apply -target=proxmox_virtual_environment_vm.opnsense
 ```
+
+⚠️ **Não aplique um plano salvo sem `-target`** (`terraform plan -out=x` seguido
+de `terraform apply x`): ele cria todos os convidados agora, na VLAN que ainda
+não existe. O `apply` com `-target` deve mostrar 2 recursos: a ISO e a VM.
+
+Se o `apply` criar a VM e falhar em seguida (ela fica `tainted` no state),
+confira a config com `qm config 100` e, estando certa, `terraform untaint
+proxmox_virtual_environment_vm.opnsense` antes do próximo `apply` — em vez de
+deixá-lo destruir e recriar. Confira depois:
+
+```bash
+ssh root@<no-primario> 'qm status 100; qm config 100 | grep -E "^(ide3|hostpci|net0)"'
+```
+
+Esperado: `running`, `ide3` com a ISO, `hostpci0/1` com `mapping=`, `net0` sem `tag=`.
 
 ⚠️ **Este guia pressupõe parque VAZIO, e é o único caminho suportado:** os
 hipervisores chegam recém-instalados e todo convidado nasce daqui. Não há
@@ -192,7 +260,11 @@ reboot, ainda na console:
    por SSH. Pela GUI (`https://<lan_ipaddr>`): System → Settings →
    Administration → Secure Shell, ligado, com login de root e por senha. Depois:
    `ssh-copy-id -i ~/.ssh/homelab_ed25519.pub root@<lan_ipaddr>`.
-4. **Nomes das NICs** (`ifconfig -l`). A do PPPoE é fixa em `igc0`
+4. **Internet antes do playbook.** Ele instala os plugins antes de gravar o
+   `config.xml`, e aborta se algum faltar. WAN por PPPoE não se configura pela
+   console: use a GUI (Interfaces → WAN), ou a WAN por DHCP. Prova:
+   `ssh root@<lan_ipaddr> 'ping -c1 1.1.1.1'`.
+5. **Nomes das NICs** (`ifconfig -l`). A do PPPoE é fixa em `igc0`
    (`config.xml.j2`); a da 2ª WAN vai em `passthrough_wan2_interface` no
    `99-local.yml`. O default é um nome Linux, que não existe no FreeBSD.
 

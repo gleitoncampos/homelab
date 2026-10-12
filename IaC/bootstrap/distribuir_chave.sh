@@ -47,7 +47,10 @@ while read -r linha <&3; do
   fi
 
   echo "→ ${nome} (${usuario}@${ip}): instalando — a senha pedida é a de ${usuario} NO HOST"
-  if ssh-copy-id -i "${chave}.pub" -o StrictHostKeyChecking=accept-new \
+  # ConnectTimeout também aqui: sem ele, host que ainda não existe (os
+  # convidados, numa instalação do zero) prende o laço ~2 min no timeout de TCP
+  # do kernel, sem mensagem, e parece travado.
+  if ssh-copy-id -i "${chave}.pub" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
        "${usuario}@${ip}" >/dev/null; then
     echo "✓ ${nome}: instalada"
   else
