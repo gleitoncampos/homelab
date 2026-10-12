@@ -178,8 +178,23 @@ antes de chegar no guest e nada no `plan` acusa.
 
 ## 7. Firewall
 
-Pela console noVNC: instale o OPNsense a partir da ISO, defina IP da LAN e senha
-de root. O guest agent não é passo de console — está em `opnsense_plugins`.
+Pela console noVNC: instale o OPNsense a partir da ISO e defina a senha de root.
+O guest agent não é passo de console — está em `opnsense_plugins`. Depois do
+reboot, ainda na console:
+
+1. **Opção 1, atribuir interfaces — não aceite a atribuição automática.** Ela põe
+   a LAN na primeira NIC física, que é uma das WANs em passthrough. LAN = `vtnet0`
+   (o trunk do `vmbr0`); WAN = a NIC que recebe DHCP da provedora secundária, só
+   para o firewall ter internet até o playbook; sem VLANs, que o playbook cria.
+2. **Opção 2:** IP da LAN = `lan_ipaddr` do `group_vars/network/99-local.yml`,
+   sem gateway e sem servidor DHCP.
+3. **SSH.** O OPNsense instala com ele desligado, e o playbook entra como root
+   por SSH. Pela GUI (`https://<lan_ipaddr>`): System → Settings →
+   Administration → Secure Shell, ligado, com login de root e por senha. Depois:
+   `ssh-copy-id -i ~/.ssh/homelab_ed25519.pub root@<lan_ipaddr>`.
+4. **Nomes das NICs** (`ifconfig -l`). A do PPPoE é fixa em `igc0`
+   (`config.xml.j2`); a da 2ª WAN vai em `passthrough_wan2_interface` no
+   `99-local.yml`. O default é um nome Linux, que não existe no FreeBSD.
 
 ```bash
 cd ../../ansible
