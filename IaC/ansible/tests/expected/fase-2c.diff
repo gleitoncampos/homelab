@@ -1,0 +1,9 @@
+@@ -1203,7 +1211,7 @@
+             <interface>lan,vlan10,vlan20,vlan30,vlan40,vlan50</interface>
+             <direction>in</direction>
+             <ipprotocol>inet</ipprotocol>
+-            <protocol>tcp,udp</protocol>
++            <protocol>TCP/UDP</protocol>
+             <icmptype/>
+             <icmp6type/>
+             <source_net>any</source_net>

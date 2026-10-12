@@ -286,6 +286,13 @@ def verifica_render_cria_as_vlans():
            f"lista fixa do gate 1 == interfaces fixas do template "
            f"(gate {sorted(fixas_gate)}, template {sorted(fixas_template)})")
 
+    # Protocolo de regra: o OPNsense o copia para o rules.debug, e `tcp,udp`
+    # sai `proto tcp,udp`, que o pf recusa — UMA regra inválida descarta o
+    # ruleset inteiro (12/10/2026: 0 regras, 0 NAT, firewall passando tudo).
+    # O valor de duas camadas é `TCP/UDP`.
+    ruins = sorted({p.text for p in raiz.iter("protocol") if p.text and "," in p.text})
+    checar(not ruins, f"nenhum <protocol> com vírgula (achados: {ruins or 'nenhum'})")
+
     # <vlans>: `if` é o PAI, `vlanif` o dispositivo (modelo Interfaces/Vlan.xml).
     # `if` == `vlanif` faz a VLAN pai de si mesma: recursão em vlan_ioctl e
     # panic no boot. Aconteceu no 1º apply de 12/10/2026.

@@ -801,7 +801,12 @@ opnsense_rules:
     interface: lan,vlan10,vlan20,vlan30,vlan40,vlan50
     direction: in
     ipprotocol: inet
-    protocol: tcp,udp
+    # `TCP/UDP`, valor do modelo de regra do OPNsense. `tcp,udp` (herdado do
+    # firewall antigo) sai literal no rules.debug como `proto tcp,udp`, que o
+    # pf recusa — e uma regra inválida derruba o ruleset INTEIRO: em
+    # 12/10/2026 o firewall subiu com 0 regras e 0 NAT (passa tudo, LAN sem
+    # internet).
+    protocol: TCP/UDP
     icmptype: ''
     icmp6type: ''
     source_net: any
