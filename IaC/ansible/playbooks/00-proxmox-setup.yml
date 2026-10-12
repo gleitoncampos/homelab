@@ -374,7 +374,7 @@
         apply:
           tags: node_exporter
 
-    - name: Instalar pacotes Enterprise e ferramentas CLI modernas (ksmtuned, chrony, fail2ban, btop, ncdu, ripgrep, fzf, tmux)
+    - name: Instalar pacotes Enterprise e ferramentas CLI modernas (chrony, fail2ban, btop, ncdu, ripgrep, fzf, tmux)
       ansible.builtin.apt:
         name:
           - intel-microcode
@@ -386,7 +386,9 @@
           # "No package matching". Nem faz falta — o driver é `intel_pstate` e o
           # kernel do PVE já sobe com o governor `performance`, que era tudo o
           # que o /etc/default/cpufrequtils pedia.
-          - ksmtuned
+          # Sem `ksmtuned`: no PVE o serviço vem do `ksm-control-daemon`, já
+          # instalado e ativo. O `ksmtuned` do Debian disputa o
+          # /etc/ksmtuned.conf com ele e o dpkg aborta a instalação inteira.
           - chrony
           - zram-tools
           # Explícito porque o Debian 13 NÃO o instala por padrão — é a mesma
