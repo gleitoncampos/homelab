@@ -24,19 +24,31 @@ por isso ele acompanha cada entrada como comentário. Reformatou um disco?
 Rode de novo e compare: o serial diz qual linha se moveu, e a troca deixa de
 ser adivinhação.
 
+⚠️ RECONSTRUÇÃO DO ZERO: o NAS não existe, e o único lugar onde os discos
+aparecem é o HIPERVISOR que tem a controladora — e só enquanto a VM do NAS não
+a assumiu pelo passthrough. `--hipervisor` lê ali, restrito aos discos ATRÁS da
+controladora (`omv_hba_pci_id` na linha do nó no hosts.ini). Rode ANTES do
+apply que cria a VM 300 (passo 8), ou com ela parada.
+
 Uso:
   ./collect-omv-fs.py                 # host do grupo `omv` no inventário de prod
+  ./collect-omv-fs.py --hipervisor    # nó Proxmox com omv_hba_pci_id (sem NAS no ar)
   ./collect-omv-fs.py -i <hosts.ini>  # outro inventário
   ./collect-omv-fs.py -l <host>       # um host nomeado do inventário
 """
 import argparse
 import json
 import pathlib
+import re
 import subprocess
 import sys
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 DEFAULT_INV = REPO / "IaC/ansible/inventories/prod/hosts.ini"
+# ansible-inventory roda daqui: é onde mora o ansible.cfg com o
+# vault_password_file. De prod-snapshot/ ele falhava em "no vault secrets
+# found" assim que o inventário passou a ter vault cifrado.
+ANSIBLE_DIR = REPO / "IaC/ansible"
 OUT_DIR = REPO / ".local/snapshot"
 
 LSBLK = ("lsblk -J -b -o "
@@ -52,8 +64,8 @@ def inventory_target(inv: pathlib.Path, limit: str | None) -> tuple[str, str]:
     """Devolve (nome, endereço) do host do grupo `omv`."""
     try:
         raw = subprocess.run(
-            ["ansible-inventory", "-i", str(inv), "--list"],
-            capture_output=True, text=True, check=True).stdout
+            ["ansible-inventory", "-i", str(inv.resolve()), "--list"],
+            capture_output=True, text=True, check=True, cwd=ANSIBLE_DIR).stdout
     except FileNotFoundError:
         die("ansible-inventory não encontrado no PATH")
     except subprocess.CalledProcessError as exc:
@@ -74,6 +86,40 @@ def inventory_target(inv: pathlib.Path, limit: str | None) -> tuple[str, str]:
     addr = meta.get("ansible_host", name)
     user = meta.get("ansible_user", "root")
     return name, f"{user}@{addr}"
+
+
+def hypervisor_target(inv: pathlib.Path) -> tuple[str, str, str]:
+    """Devolve (nome, endereço, pci) do nó Proxmox que declara omv_hba_pci_id."""
+    raw = subprocess.run(["ansible-inventory", "-i", str(inv.resolve()), "--list"],
+                         capture_output=True, text=True, cwd=ANSIBLE_DIR)
+    if raw.returncode != 0:
+        die(f"ansible-inventory falhou: {raw.stderr.strip()}")
+    data = json.loads(raw.stdout)
+    hv = data.get("_meta", {}).get("hostvars", {})
+    nos = [h for h in data.get("proxmox", {}).get("hosts", []) if hv.get(h, {}).get("omv_hba_pci_id")]
+    if len(nos) != 1:
+        die(f"esperava UM nó em `proxmox` com omv_hba_pci_id, achei {nos} — rode `make bootstrap`")
+    meta = hv[nos[0]]
+    pci = meta["omv_hba_pci_id"]
+    if not re.fullmatch(r"[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]", pci):
+        die(f"omv_hba_pci_id fora do formato 0000:05:00.0: {pci!r}")
+    return nos[0], f"{meta.get('ansible_user', 'root')}@{meta.get('ansible_host', nos[0])}", pci
+
+
+def collect_hba(target: str, pci: str) -> dict:
+    """lsblk só dos discos cujo caminho no sysfs passa pela controladora."""
+    remoto = (
+        f"set -eu; d=$(find /sys/bus/pci/devices/{pci}/ -path '*/block/*' "
+        "-maxdepth 9 -mindepth 1 -type d -name 'sd*' -prune -exec basename {} \\; | sort -u); "
+        f"[ -n \"$d\" ] || {{ echo 'controladora {pci} sem disco visível: a VM do NAS "
+        "a assumiu? pare-a (qm stop 300) e rode de novo' >&2; exit 3; }; "
+        f"{LSBLK} $(printf '/dev/%s ' $d)"
+    )
+    out = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", target, remoto],
+                         capture_output=True, text=True)
+    if out.returncode != 0:
+        die(f"coleta em {target} falhou: {out.stderr.strip()}")
+    return json.loads(out.stdout)
 
 
 def gib(n: int) -> str:
@@ -127,11 +173,11 @@ def data_partitions(tree: dict) -> list[dict]:
     return sorted(found, key=lambda p: p["dev"])
 
 
-def render(host: str, parts: list[dict]) -> str:
+def render(host: str, parts: list[dict], origem: str | None = None) -> str:
     lines = [
         "---",
         "# GERADO por prod-snapshot/collect-omv-fs.py — LEIA ANTES DE INSTALAR.",
-        f"# Origem: host `{host}` do grupo `omv`.",
+        f"# Origem: {origem or f'host `{host}` do grupo `omv`'}.",
         "#",
         "# Filesystems de dados que o playbook do OMV remonta depois de uma",
         "# reinstalação. A lista é declarada, e não detectada em tempo de",
@@ -159,20 +205,28 @@ def main() -> None:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("-i", "--inventory", type=pathlib.Path, default=DEFAULT_INV)
     ap.add_argument("-l", "--limit", default=None)
+    ap.add_argument("--hipervisor", action="store_true",
+                    help="lê no nó Proxmox, só os discos atrás de omv_hba_pci_id")
     args = ap.parse_args()
 
     if not args.inventory.exists():
         die(f"inventário não encontrado: {args.inventory}")
 
-    host, target = inventory_target(args.inventory, args.limit)
-    parts = data_partitions(collect(target))
+    origem = None
+    if args.hipervisor:
+        host, target, pci = hypervisor_target(args.inventory)
+        origem = f"hipervisor `{host}`, discos atrás da controladora {pci}"
+        parts = data_partitions(collect_hba(target, pci))
+    else:
+        host, target = inventory_target(args.inventory, args.limit)
+        parts = data_partitions(collect(target))
     if not parts:
         die(f"nenhuma partição de dados encontrada em {host}. "
             "O passthrough da controladora está ativo nesta VM?")
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out = OUT_DIR / f"omv-filesystems-{host}.yml"
-    out.write_text(render(host, parts), encoding="utf-8")
+    out.write_text(render(host, parts, origem), encoding="utf-8")
     out.chmod(0o600)
 
     print(f"{len(parts)} filesystem(s) de dados em {host}:")

@@ -250,7 +250,7 @@ snapshot: ## Coleta o estado real da produção (precisa de SSH e credencial)
 	@cd prod-snapshot && ./collect.sh
 
 omv-fs: ## Propõe a lista de filesystems de dados do NAS para o group_vars local
-	@cd prod-snapshot && ./collect-omv-fs.py
+	@cd prod-snapshot && ./collect-omv-fs.py $(ARGS)
 
 discover: ## Descobre hosts na rede e sugere o hosts.ini
 	@cd prod-snapshot && ./discover.sh

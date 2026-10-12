@@ -62,6 +62,15 @@ Depois que a VM for destruída não há de onde coletar. Sem essa lista o playbo
 para numa asserção: a camada versionada traz UUIDs fictícios de propósito, para
 que o esquecimento falhe alto em vez de montar nada em silêncio.
 
+**Hipervisor reinstalado, discos com dados** (o NAS antigo não existe mais):
+colete no nó que tem a controladora, ANTES do `terraform apply` do passo 8 — é o
+único momento em que os discos aparecem nele; depois que a VM 300 sobe, ela
+assume a controladora pelo passthrough.
+
+```bash
+make omv-fs ARGS=--hipervisor    # lê só os discos atrás de omv_hba_pci_id
+```
+
 Isso só se aplica a um NAS que já tem dados. Numa instalação do zero, com discos
 novos, não há UUID a preservar — formate pela interface do OMV e gere a lista
 depois.
