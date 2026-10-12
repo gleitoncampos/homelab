@@ -1517,15 +1517,21 @@ opnsense_users:
 # ⚠️ firmware/plugins é campo DERIVADO — escrevê-lo não instala nada. Só o
 # `pkg install` instala. Por isso o playbook acrescenta verificação com
 # `pkg info -e` em vez de confiar na declaração.
+#
+# Fora da lista desde 12/10/2026 (instalação do zero na 26.7), não reponha sem
+# conferir `pkg search` no firewall:
+#   os-speedtest-community — só existe em repositório comunitário de terceiro;
+#     o firewall antigo nem o tinha instalado.
+#   os-monit — o Monit passou para o núcleo (/usr/local/bin/monit).
+#   os-arpwatch, os-osint — não existem nos repositórios da 26.7, e o firewall
+#     antigo também não os tinha.
+# Nenhum deles tinha configuração no template.
 opnsense_plugins:
-  - os-arpwatch
   - os-crowdsec
   - os-etpro-telemetry   # consome opnsense_etpro_telemetry_token; faltava no pkg install
   - os-igmp-proxy
   - os-mdns-repeater
-  - os-monit
   - os-node_exporter
-  - os-osint
   - os-qemu-guest-agent
   - os-tailscale          # VPN de acesso remoto — roadmap §3.7
   - os-theme-rebellion    # substitui os-theme-cicada
