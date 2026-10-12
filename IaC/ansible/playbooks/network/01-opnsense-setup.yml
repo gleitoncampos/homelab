@@ -231,6 +231,49 @@
       ansible.builtin.shell: "cp /conf/config.xml /conf/config.xml.bak.$(date +%Y%m%d_%H%M%S)"
       changed_when: true
 
+    # ⚠️ A cópia acima mora no PRÓPRIO firewall, e em 12/10/2026 foi junto com
+    # ele: o apply derrubou o kernel em loop e os backups gravados ali ficaram
+    # com 0 bytes. A cópia que vale é esta, na máquina de controle, em `.local/`
+    # (gitignorado), 0600 porque carrega hashes e a chave privada da GUI. Roda
+    # também em --check: tirar a cópia não altera nada no firewall.
+    - name: Marcar o instante do backup local
+      ansible.builtin.set_fact:
+        opnsense_backup_local: >-
+          {{ playbook_dir }}/../../../../.local/opnsense-backups/config-{{ inventory_hostname }}-{{
+          lookup('ansible.builtin.pipe', 'date +%Y%m%d_%H%M%S') }}.xml
+
+    - name: Trazer o config.xml atual para a máquina de controle
+      ansible.builtin.fetch:
+        src: /conf/config.xml
+        dest: "{{ opnsense_backup_local }}"
+        flat: true
+      check_mode: false
+
+    - name: Restringir a cópia local a 0600
+      ansible.builtin.file:
+        path: "{{ opnsense_backup_local }}"
+        mode: '0600'
+      delegate_to: localhost
+      become: false
+      check_mode: false
+
+    - name: Conferir a cópia local antes de qualquer escrita
+      ansible.builtin.stat:
+        path: "{{ opnsense_backup_local }}"
+      register: opnsense_backup_local_stat
+      delegate_to: localhost
+      become: false
+
+    - name: Abortar se a cópia local do config.xml não existe ou está vazia
+      ansible.builtin.assert:
+        that:
+          - opnsense_backup_local_stat.stat.exists
+          - opnsense_backup_local_stat.stat.size > 0
+        fail_msg: >-
+          Sem cópia íntegra do config.xml atual na máquina de controle
+          ({{ opnsense_backup_local }}). Não aplico sem um caminho de volta.
+        quiet: true
+
     - name: Garantir a instalação dos plugins essenciais (lista única em _common/opnsense.yml)
       ansible.builtin.command: "pkg install -y {{ item }}"
       loop: "{{ opnsense_plugins }}"
@@ -280,28 +323,9 @@
       loop_control:
         label: "{{ item.item }}"
 
-    - name: Habilitar módulos de sensores térmicos de CPU em /boot/loader.conf
-      ansible.builtin.lineinfile:
-        path: /boot/loader.conf
-        line: "{{ item }}"
-        create: true
-        owner: root
-        group: wheel
-        mode: '0644'
-      loop:
-        - 'coretemp_load="YES"'
-        - 'amdtemp_load="YES"'
-
-    # Um dos dois SEMPRE falha: coretemp é Intel, amdtemp é AMD. Falhar aqui é o
-    # comportamento correto do kldload, não um erro de execução.
-    - name: Carregar módulos térmicos no kernel em tempo de execução
-      ansible.builtin.command: "kldload {{ item }}"
-      loop:
-        - coretemp
-        - amdtemp
-      register: kld
-      failed_when: false
-      changed_when: kld.rc == 0
+    # Sem coretemp/amdtemp: o firewall é VM, e o KVM não expõe sensor térmico
+    # ao convidado. A temperatura do hardware é lida no hipervisor (lm-sensors,
+    # 00-proxmox-setup.yml). Removido em 12/10/2026.
 
     - name: Configurar Banner Legal de Aviso no SSH (/etc/motd)
       ansible.builtin.copy:
