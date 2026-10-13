@@ -53,6 +53,31 @@ if alias is not None:
     checar("192.0.2.50" in conteudo, "mantém os IPs de dns_redirect_bypass_ips")
     checar("198.51.100.10" in conteudo, "inclui os managers do Swarm")
 
+# A isenção do NAT sozinha não basta: a regra anti-DoH bloqueia QUALQUER porta
+# para os IPs da DOH_list, e todo resolvedor público grande está nela
+# (1.1.1.1, 8.8.8.8, 9.9.9.9...). Os isentos precisam de passagem na 53,
+# antes do bloqueio, e só na 53 (13/10/2026).
+regras = list(raiz.iter("rule"))
+def _campo(r, *caminho):
+    for c in caminho:
+        v = r.findtext(c)
+        if v is not None:
+            return v
+    return ""
+passa = next((i for i, r in enumerate(regras)
+              if _campo(r, "action", "type") == "pass"
+              and "DNS_REDIRECT_BYPASS" in _campo(r, "source_net", "source/network", "source/address")
+              and "DOH_list" in _campo(r, "destination_net", "destination/network", "destination/address")), None)
+bloq = next((i for i, r in enumerate(regras) if r.get("uuid") == "ffec6963-1b39-4078-80a4-c866447be8f7"), None)
+checar(passa is not None, "existe passagem DNS_REDIRECT_BYPASS -> DOH_list")
+if passa is not None:
+    r = regras[passa]
+    checar(_campo(r, "destination_port", "destination/port") == "53", "a passagem é só para a porta 53")
+    checar(bloq is not None and passa < bloq, "a passagem vem antes do bloqueio anti-DoH")
+    if bloq is not None:
+        checar(int(_campo(r, "sequence") or 0) <= int(_campo(regras[bloq], "sequence") or 0),
+               "sequence da passagem <= sequence do bloqueio")
+
 pb = PB.read_text(encoding="utf-8")
 checar("_dns_bypass_managers" in pb and "homelab_managers" in pb,
        "o playbook monta _dns_bypass_managers a partir de homelab_managers")

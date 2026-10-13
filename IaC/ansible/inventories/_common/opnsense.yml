@@ -827,6 +827,66 @@ opnsense_rules:
     udp-first: ''
     sched: ''
     description: Bloquear trafego de Cryptomining e Stratum Pools
+  # Passagem SÓ na 53 para os isentos do DNS forçado, ANTES do bloqueio
+  # anti-DoH abaixo: ele bloqueia qualquer porta para a DOH_list, e todo
+  # resolvedor público grande está nela. O Traefik (manager do Swarm) precisa
+  # do SOA público para o DNS-01 da Cloudflare (13/10/2026). Trava em
+  # tests/render_opnsense_dns_bypass.py.
+  - uuid: a1000000-0000-4000-8000-00000000d053
+    enabled: '1'
+    statetype: keep
+    state-policy: ''
+    sequence: '1'
+    action: pass
+    quick: '1'
+    interfacenot: '0'
+    interface: lan,vlan10,vlan20,vlan30,vlan40,vlan50
+    direction: in
+    ipprotocol: inet
+    protocol: TCP/UDP
+    icmptype: ''
+    icmp6type: ''
+    source_net: DNS_REDIRECT_BYPASS
+    source_not: '0'
+    source_port: ''
+    destination_net: DOH_list
+    destination_not: '0'
+    destination_port: '53'
+    divert-to: ''
+    gateway: ''
+    replyto: ''
+    disablereplyto: '0'
+    log: '1'
+    allowopts: '0'
+    nosync: '0'
+    nopfsync: '0'
+    statetimeout: ''
+    udp-first: ''
+    udp-multiple: ''
+    udp-single: ''
+    max-src-nodes: ''
+    max-src-states: ''
+    max-src-conn: ''
+    max: ''
+    max-src-conn-rate: ''
+    max-src-conn-rates: ''
+    overload: ''
+    adaptivestart: ''
+    adaptiveend: ''
+    prio: ''
+    set-prio: ''
+    set-prio-low: ''
+    tag: ''
+    tagged: ''
+    tcpflags1: ''
+    tcpflags2: ''
+    tcpflags_any: '0'
+    categories: ''
+    sched: ''
+    tos: ''
+    shaper1: ''
+    shaper2: ''
+    description: Isentos do DNS forcado (managers do Swarm) consultam DNS publico na 53
   - uuid: ffec6963-1b39-4078-80a4-c866447be8f7
     enabled: '1'
     statetype: keep
