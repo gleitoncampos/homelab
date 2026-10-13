@@ -444,7 +444,24 @@
         - (omv_ssh.stdout | from_json).passwordauthentication | bool
           or (omv_ssh.stdout | from_json).permitrootlogin | bool
       changed_when: true
-      notify: Reimplantar o SSH do OMV
+
+    # Conferido contra o sshd vivo, e não contra o banco: se o play cair entre
+    # a gravação no banco e o deploy, o rerun acha o banco já certo e um
+    # handler nunca mais seria notificado — o sshd ficaria liberado para sempre.
+    - name: Ler o SSH efetivo
+      ansible.builtin.command: sshd -T
+      register: sshd_efetivo
+      changed_when: false
+      check_mode: false
+      when: omv_bin.stat.exists
+
+    - name: Aplicar o SSH do OMV
+      ansible.builtin.command:
+        cmd: omv-salt deploy run ssh
+      when:
+        - omv_bin.stat.exists
+        - sshd_efetivo.stdout is search('(?m)^(passwordauthentication|permitrootlogin) yes$')
+      changed_when: true
 
     # ------------------------------------------------------------------------
     # Plugins do OMV
@@ -528,11 +545,12 @@
           - admin
           - UserMgmt
           - setUser
-          - >-
-            {"name":"{{ omv_backup_user }}",
-             "password":"{{ proxmox_backup_share_password }}",
-             "shell":"/usr/sbin/nologin","groups":[],"comment":"Backup do Proxmox",
-             "email":"","disallowusermod":true,"sshpubkeys":[]}
+          # `to_json`: o JSON escrito à mão quebrava com `"` ou `\` na senha.
+          - "{{ {'name': omv_backup_user,
+                 'password': proxmox_backup_share_password,
+                 'shell': '/usr/sbin/nologin', 'groups': [],
+                 'comment': 'Backup do Proxmox', 'email': '',
+                 'disallowusermod': true, 'sshpubkeys': []} | to_json }}"
       when:
         - omv_bin.stat.exists
         - omv_backup_user not in (omv_users.stdout | default('[]') | from_json
@@ -552,13 +570,12 @@
           - admin
           - UserMgmt
           - setUser
-          - >-
-            {"name":"{{ omv_admin_user }}",
-             "password":"{{ omv_admin_password }}",
-             "shell":"{{ omv_admin_shell }}",
-             "groups":["openmediavault-admin"],
-             "comment":"Segundo administrador",
-             "email":"","disallowusermod":false,"sshpubkeys":[]}
+          - "{{ {'name': omv_admin_user,
+                 'password': omv_admin_password,
+                 'shell': omv_admin_shell,
+                 'groups': ['openmediavault-admin'],
+                 'comment': 'Segundo administrador', 'email': '',
+                 'disallowusermod': false, 'sshpubkeys': []} | to_json }}"
       when:
         - omv_bin.stat.exists
         - omv_admin_user not in (omv_users.stdout | default('[]') | from_json
@@ -868,11 +885,6 @@
           Fail2ban e envio de syslog para o Alloy.
 
   handlers:
-    - name: Reimplantar o SSH do OMV
-      ansible.builtin.command:
-        cmd: omv-salt deploy run ssh
-      changed_when: true
-
     # `omv-salt deploy run rsyslog` regenera o diretório /etc/rsyslog.d/ a
     # partir do banco de configuração do OMV. É o único caminho que faz o
     # `openmediavault-remote.conf` refletir o valor novo: editar o arquivo à

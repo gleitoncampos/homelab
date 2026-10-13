@@ -76,7 +76,10 @@
       - admin
       - FileSystemMgmt
       - setMountPoint
-      - '{"id":"{{ item }}"}'
+      # `to_json`, e não um literal '{"id":...}': o Ansible converte o literal
+      # em dict e o argv recebe o repr do Python ({'id': ...}), que o omv-rpc
+      # recusa com "The params argument is no valid JSON".
+      - "{{ {'id': item} | to_json }}"
   loop: "{{ omv_fs_declared | intersect(omv_fs_mountable) }}"
   changed_when: true
   when: not ansible_check_mode
