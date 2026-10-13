@@ -40,6 +40,23 @@
           <parameters/>
           <description>ids rule updates</description>
         </job>
+        {# A DNSBL do Unbound consulta /var/unbound/data/dnsbl.json, que só a
+           ação `unbound dnsbl` gera. Sem este job e sem a task do playbook,
+           a lista nunca existia — bloqueio "habilitado" e nada bloqueado
+           (13/10/2026). Diário, fora do horário do `ids update`. #}
+        <job uuid="{{ 'cron:unbound-dnsbl' | to_uuid }}">
+          <origin>cron</origin>
+          <enabled>1</enabled>
+          <minutes>30</minutes>
+          <hours>3</hours>
+          <days>*</days>
+          <months>*</months>
+          <weekdays>*</weekdays>
+          <who>root</who>
+          <command>unbound dnsbl</command>
+          <parameters/>
+          <description>Update Unbound DNSBLs</description>
+        </job>
       </jobs>
     </cron>
 {% elif _plugins_section == 'netflow_ids' %}

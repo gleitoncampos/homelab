@@ -509,6 +509,15 @@
       ansible.builtin.shell: configctl template reload OPNsense/Kea && configctl kea restart
       changed_when: true
 
+    # O config.xml declara a DNSBL, mas o Unbound consulta
+    # /var/unbound/data/dnsbl.json, que só esta ação gera (baixa e compila as
+    # listas; a GUI a dispara no "Apply"). Sem ela o firewall reinstalado
+    # ficou sem bloqueio nenhum (13/10/2026). O cron `unbound dnsbl` do
+    # config.xml mantém a lista atualizada depois.
+    - name: Baixar e compilar as listas da DNSBL do Unbound
+      ansible.builtin.command: configctl unbound dnsbl
+      changed_when: true
+
     - name: Garantir que os serviços do Node Exporter, QEMU Guest Agent e Monit estejam ativos
       ansible.builtin.command: "{{ item }}"
       loop:

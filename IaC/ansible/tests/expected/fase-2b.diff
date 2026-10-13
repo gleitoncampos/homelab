@@ -47,7 +47,26 @@
            <minutes>0</minutes>
            <hours>0</hours>
            <days>*</days>
-@@ -660,7 +630,7 @@
+@@ -654,13 +624,26 @@
+           <parameters/>
+           <description>ids rule updates</description>
+         </job>
++        <job uuid="ecec16bd-b54e-591c-8efe-8eaecdc17312">
++          <origin>cron</origin>
++          <enabled>1</enabled>
++          <minutes>30</minutes>
++          <hours>3</hours>
++          <days>*</days>
++          <months>*</months>
++          <weekdays>*</weekdays>
++          <who>root</who>
++          <command>unbound dnsbl</command>
++          <parameters/>
++          <description>Update Unbound DNSBLs</description>
++        </job>
+       </jobs>
+     </cron>
+     <Firewall>
        <Lvtemplate version="0.0.1">
          <templates/>
        </Lvtemplate>
@@ -56,7 +75,7 @@
          <geoip>
            <url/>
          </geoip>
-@@ -838,23 +808,6 @@
+@@ -838,23 +821,6 @@
              <categories/>
              <description>Spamhaus DROP List</description>
            </alias>
@@ -80,7 +99,7 @@
            <alias uuid="5aeba382-8760-42dd-bea3-9dd5241fbe14">
              <enabled>1</enabled>
              <name>DNS_REDIRECT_BYPASS</name>
-@@ -1004,6 +957,43 @@
+@@ -1004,6 +970,43 @@
              <categories/>
              <description>Portas DNS-over-QUIC (UDP 853)</description>
            </alias>
@@ -124,7 +143,7 @@
            <alias uuid="d8c7b6a5-f4e3-2109-8765-443322110099">
              <enabled>1</enabled>
              <name>Management_Ports</name>
-@@ -1031,39 +1021,8 @@
+@@ -1031,39 +1034,8 @@
        <Category version="1.0.0">
          <categories/>
        </Category>
