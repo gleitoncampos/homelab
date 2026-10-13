@@ -7,7 +7,7 @@
        <type/>
        <subscription/>
        <reboot/>
-@@ -423,52 +408,43 @@
+@@ -423,52 +408,44 @@
        <blockpriv>1</blockpriv>
        <blockbogons>1</blockbogons>
        <ipaddr>pppoe</ipaddr>
@@ -15,6 +15,7 @@
 +      <ipaddrv6>dhcp6</ipaddrv6>
 +      <dhcp6-ia-pd-len>8</dhcp6-ia-pd-len>
 +      <dhcp6-ia-pd-send-hint>1</dhcp6-ia-pd-send-hint>
++      <dhcp6prefixonly>1</dhcp6prefixonly>
        <mss>1420</mss>
      </wan>
 -  </interfaces>

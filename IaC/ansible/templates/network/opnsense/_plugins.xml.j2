@@ -605,7 +605,12 @@
         <monitor_noroute>0</monitor_noroute>
         <monitor_killstates>1</monitor_killstates>
         <monitor_killstates_priority>0</monitor_killstates_priority>
-        <monitor>{{ opnsense_wan_monitor_ipv6 }}</monitor>
+        {# Sem monitor fixo: o provedor não dá endereço global à pppoe0 (só
+           prefixo delegado), e o dpinger recusa monitor global sem origem
+           roteável na interface — gateway down para sempre (13/10/2026).
+           Vazio, o OPNsense monitora o próprio gateway link-local, com origem
+           link-local. Mede o enlace até o provedor, não a internet. #}
+        <monitor/>
         <force_down>0</force_down>
         <priority>1</priority>
         <weight>1</weight>

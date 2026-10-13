@@ -90,7 +90,6 @@ opnsense_wan_monitor_ipv4: "192.0.2.9"
 # 10-defaults.yml versionado, que os carrega reais pelo mesmo motivo. A NIC é
 # nomenclatura de device (RFC não se aplica), espelha passthrough_wan_interface.
 passthrough_wan2_interface: "enp4s0"
-opnsense_wan_monitor_ipv6: "2606:4700:4700::1111"
 opnsense_wan2_monitor_ipv4: "8.8.8.8"
 opnsense_wan2_monitor_ipv6: "2001:4860:4860::8888"
 

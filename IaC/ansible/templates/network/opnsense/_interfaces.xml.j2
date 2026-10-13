@@ -48,6 +48,9 @@
       <ipaddrv6>dhcp6</ipaddrv6>
       <dhcp6-ia-pd-len>8</dhcp6-ia-pd-len>
       <dhcp6-ia-pd-send-hint>1</dhcp6-ia-pd-send-hint>
+      {# O provedor responde `NA: no addresses`: pedir endereço deixa o dhcp6c
+         mandando Solicit sem fim. Só o prefixo. #}
+      <dhcp6prefixonly>1</dhcp6prefixonly>
       <mss>1420</mss>
     </wan>
     {# 2ª WAN (CLARO): DHCP na NIC física dedicada (pass-through). No OPNsense a

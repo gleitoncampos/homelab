@@ -93,12 +93,12 @@ parent_interface: "vtnet0" # Interface física pai no OPNsense (Trunk vmbr0 Prox
 passthrough_wan_interface: "enp5s0" # Interface física de rede dedicada via PCIe Pass-through (VT-d) no Proxmox Host
 passthrough_wan2_interface: "enp4s0" # 2ª WAN (CLARO): NIC física dedicada via PCIe Pass-through. Nomenclatura de device, não topologia — mesmo critério de passthrough_wan_interface. Valor real no 99-local.
 
-# IPs de monitor (dpinger): v6 da WAN1 (WAN_PPPOEV6) e v4+v6 da CLARO. São
-# anycast PÚBLICO (Cloudflare/Google), não topologia — por isso têm valor real
-# aqui, ao contrário do resto do arquivo. O v4 da WAN1 (WAN_GW) NÃO está aqui:
-# usa opnsense_wan_monitor_ipv4, cujo default público (1.1.1.1/Cloudflare) mora
-# em _common/opnsense.yml.
-opnsense_wan_monitor_ipv6: "2606:4700:4700::1111"
+# IPs de monitor (dpinger) da CLARO, v4+v6. São anycast PÚBLICO
+# (Cloudflare/Google), não topologia — por isso têm valor real aqui, ao
+# contrário do resto do arquivo. O v4 da WAN1 (WAN_GW) NÃO está aqui: usa
+# opnsense_wan_monitor_ipv4, cujo default público (1.1.1.1/Cloudflare) mora em
+# _common/opnsense.yml. O v6 da WAN1 (WAN_PPPOEV6) não tem monitor fixo: ver
+# _plugins.xml.j2.
 opnsense_wan2_monitor_ipv4: "8.8.8.8"         # CLARO_DHCP
 opnsense_wan2_monitor_ipv6: "2001:4860:4860::8888"  # CLARO_DHCP6
 

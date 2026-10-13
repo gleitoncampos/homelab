@@ -1,4 +1,4 @@
-@@ -515,16 +491,9 @@
+@@ -515,16 +492,9 @@
      </rule>
    </nat>
    <filter/>
@@ -15,7 +15,7 @@
    <revision>
      <username>ansible</username>
      <description>Provisionado via Ansible</description>
-@@ -539,11 +508,11 @@
+@@ -539,11 +509,11 @@
        <general version="0.0.1">
          <enabled>0</enabled>
        </general>
@@ -29,7 +29,7 @@
        <general>
          <enabled/>
          <preferred_oldsa>0</preferred_oldsa>
-@@ -635,7 +604,7 @@
+@@ -635,7 +605,7 @@
        <Instances/>
        <StaticKeys/>
      </OpenVPN>
@@ -38,7 +38,7 @@
        <zones/>
        <templates/>
      </captiveportal>
-@@ -643,7 +612,7 @@
+@@ -643,7 +613,7 @@
        <jobs>
          <job uuid="29a4a8cb-f14d-4faa-b8f7-6d7ddb0a758c">
            <origin>IDS</origin>
@@ -47,7 +47,7 @@
            <minutes>0</minutes>
            <hours>0</hours>
            <days>*</days>
-@@ -660,7 +629,7 @@
+@@ -660,7 +630,7 @@
        <Lvtemplate version="0.0.1">
          <templates/>
        </Lvtemplate>
@@ -56,7 +56,7 @@
          <geoip>
            <url/>
          </geoip>
-@@ -838,23 +807,6 @@
+@@ -838,23 +808,6 @@
              <categories/>
              <description>Spamhaus DROP List</description>
            </alias>
@@ -80,7 +80,7 @@
            <alias uuid="5aeba382-8760-42dd-bea3-9dd5241fbe14">
              <enabled>1</enabled>
              <name>DNS_REDIRECT_BYPASS</name>
-@@ -1004,6 +956,43 @@
+@@ -1004,6 +957,43 @@
              <categories/>
              <description>Portas DNS-over-QUIC (UDP 853)</description>
            </alias>
@@ -124,7 +124,7 @@
            <alias uuid="d8c7b6a5-f4e3-2109-8765-443322110099">
              <enabled>1</enabled>
              <name>Management_Ports</name>
-@@ -1031,39 +1020,8 @@
+@@ -1031,39 +1021,8 @@
        <Category version="1.0.0">
          <categories/>
        </Category>
