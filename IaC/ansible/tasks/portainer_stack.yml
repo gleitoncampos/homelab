@@ -130,6 +130,12 @@
   # Quem reprova é a conferência abaixo, que mostra status e mensagem do
   # Portainer — o no_log daqui esconde a resposta inteira, segredo junto.
   failed_when: false
+  # Repete enquanto não vier 200: logo depois de a stack do Portainer mudar, os
+  # agentes reiniciam e o do worker responde 500 ("unable to redirect request
+  # to a manager") até o do manager voltar ao cluster (13/10/2026).
+  until: portainer_stack_create.status == 200
+  retries: 6
+  delay: 10
   when: not stack_id
   no_log: true
 
@@ -168,8 +174,12 @@
     status_code: 200
     validate_certs: false
   register: portainer_stack_redeploy
-  # Ver a task de criação: a conferência abaixo é quem reprova.
+  # Ver a task de criação: a conferência abaixo é quem reprova, e o mesmo
+  # motivo para repetir até 200.
   failed_when: false
+  until: portainer_stack_redeploy.status == 200
+  retries: 6
+  delay: 10
   when: stack_id
   no_log: true
 

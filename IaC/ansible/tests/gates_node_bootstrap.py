@@ -126,6 +126,15 @@ for arq in ("docker/portainer/swarm/compose.yml", "docker/traefik/swarm/compose.
         cond = ((sv.get("deploy") or {}).get("restart_policy") or {}).get("condition", "any")
         checar(cond == "any", f"{arq.split('/')[1]}/{nome}: restart_policy.condition = any (veio {cond})")
 
+# Deploy de stack tenta de novo: logo depois de a stack do Portainer mudar, os
+# agentes reiniciam e o do worker responde 500 ("unable to redirect request to
+# a manager") até o do manager voltar ao cluster (13/10/2026: 4 s de corrida).
+pst = yaml.safe_load((PB.parent.parent / "tasks" / "portainer_stack.yml").read_text(encoding="utf-8"))
+for rotulo in ("Criar stack nova", "Redeploy da stack existente"):
+    t = next((x for x in pst if str(x.get("name", "")).startswith(rotulo)), {})
+    checar(int(t.get("retries") or 0) >= 3 and "until" in t,
+           f"portainer_stack: '{rotulo}' repete até HTTP 200 (until/retries)")
+
 if falhas:
     sys.exit("\n✗ gates-node-bootstrap")
 print("\n✓ gates-node-bootstrap")
