@@ -1,0 +1,61 @@
+{# DHCPv4 do Kea. Substitui o `<dhcpd>` do ISC, que saiu do núcleo no
+   OPNsense 26.7 (plugin `os-isc-dhcp`, descontinuado) — com o template ainda
+   gerando `<dhcpd>`, nada servia DHCP (13/10/2026).
+
+   ⚠️ `routers` e `domain_name_servers` vão ESCRITOS. O
+   `option_data_autocollect` só os preenche quando a configuração é salva
+   pela GUI/API (`KeaDhcpv4::setNodes`); este arquivo é gravado direto no
+   /conf/config.xml, e sem eles o cliente recebe endereço sem gateway.
+
+   DNS = gateway da PRÓPRIA rede: sem isso a consulta atravessaria interface
+   e dependeria de uma regra de passagem que não existe. O Unbound escuta em
+   todas elas (ver _dns.xml.j2).
+
+   `subnet` é o CIDR da REDE, calculado do IP do gateway e do prefixo: o
+   modelo valida o endereço da reserva com `isIPInCIDR` contra ele.
+
+   UUIDs estáveis (`to_uuid`): a reserva aponta para a subnet pelo UUID, e um
+   UUID novo a cada render faria todo apply parecer mudança. #}
+{% macro _cidr(ip, prefixo) -%}
+{%- set o = ip.split('.') | map('int') | list -%}
+{%- set n = o[0] * 16777216 + o[1] * 65536 + o[2] * 256 + o[3] -%}
+{%- set base = n - n % (2 ** (32 - prefixo | int)) -%}
+{{ base // 16777216 }}.{{ (base // 65536) % 256 }}.{{ (base // 256) % 256 }}.{{ base % 256 }}/{{ prefixo }}
+{%- endmacro %}
+        <subnets>
+{% for rede in _kea_redes %}
+          <subnet4 uuid="{{ ('kea:subnet4:' ~ rede.nome) | to_uuid }}">
+            <subnet>{{ _cidr(rede.ip, rede.prefixo) }}</subnet>
+            <next_server/>
+            <option_data_autocollect>1</option_data_autocollect>
+            <option_data>
+              <domain_name_servers>{{ rede.ip }}</domain_name_servers>
+              <domain_search/>
+              <routers>{{ rede.ip }}</routers>
+              <static_routes/>
+              <domain_name/>
+              <ntp_servers>{{ rede.ip }}</ntp_servers>
+              <time_servers/>
+              <tftp_server_name/>
+              <boot_file_name/>
+            </option_data>
+            <match-client-id>1</match-client-id>
+            <pools>{{ rede.inicio }}-{{ rede.fim }}</pools>
+            <description>{{ rede.nome }}</description>
+          </subnet4>
+{% endfor %}
+        </subnets>
+        <reservations>
+{# Reservas: `dhcp_static_maps` é a lista da LAN. Reserva em VLAN entra
+   quando houver dado para ela. #}
+{% for map in dhcp_static_maps | default([]) %}
+          <reservation uuid="{{ ('kea:reserva:' ~ map.mac | lower) | to_uuid }}">
+            <subnet>{{ ('kea:subnet4:lan') | to_uuid }}</subnet>
+            <ip_address>{{ map.ipaddr | e }}</ip_address>
+            <hw_address>{{ map.mac | e }}</hw_address>
+            <client_id/>
+            <hostname>{{ map.hostname | e }}</hostname>
+            <description>{{ map.descr | default('') | e }}</description>
+          </reservation>
+{% endfor %}
+        </reservations>

@@ -4,7 +4,6 @@
 {% include '_sysctl.xml.j2' %}
 {% include '_system.xml.j2' %}
 {% include '_interfaces.xml.j2' %}
-{% include '_dhcp.xml.j2' %}
 {% include '_nat.xml.j2' %}
   <filter/>
   <ntpd>
@@ -154,6 +153,16 @@
         <dhcp6_ratimeout>10</dhcp6_ratimeout>
       </settings>
     </Interfaces>
+{# Redes servidas pelo Kea: a LAN e toda VLAN com `dhcp_enabled`. MGMT e
+   HOMELAB ficam de fora de propósito — DHCP nelas daria endereço a quem se
+   plugasse na rede de gerência. Montada aqui porque `general.interfaces` e
+   `_kea_dhcp4.xml.j2` leem a mesma lista; `set` dentro do include não sobe. #}
+{% set _kea_redes = [{'nome': 'lan', 'ip': lan_ipaddr, 'prefixo': 24,
+                      'inicio': lan_dhcp_range_from, 'fim': lan_dhcp_range_to}] %}
+{% for vlan in vlans if vlan.dhcp_enabled | default(false) %}
+{% set _ = _kea_redes.append({'nome': 'vlan' ~ vlan.tag, 'ip': vlan.ip, 'prefixo': vlan.subnet,
+                              'inicio': vlan.dhcp_start, 'fim': vlan.dhcp_end}) %}
+{% endfor %}
     <Kea>
       <ctrl_agent version="0.0.1">
         <general>
@@ -164,9 +173,9 @@
       </ctrl_agent>
       <dhcp4 version="1.0.5" description="Kea DHCPv4 configuration">
         <general>
-          <enabled>0</enabled>
+          <enabled>1</enabled>
           <manual_config>0</manual_config>
-          <interfaces/>
+          <interfaces>{{ _kea_redes | map(attribute='nome') | join(',') }}</interfaces>
           <service_sockets_max_retries/>
           <service_sockets_retry_wait_time/>
           <valid_lifetime>4000</valid_lifetime>
@@ -188,8 +197,7 @@
           <this_server_name/>
           <max_unacked_clients>2</max_unacked_clients>
         </ha>
-        <subnets/>
-        <reservations/>
+{% include '_kea_dhcp4.xml.j2' %}
         <options/>
         <ha_peers/>
       </dhcp4>

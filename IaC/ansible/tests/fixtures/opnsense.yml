@@ -124,7 +124,7 @@ vlans:
     ip: "203.0.113.1"
     subnet: 24
     # A fixture precisa de UMA VLAN com DHCP e uma SEM: as duas metades do
-    # `if vlan.dhcp_enabled` de _dhcp.xml.j2. Sem isto o laço nunca emite
+    # `if vlan.dhcp_enabled` de config.xml.j2 (Kea). Sem isto o laço nunca emite
     # nada e o render aprova um template que poderia estar quebrado.
     dhcp_enabled: true
     dhcp_start: "203.0.113.100"

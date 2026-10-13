@@ -245,7 +245,7 @@ def verifica_render_cria_as_vlans():
     checar(len(vlans) >= 2, "a fixture declara ao menos 2 VLANs")
     com_dhcp = [v for v in vlans if v.get("dhcp_enabled")]
     sem_dhcp = [v for v in vlans if not v.get("dhcp_enabled")]
-    # As duas metades do `if vlan.dhcp_enabled` de _dhcp.xml.j2. Sem uma
+    # As duas metades do `if vlan.dhcp_enabled` de config.xml.j2 (Kea). Sem uma
     # fixture de cada lado, um dos ramos nunca é exercido.
     checar(com_dhcp and sem_dhcp,
            "a fixture tem VLAN COM e SEM dhcp_enabled (os dois ramos do laço)")
@@ -268,10 +268,11 @@ def verifica_render_cria_as_vlans():
 
     interfaces = raiz.find("interfaces")
     checar(interfaces is not None, "<interfaces> presente no render")
-    dhcpd = raiz.find("dhcpd")
-    checar(dhcpd is not None, "<dhcpd> presente no render")
-    if interfaces is None or dhcpd is None:
+    kea = raiz.find("./OPNsense/Kea/dhcp4/general/interfaces")
+    checar(kea is not None, "Kea dhcp4 declara interfaces no render")
+    if interfaces is None or kea is None:
         return
+    kea_ifaces = {i for i in (kea.text or "").split(",") if i}
 
     # A lista FIXA do gate 1 (as interfaces que não são VLAN) tem de ser
     # exatamente o que o template emite. Escrita à mão, ela envelheceu: o
@@ -326,9 +327,9 @@ def verifica_render_cria_as_vlans():
         # DHCP: presente se e só se `dhcp_enabled`. As duas direções importam
         # — um servidor DHCP na VLAN de gerência entrega endereço a quem se
         # plugar nela.
-        tem_dhcp = dhcpd.find(nome) is not None
+        tem_dhcp = nome in kea_ifaces
         checar(tem_dhcp == bool(vlan.get("dhcp_enabled")),
-               f"<dhcpd><{nome}> presente == dhcp_enabled "
+               f"Kea serve {nome} == dhcp_enabled "
                f"({vlan.get('dhcp_enabled', False)})")
 
     # O Unbound precisa escutar em toda VLAN: o cliente recebe por DHCP o

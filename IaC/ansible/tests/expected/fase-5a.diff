@@ -1,4 +1,4 @@
-@@ -1524,7 +2204,7 @@
+@@ -1524,7 +2152,7 @@
        <activeTimeout>1800</activeTimeout>
        <inactiveTimeout>15</inactiveTimeout>
      </Netflow>
@@ -7,7 +7,7 @@
        <rules/>
        <policies/>
        <userDefinedRules/>
-@@ -1780,7 +2460,7 @@
+@@ -1780,7 +2408,7 @@
        <loopbacks version="1.0.0"/>
        <neighbors version="1.0.0"/>
        <vxlans version="1.0.2"/>
@@ -16,16 +16,85 @@
          <disablechecksumoffloading>1</disablechecksumoffloading>
          <disablesegmentationoffloading>1</disablesegmentationoffloading>
          <disablelargereceiveoffloading>1</disablelargereceiveoffloading>
-@@ -1800,7 +2480,7 @@
+@@ -1800,11 +2428,11 @@
            <http_port>8000</http_port>
          </general>
        </ctrl_agent>
 -      <dhcp4 description="Kea DHCPv4 configuration" persisted_at="1780800096.93" version="1.0.5">
 +      <dhcp4 description="Kea DHCPv4 configuration" version="1.0.5">
          <general>
-           <enabled>0</enabled>
+-          <enabled>0</enabled>
++          <enabled>1</enabled>
            <manual_config>0</manual_config>
-@@ -1831,7 +2511,7 @@
+-          <interfaces/>
++          <interfaces>lan,vlan20</interfaces>
+           <service_sockets_max_retries/>
+           <service_sockets_retry_wait_time/>
+           <valid_lifetime>4000</valid_lifetime>
+@@ -1826,12 +2454,68 @@
+           <this_server_name/>
+           <max_unacked_clients>2</max_unacked_clients>
+         </ha>
+-        <subnets/>
+-        <reservations/>
++        <subnets>
++          <subnet4 uuid="6a0bdd8d-bb2f-5b39-9ccd-c2fbdce54ae9">
++            <subnet>192.0.2.0/24</subnet>
++            <next_server/>
++            <option_data_autocollect>1</option_data_autocollect>
++            <option_data>
++              <domain_name_servers>192.0.2.1</domain_name_servers>
++              <domain_search/>
++              <routers>192.0.2.1</routers>
++              <static_routes/>
++              <domain_name/>
++              <ntp_servers>192.0.2.1</ntp_servers>
++              <time_servers/>
++              <tftp_server_name/>
++              <boot_file_name/>
++            </option_data>
++            <match-client-id>1</match-client-id>
++            <pools>192.0.2.170-192.0.2.254</pools>
++            <description>lan</description>
++          </subnet4>
++          <subnet4 uuid="92aa71c8-ac22-5f6f-a04b-2d8a16b5b322">
++            <subnet>203.0.113.0/24</subnet>
++            <next_server/>
++            <option_data_autocollect>1</option_data_autocollect>
++            <option_data>
++              <domain_name_servers>203.0.113.1</domain_name_servers>
++              <domain_search/>
++              <routers>203.0.113.1</routers>
++              <static_routes/>
++              <domain_name/>
++              <ntp_servers>203.0.113.1</ntp_servers>
++              <time_servers/>
++              <tftp_server_name/>
++              <boot_file_name/>
++            </option_data>
++            <match-client-id>1</match-client-id>
++            <pools>203.0.113.100-203.0.113.200</pools>
++            <description>vlan20</description>
++          </subnet4>
++        </subnets>
++        <reservations>
++          <reservation uuid="7af7b93a-3beb-5ca1-aff2-ab1e3b35573f">
++            <subnet>6a0bdd8d-bb2f-5b39-9ccd-c2fbdce54ae9</subnet>
++            <ip_address>192.0.2.201</ip_address>
++            <hw_address>00:00:5e:00:53:01</hw_address>
++            <client_id/>
++            <hostname>host-um</hostname>
++            <description>Fixture um</description>
++          </reservation>
++          <reservation uuid="84bf2026-dc09-53e0-8f71-6580b1eec38d">
++            <subnet>6a0bdd8d-bb2f-5b39-9ccd-c2fbdce54ae9</subnet>
++            <ip_address>192.0.2.202</ip_address>
++            <hw_address>00:00:5e:00:53:02</hw_address>
++            <client_id/>
++            <hostname>host-dois</hostname>
++            <description>Fixture dois</description>
++          </reservation>
++        </reservations>
          <options/>
          <ha_peers/>
        </dhcp4>
@@ -34,7 +103,7 @@
          <general>
            <enabled>0</enabled>
            <manual_config>0</manual_config>
-@@ -1862,7 +2542,7 @@
+@@ -1862,7 +2546,7 @@
          <pd_pools/>
          <ha_peers/>
        </dhcp6>
@@ -43,7 +112,7 @@
          <general>
            <enabled>0</enabled>
            <manual_config>0</manual_config>
-@@ -1871,9 +2551,9 @@
+@@ -1871,9 +2555,9 @@
          </general>
        </ddns>
      </Kea>
@@ -55,7 +124,7 @@
          <interval>120</interval>
          <startdelay>120</startdelay>
          <mailserver>127.0.0.1</mailserver>
-@@ -2055,7 +2735,7 @@
+@@ -2055,7 +2739,7 @@
          <path/>
        </test>
      </monit>
@@ -64,7 +133,7 @@
        <gateway_item uuid="f42ac827-3c2e-4237-998d-603930653b98">
          <disabled>0</disabled>
          <name>WAN_GW</name>
-@@ -2065,25 +2745,103 @@
+@@ -2065,25 +2749,103 @@
          <gateway/>
          <defaultgw>1</defaultgw>
          <fargw>0</fargw>
@@ -177,7 +246,7 @@
        <general>
          <enabled>1</enabled>
          <loglocal>1</loglocal>
-@@ -2096,7 +2854,7 @@
+@@ -2096,7 +2858,7 @@
            <transport>udp4</transport>
            <program>audit,configd.py,dhcpd,filterlog,firewall,dpinger,kernel,ppp,unbound,suricata</program>
            <level>debug,info,notice,warn,err,crit,alert,emerg</level>
@@ -186,7 +255,7 @@
            <hostname>192.0.2.10</hostname>
            <certificate/>
            <port>1514</port>
-@@ -2110,12 +2868,12 @@
+@@ -2110,12 +2872,12 @@
        <queues/>
        <rules/>
      </TrafficShaper>
@@ -201,7 +270,7 @@
          <dnssec>1</dnssec>
          <dns64>0</dns64>
          <dns64prefix/>
-@@ -2146,11 +2904,9 @@
+@@ -2146,11 +2908,9 @@
          <serveexpiredttlreset>1</serveexpiredttlreset>
          <serveexpiredclienttimeout>1800</serveexpiredclienttimeout>
          <qnameminstrict>1</qnameminstrict>
@@ -214,7 +283,7 @@
          <logtagqueryreply>1</logtagqueryreply>
          <logservfail>1</logservfail>
          <loglocalactions>0</loglocalactions>
-@@ -2169,7 +2925,7 @@
+@@ -2169,7 +2929,7 @@
          <discardtimeout/>
          <cachemaxttl/>
          <cachemaxnegativettl/>
@@ -223,7 +292,7 @@
          <infrahostttl/>
          <infrakeepprobing>0</infrakeepprobing>
          <infracachenumhosts/>
-@@ -2194,61 +2950,61 @@
+@@ -2194,61 +2954,61 @@
          </blocklist>
        </dnsbl>
        <forwarding>
@@ -296,7 +365,7 @@
            <forward_first>1</forward_first>
            <description>Google Unfiltered Primary DoT</description>
          </dot>
-@@ -2306,7 +3062,7 @@
+@@ -2306,7 +3066,7 @@
        </general>
      </QemuGuestAgent>
      <crowdsec>
@@ -305,7 +374,7 @@
          <agent_enabled>1</agent_enabled>
          <lapi_enabled>1</lapi_enabled>
          <firewall_bouncer_enabled>1</firewall_bouncer_enabled>
-@@ -2320,7 +3076,7 @@
+@@ -2320,7 +3080,7 @@
          <crowdsec_firewall_verbose>0</crowdsec_firewall_verbose>
        </general>
      </crowdsec>
@@ -314,7 +383,7 @@
        <enabled>1</enabled>
        <listenaddress>0.0.0.0</listenaddress>
        <listenport>9100</listenport>
-@@ -2336,7 +3092,7 @@
+@@ -2336,7 +3096,7 @@
        <ntp>0</ntp>
        <zfs>0</zfs>
      </NodeExporter>
@@ -323,7 +392,7 @@
        <general>
          <enabled>1</enabled>
          <promisc>0</promisc>
-@@ -2345,7 +3101,30 @@
+@@ -2345,7 +3105,30 @@
          <interface/>
        </general>
      </Hostwatch>
@@ -355,7 +424,7 @@
    </OPNsense>
    <hasync version="1.0.2">
      <disablepreempt>0</disablepreempt>
-@@ -2359,8 +3138,6 @@
+@@ -2359,8 +3142,6 @@
      <password/>
      <syncitems/>
    </hasync>
@@ -364,7 +433,7 @@
    <gifs version="1.0.0">
      <gif/>
    </gifs>
-@@ -2375,20 +3152,36 @@
+@@ -2375,20 +3156,36 @@
    </virtualip>
    <vlans version="1.0.0">
      <vlan>
@@ -407,7 +476,7 @@
    <staticroutes version="1.0.0">
      <route/>
    </staticroutes>
-@@ -2414,7 +3207,6 @@
+@@ -2414,7 +3211,6 @@
    <wireless>
      <clone/>
    </wireless>
@@ -415,7 +484,7 @@
    <dhcpdv6>
      <lan>
        <enable>-1</enable>
-@@ -2428,8 +3220,7 @@
+@@ -2428,8 +3224,7 @@
      <csr/>
      <prv>RklYVFVSRS1LRVkK</prv>
    </cert>
@@ -425,7 +494,7 @@
      <enable/>
      <regdhcp/>
      <regdhcpstatic/>
-@@ -2487,10 +3278,4 @@
+@@ -2487,10 +3282,4 @@
        <enabled>1</enabled>
      </general>
    </igmpproxy>

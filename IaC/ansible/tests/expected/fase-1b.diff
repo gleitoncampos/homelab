@@ -7,14 +7,56 @@
        <type/>
        <subscription/>
        <reboot/>
-@@ -426,6 +411,37 @@
+@@ -426,49 +411,38 @@
        <ipaddrv6>pppoev6</ipaddrv6>
        <mss>1420</mss>
      </wan>
+-  </interfaces>
+-  <dhcpd>
+-    <lan>
 +    <opt1>
 +      <if>enp4s0</if>
 +      <descr>CLARO</descr>
-+      <enable>1</enable>
+       <enable>1</enable>
+-      <gateway>192.0.2.1</gateway>
+-      <ddnsdomainalgorithm>hmac-md5</ddnsdomainalgorithm>
+-      <numberoptions>
+-        <item/>
+-      </numberoptions>
+-      <range>
+-        <from>192.0.2.170</from>
+-        <to>192.0.2.254</to>
+-      </range>
+-      <winsserver/>
+-      <dnsserver/>
+-      <ntpserver/>
+-      <staticmap>
+-        <mac>00:00:5e:00:53:01</mac>
+-        <cid>host-um</cid>
+-        <ipaddr>192.0.2.201</ipaddr>
+-        <hostname>host-um</hostname>
+-        <descr>Fixture um</descr>
+-        <winsserver/>
+-        <dnsserver/>
+-        <ntpserver/>
+-      </staticmap>
+-      <staticmap>
+-        <mac>00:00:5e:00:53:02</mac>
+-        <cid>host-dois</cid>
+-        <ipaddr>192.0.2.202</ipaddr>
+-        <hostname>host-dois</hostname>
+-        <descr>Fixture dois</descr>
+-        <winsserver/>
+-        <dnsserver/>
+-        <ntpserver/>
+-      </staticmap>
+-    </lan>
+-  </dhcpd>
+-  <snmpd>
+-    <syslocation/>
+-    <syscontact/>
+-    <rocommunity>fixture-snmp-ro</rocommunity>
+-  </snmpd>
 +      <spoofmac/>
 +      <blockbogons>1</blockbogons>
 +      <ipaddr>dhcp</ipaddr>
@@ -42,34 +84,7 @@
 +      <ipaddr>203.0.113.1</ipaddr>
 +      <subnet>24</subnet>
 +    </vlan20>
-   </interfaces>
-   <dhcpd>
-     <lan>
-@@ -463,12 +479,22 @@
-         <ntpserver/>
-       </staticmap>
-     </lan>
-+    <vlan20>
-+      <enable>1</enable>
-+      <gateway>203.0.113.1</gateway>
-+      <ddnsdomainalgorithm>hmac-md5</ddnsdomainalgorithm>
-+      <numberoptions>
-+        <item/>
-+      </numberoptions>
-+      <range>
-+        <from>203.0.113.100</from>
-+        <to>203.0.113.200</to>
-+      </range>
-+      <winsserver/>
-+      <dnsserver>203.0.113.1</dnsserver>
-+      <ntpserver/>
-+    </vlan20>
-   </dhcpd>
--  <snmpd>
--    <syslocation/>
--    <syscontact/>
--    <rocommunity>fixture-snmp-ro</rocommunity>
--  </snmpd>
++  </interfaces>
    <nat>
      <outbound>
        <mode>automatic</mode>

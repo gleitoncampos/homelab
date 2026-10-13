@@ -120,7 +120,7 @@ consumindo dado de `inventories/_common/opnsense.yml` ou de `group_vars/network/
 | `_sysctl.xml.j2` | tunables de kernel | `opnsense_tunables` |
 | `_system.xml.j2` | hostname, WebGUI, SSH, usuários e grupos | `opnsense_hostname`, `opnsense_users`, `opnsense_groups` |
 | `_interfaces.xml.j2` | LAN nativa e WAN | `lan_ipaddr`, `parent_interface` |
-| `_dhcp.xml.j2` | `dhcpd`, Kea, reservas estáticas | `lan_dhcp_range_from/to`, `dhcp_static_maps` |
+| `_kea_dhcp4.xml.j2` | Kea DHCPv4: subnets, pools, reservas | `lan_dhcp_range_from/to`, `vlans[].dhcp_*`, `dhcp_static_maps` |
 | `_nat.xml.j2` | redirecionamento de porta e outbound | `opnsense_dns_redirect_*` |
 | `_aliases.xml.j2` | aliases de firewall | `opnsense_aliases` |
 | `_filter.xml.j2` | regras de filtro | `opnsense_rules` |
