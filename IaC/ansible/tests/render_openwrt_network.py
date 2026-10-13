@@ -49,6 +49,7 @@ CONTEXTO = {
     "syslog_server_port": "1514",
     "syslog_server_port_rfc3164": "1515",
     "network_timezone": "America/Sao_Paulo",
+    "lan_network_cidr": "192.0.2.0/24",
 }
 
 falhas = []
@@ -70,6 +71,7 @@ env = Environment(
 )
 rede = env.get_template("openwrt_network.j2").render(**CONTEXTO)
 sistema = env.get_template("openwrt_system.j2").render(**CONTEXTO)
+firewall = env.get_template("openwrt_firewall.j2").render(**CONTEXTO)
 
 print("Invariante 1 — o dropbear aponta para uma interface que existe:")
 m = re.search(r"option Interface '([^']+)'", sistema)
@@ -162,6 +164,18 @@ print("\nInvariante 7 — tarefa delegada ao nó de controle não pede sudo:")
 for t in _tarefas(tarefas):
     if t.get("delegate_to") == "localhost":
         checar(t.get("become") is False, f"`{t.get('name')}` tem `become: false`")
+
+print("\nInvariante 8 — a interface do dropbear está numa zona que aceita entrada:")
+# Interface fora de qualquer zona cai em `defaults input REJECT`: o AP sobe na
+# gerência, manda syslog para fora e recusa o SSH. Aconteceu em 13/10/2026 —
+# a zona `lan` ainda listava a rede `lan`, que o network novo não cria mais.
+if m:
+    zonas = re.findall(r"config zone\n(.*?)(?:\n\n|\Z)", firewall, re.S)
+    aceita = [
+        z for z in zonas
+        if f"list network '{iface}'" in z and "option input 'ACCEPT'" in z
+    ]
+    checar(len(aceita) == 1, f"a interface '{iface}' está numa zona com input ACCEPT")
 
 print("\nHigiene do render:")
 for rotulo, texto_render in (("network", rede), ("system", sistema)):
