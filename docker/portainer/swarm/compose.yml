@@ -25,7 +25,9 @@ services:
           cpus: '0.5'
           memory: 256M
       restart_policy:
-        condition: on-failure
+        # `any`, não `on-failure`: restart limpo do dockerd (exit 0) deixava a
+        # task `Complete` e o Swarm não a recriava (13/10/2026, Traefik 0/1).
+        condition: any
 
   portainer:
     image: portainer/portainer-ce:2.39.5
@@ -74,7 +76,9 @@ services:
           cpus: '1.0'
           memory: 512M
       restart_policy:
-        condition: on-failure
+        # `any`, não `on-failure`: restart limpo do dockerd (exit 0) deixava a
+        # task `Complete` e o Swarm não a recriava (13/10/2026, Traefik 0/1).
+        condition: any
       labels:
         # Frontend
         - "traefik.enable=true"

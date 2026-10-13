@@ -117,6 +117,15 @@ if ancoras:
     checar(not any(str(l).startswith("traefik.enable=true") for l in (sv.get("deploy") or {}).get("labels") or []),
            "a âncora não é exposta pelo Traefik")
 
+# Serviço de infraestrutura volta SEMPRE: com `on-failure`, um restart limpo do
+# dockerd (exit 0) deixa a task `Complete` e o Swarm não a recria — o Traefik
+# ficou 0/1 depois do `systemctl restart docker` (13/10/2026).
+_raiz_repo = PB.parent.parent.parent.parent
+for arq in ("docker/portainer/swarm/compose.yml", "docker/traefik/swarm/compose.yml"):
+    for nome, sv in (yaml.safe_load((_raiz_repo / arq).read_text(encoding="utf-8")).get("services") or {}).items():
+        cond = ((sv.get("deploy") or {}).get("restart_policy") or {}).get("condition", "any")
+        checar(cond == "any", f"{arq.split('/')[1]}/{nome}: restart_policy.condition = any (veio {cond})")
+
 if falhas:
     sys.exit("\n✗ gates-node-bootstrap")
 print("\n✓ gates-node-bootstrap")
