@@ -205,6 +205,30 @@ print("\nInvariante 10 — a troca recarrega o firewall do AP:")
 # interfaces antigas: a gerência nova cai no reject (13/10/2026).
 checar("/etc/init.d/firewall restart" in texto, "o script da troca reinicia o firewall")
 
+print("\nInvariante 11 — todo rádio declara o `path` do hardware:")
+# Sem `option path`, o netifd não associa o wifi-device a um phy, os rádios
+# ficam em `retry_setup_failed` e nenhum SSID sobe (13/10/2026).
+_ficticio = {
+    f"wifi_{r}_{c}": f"exemplo-{r}-{c}"
+    for r in ("main", "iot", "media", "guest")
+    for c in ("ssid", "password")
+}
+_defaults = yaml.safe_load(
+    (RAIZ / "IaC/ansible/inventories/prod/group_vars/network/10-defaults.yml").read_text(encoding="utf-8")
+)
+try:
+    sem_fio = env.get_template("openwrt_wireless.j2").render(
+        **CONTEXTO, **_ficticio,
+        **{k: v for k, v in _defaults.items() if k.startswith("openwrt_radio")},
+    )
+except Exception as erro:  # StrictUndefined: variável de path ausente
+    sem_fio = ""
+    checar(False, f"o wireless renderiza com os defaults ({erro})")
+radios = re.findall(r"config wifi-device '([^']+)'\n(.*?)(?:\n\n|\Z)", sem_fio, re.S)
+checar(len(radios) == 2, "o wireless declara dois rádios")
+for nome, corpo in radios:
+    checar(re.search(r"option path '[^']+'", corpo) is not None, f"o {nome} declara `option path`")
+
 print("\nHigiene do render:")
 for rotulo, texto_render in (("network", rede), ("system", sistema)):
     checar(

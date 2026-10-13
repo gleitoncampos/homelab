@@ -340,6 +340,13 @@ openwrt_led_reaffirm_cycles: 20
 # para a direita, olhando o roteador POR TRÁS.
 openwrt_uplink_port: "wan"
 
+# `path` de cada rádio no device tree. Sem ele o netifd não associa o
+# wifi-device a um phy e nenhum SSID sobe (13/10/2026). Valores do Xiaomi
+# AX3000T (mediatek/filogic); outro modelo: `cat /etc/config/wireless` de
+# fábrica, ou `wifi config`.
+openwrt_radio0_path: "platform/18000000.wifi"
+openwrt_radio1_path: "platform/18000000.wifi+1"
+
 # Portas deixadas FORA do bridge. Porta física dentro de um bridge que carrega
 # a VLAN de gerência é acesso privilegiado para quem alcançar o aparelho
 # fisicamente.
