@@ -121,7 +121,10 @@ print("\nInvariante 7 — o rc.reload_all roda fora da sessão SSH e o play reco
 # in ... inet all`) e o sshd registra `Read error ... Operation timed out`.
 # As tasks seguintes — inclusive a do Kea — nunca rodavam. O reload vai
 # destacado (`daemon`) e o play só segue por conexão NOVA.
-p_daemon = pb.find("daemon -f -p /var/run/iac-reload_all.pid /usr/local/etc/rc.reload_all")
+# pidfile POR EXECUÇÃO: um reload anterior preso (o php não sai com o Kea
+# ligado) segura o pidfile fixo e o `daemon` recusa com rc=3 (13/10/2026).
+p_daemon = pb.find('daemon -f -p "{{ _reload_pidfile }}" /usr/local/etc/rc.reload_all')
+checar("_reload_pidfile: \"/var/run/iac-reload_all.{{ now(" in pb, "o pidfile do reload é único por execução")
 p_reset = pb.find("meta: reset_connection", max(p_daemon, 0))
 p_espera = pb.find("wait_for_connection", max(p_daemon, 0))
 checar(p_daemon != -1, "o rc.reload_all é disparado com `daemon`, fora da sessão")

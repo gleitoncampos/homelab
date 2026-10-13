@@ -449,8 +449,15 @@
     # ... Operation timed out` — as tasks abaixo, inclusive a do Kea, nunca
     # rodavam. O que apaga o estado não foi provado; o efeito, sim (log de
     # filtro com A/PA da sessão bloqueados). Duração medida: 22–37 s.
+    # pidfile POR EXECUÇÃO: um reload anterior preso (ver "Esperar o reload
+    # terminar") segura o pidfile fixo e o `daemon` recusa com rc=3. O preso já
+    # terminou o trabalho; a task do Kea libera os dois.
+    - name: Nomear o pidfile do reload desta execução
+      ansible.builtin.set_fact:
+        _reload_pidfile: "/var/run/iac-reload_all.{{ now(fmt='%Y%m%d%H%M%S') }}.pid"
+
     - name: Disparar o reload de todos os serviços e regras do OPNsense, fora da sessão
-      ansible.builtin.command: daemon -f -p /var/run/iac-reload_all.pid /usr/local/etc/rc.reload_all
+      ansible.builtin.command: daemon -f -p "{{ _reload_pidfile }}" /usr/local/etc/rc.reload_all
       changed_when: true
 
     - name: Esperar o reload derrubar e refazer as regras antes de reconectar
@@ -479,7 +486,7 @@
     - name: Esperar o reload terminar
       ansible.builtin.shell: |
         set -o pipefail
-        p="$(cat /var/run/iac-reload_all.pid)"
+        p="$(cat {{ _reload_pidfile }})"
         if ! kill -0 "$p" 2>/dev/null; then echo FIM; exit 0; fi
         # Formato com cabeçalho: com `-o ppid=,stat=` o `stat` do zumbi sai vazio.
         vivos=$(ps -ax -o pid,ppid,stat | awk -v p="$p" 'NR > 1 && $2 == p && $3 !~ /^Z/' | wc -l)
