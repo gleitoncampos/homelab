@@ -1,0 +1,25 @@
+{# Bloco do /etc/ufw/after.rules que persiste a chain DOCKER-USER pelo UFW.
+
+   Por que aqui e não no iptables-persistent: os dois pacotes conflitam no
+   Debian — instalar um remove o outro, e o 01-bootstrap-os alternava os dois
+   a cada execução (13/10/2026). O UFW carrega este arquivo no boot, ANTES do
+   dockerd, e o Docker não limpa DOCKER-USER ao subir.
+
+   `:DOCKER-USER - [0:0]` declara a chain; o iptables-restore do UFW esvazia
+   e reconstrói chain declarada que já existe, então todo `ufw reload` refaz
+   o bloco inteiro, sem duplicar regra. Sem o RETURN final do Docker: o fim
+   de chain de usuário já devolve o pacote à FORWARD.
+
+   Ordem: todo RETURN (faixa autorizada × porta) antes de todo DROP. Trava em
+   tests/gates_node_bootstrap.py. #}
+*filter
+:DOCKER-USER - [0:0]
+{% for faixa in mgmt_allowed_cidrs %}
+-A DOCKER-USER -s {{ faixa }} -p tcp -m tcp --dport 9000 -m comment --comment "homelab: gerencia autorizada 9000/tcp" -j RETURN
+-A DOCKER-USER -s {{ faixa }} -p tcp -m tcp --dport 1514 -m comment --comment "homelab: gerencia autorizada 1514/tcp" -j RETURN
+-A DOCKER-USER -s {{ faixa }} -p udp -m udp --dport 1514 -m comment --comment "homelab: gerencia autorizada 1514/udp" -j RETURN
+{% endfor %}
+-A DOCKER-USER -p tcp -m tcp --dport 9000 -m comment --comment "homelab: fecha 9000/tcp" -j DROP
+-A DOCKER-USER -p tcp -m tcp --dport 1514 -m comment --comment "homelab: fecha 1514/tcp" -j DROP
+-A DOCKER-USER -p udp -m udp --dport 1514 -m comment --comment "homelab: fecha 1514/udp" -j DROP
+COMMIT

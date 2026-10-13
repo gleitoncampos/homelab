@@ -7,7 +7,10 @@
 # silencioso, já documentado em docker/portainer/swarm/compose.yml:34-40.
 #
 # DOCKER-USER é a chain que o Docker cria e NÃO limpa entre reinícios, e é
-# consultada antes das regras que ele gera.
+# consultada antes das regras que ele gera. As regras moram no
+# /etc/ufw/after.rules (templates/ufw_docker_user.rules.j2), que o UFW carrega
+# no boot antes do dockerd. Antes eram gravadas pelo iptables-persistent, que
+# conflita com o ufw no Debian: instalar um removia o outro (13/10/2026).
 #
 # Espera: `mgmt_allowed_cidrs` (LISTA; o `make bootstrap` gera em
 # group_vars/all/99-local.yml). Lista porque o syslog vem do firewall e do NAS
@@ -25,90 +28,56 @@
       bloqueariam TODO acesso às portas administrativas, inclusive o seu.
       Rode `make bootstrap`, que a gera em group_vars/all/99-local.yml.
 
-- name: Instalar iptables-persistent para que as regras sobrevivam ao boot
+# O iptables-persistent removia o ufw (conflito de pacote no Debian) e o
+# reinstalar do ufw removia o iptables-persistent: gangorra a cada execução.
+# Quem persiste agora é o UFW.
+- name: Remover o iptables-persistent, que conflita com o ufw
   ansible.builtin.apt:
-    name: iptables-persistent
+    name:
+      - iptables-persistent
+      - netfilter-persistent
+    state: absent
+
+- name: Garantir o ufw (o iptables-persistent o removia)
+  ansible.builtin.apt:
+    name: ufw
     state: present
 
-- name: "Permitir as faixas de gerência nas portas administrativas"
-  ansible.builtin.iptables:
-    chain: DOCKER-USER
-    source: "{{ item.0 }}"
-    protocol: "{{ item.1.proto }}"
-    destination_port: "{{ item.1.port }}"
-    jump: RETURN
-    action: insert
-    rule_num: 1
-    comment: "homelab: gerencia autorizada {{ item.1.port }}/{{ item.1.proto }}"
-    state: present
-  loop: "{{ mgmt_allowed_cidrs | product(_portas_admin) | list }}"
-  loop_control:
-    label: "{{ item.0 }} -> {{ item.1.proto }}/{{ item.1.port }}"
+- name: Gravar as regras DOCKER-USER no /etc/ufw/after.rules
+  ansible.builtin.blockinfile:
+    path: /etc/ufw/after.rules
+    marker: "# {mark} homelab DOCKER-USER (Ansible: tasks/docker_user_rules.yml)"
+    block: "{{ lookup('ansible.builtin.template', '../templates/ufw_docker_user.rules.j2') }}"
+    insertafter: EOF
+    backup: true
+  register: _after_rules
+
+# Não é handler de propósito: handler roda no fim do play, e a conferência
+# logo abaixo precisa da chain JÁ recarregada.
+- name: Recarregar o UFW para aplicar o DOCKER-USER  # noqa: no-handler
+  ansible.builtin.command: ufw reload
+  when: _after_rules is changed
+  changed_when: true
+
+# `ufw reload` sai 0 mesmo quando o after.rules tem linha que o
+# iptables-restore recusa — o bloco some calado. A conferência é na chain
+# carregada, não no arquivo.
+- name: Ler a chain DOCKER-USER carregada
+  ansible.builtin.command: iptables -S DOCKER-USER
+  register: _docker_user
+  changed_when: false
+
+- name: Conferir que todo RETURN autorizado vem antes dos DROP
   vars:
-    _portas_admin:
-      - { port: "9000", proto: "tcp" }
-      - { port: "1514", proto: "tcp" }
-      - { port: "1514", proto: "udp" }
-
-# `insert` com rule_num, NÃO `append`. A posição é o mecanismo inteiro aqui.
-#
-# Conteúdo padrão da chain: o Docker cria DOCKER-USER já com uma regra, e uma
-# só — `-A DOCKER-USER -j RETURN`. Ela devolve o pacote à FORWARD, onde as
-# regras geradas pelo Docker liberam o tráfego para os containers. Um `append`
-# coloca os DROP DEPOIS desse RETURN, e regra depois de RETURN nunca é
-# avaliada: `iptables -S DOCKER-USER` mostra as seis regras, o Ansible reporta
-# `changed`, e as portas 9000 e 1514 continuam abertas ao mundo. É o modo de
-# falha que este arquivo existe para eliminar, reproduzido dentro dele.
-#
-# Posições N+1 a N+3, com N = 3 × faixas: depois de TODOS os RETURN das
-# faixas autorizadas (inseridos pela task acima) e antes do RETURN do Docker.
-# Ordem final esperada, com as 3 faixas do bootstrap:
-#
-#   1-9    RETURN  -s <faixa>  (9000/tcp, 1514/tcp, 1514/udp, por faixa)
-#   10-12  DROP                (9000/tcp, 1514/tcp, 1514/udp)
-#   13     RETURN              (a regra que o Docker criou)
-#
-# ⚠️ Isso pressupõe que mais nada escreve em DOCKER-USER (não há ufw-docker
-# nem script de terceiro nestes nós). Confira com `iptables -S DOCKER-USER`
-# depois de aplicar: `state: present` resolve por `iptables -C`, que casa a
-# regra INDEPENDENTE da posição — reexecutar não move para o lugar certo uma
-# regra que já esteja no lugar errado. Se a ordem sair diferente da de cima,
-# zere a chain (`iptables -F DOCKER-USER && iptables -A DOCKER-USER -j RETURN`)
-# e rode o playbook de novo.
-- name: "Recusar o resto nas portas administrativas"
-  ansible.builtin.iptables:
-    chain: DOCKER-USER
-    protocol: "{{ item.proto }}"
-    destination_port: "{{ item.port }}"
-    jump: DROP
-    action: insert
-    rule_num: "{{ (mgmt_allowed_cidrs | length) * 3 + item.ordem }}"
-    comment: "homelab: fecha {{ item.port }}/{{ item.proto }}"
-    state: present
-  loop:
-    - { port: "9000", proto: "tcp", ordem: 1 }
-    - { port: "1514", proto: "tcp", ordem: 2 }
-    - { port: "1514", proto: "udp", ordem: 3 }
-  loop_control:
-    label: "{{ item.proto }}/{{ item.port }} na posição {{ (mgmt_allowed_cidrs | length) * 3 + item.ordem }}"
-
-# `table: filter` restringe o que vai para o arquivo. Sem isso o módulo grava
-# TODAS as tabelas, e a `nat` carrega o DNAT por container — endereço de
-# container que já morreu, restaurado no boot antes do `dockerd` subir, é
-# regra apontando para IP que não existe mais. Com `filter`, o que sobrevive
-# ao boot é a chain que precisa sobreviver.
-#
-# Dentro de `filter` ainda entram as chains geradas pelo Docker (DOCKER,
-# DOCKER-FORWARD, DOCKER-ISOLATION-*): o módulo não tem granularidade por
-# chain, só por tabela. Tolerável porque o `dockerd` recria as suas próprias
-# chains ao iniciar — a única que ele NÃO limpa é justamente DOCKER-USER, que
-# é o motivo de as regras acima morarem nela.
-- name: Persistir as regras
-  community.general.iptables_state:
-    state: saved
-    table: filter
-    path: /etc/iptables/rules.v4
-  # Sem `when:`. O que estava aqui era `iptables_pkg is succeeded`, que nunca é
-  # falso: a task do apt não tem `ignore_errors`, então uma falha dela já teria
-  # abortado o play antes desta linha. Condição que nunca reprova é ruído que
-  # aparenta cuidado.
+    _linhas: "{{ _docker_user.stdout_lines | select('match', '^-A DOCKER-USER') | list }}"
+    _drops: "{{ _linhas | select('search', '-j DROP$') | list }}"
+    _rets: "{{ _linhas | select('search', '-j RETURN$') | list }}"
+  ansible.builtin.assert:
+    that:
+      - _drops | length == 3
+      - _rets | length == (mgmt_allowed_cidrs | length) * 3
+      - _linhas.index(_drops[0]) > _linhas.index(_rets[-1])
+    fail_msg: >-
+      DOCKER-USER carregada fora do esperado ({{ _rets | length }} RETURN,
+      {{ _drops | length }} DROP). Confira `iptables -S DOCKER-USER` e o bloco
+      homelab no /etc/ufw/after.rules.

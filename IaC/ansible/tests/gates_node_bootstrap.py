@@ -68,6 +68,29 @@ checar("mgmt_allowed_cidr " not in regras and "mgmt_allowed_cidr }}" not in regr
 checar("mgmt_allowed_cidrs | length" in regras,
        "a posição dos DROP é calculada pelo tamanho de `mgmt_allowed_cidrs`")
 
+# Persistência do DOCKER-USER pelo UFW, não pelo iptables-persistent: os dois
+# pacotes conflitam no Debian, e instalar um removia o outro a cada execução
+# (13/10/2026: `Remove: ufw` no history do apt dos nós).
+_instala = [t for t in yaml.safe_load(regras)
+            if "iptables-persistent" in str((t.get("ansible.builtin.apt") or {}).get("name"))
+            and (t.get("ansible.builtin.apt") or {}).get("state", "present") == "present"]
+checar(not _instala, "docker_user_rules não instala o iptables-persistent")
+checar("/etc/ufw/after.rules" in regras, "docker_user_rules persiste pelo /etc/ufw/after.rules")
+tpl = PB.parent.parent / "templates" / "ufw_docker_user.rules.j2"
+checar(tpl.exists(), "existe o template do bloco DOCKER-USER do UFW")
+if tpl.exists():
+    from jinja2 import Environment, StrictUndefined
+    bloco = Environment(undefined=StrictUndefined, trim_blocks=True).from_string(
+        tpl.read_text(encoding="utf-8")).render(mgmt_allowed_cidrs=["192.0.2.0/24", "198.51.100.0/24"])
+    linhas = [l for l in bloco.splitlines() if l.startswith("-A DOCKER-USER")]
+    ret = [i for i, l in enumerate(linhas) if l.endswith("-j RETURN")]
+    drop = [i for i, l in enumerate(linhas) if l.endswith("-j DROP")]
+    checar(bloco.lstrip().startswith("*filter") and bloco.rstrip().endswith("COMMIT"),
+           "o bloco é *filter ... COMMIT")
+    checar(":DOCKER-USER - [0:0]" in bloco, "o bloco declara a chain DOCKER-USER (reload a reconstrói)")
+    checar(len(ret) == 6 and len(drop) == 3, f"6 RETURN e 3 DROP com 2 faixas (veio {len(ret)}/{len(drop)})")
+    checar(ret and drop and max(ret) < min(drop), "todo RETURN vem antes de todo DROP")
+
 if falhas:
     sys.exit("\n✗ gates-node-bootstrap")
 print("\n✓ gates-node-bootstrap")
