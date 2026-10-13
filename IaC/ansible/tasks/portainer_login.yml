@@ -24,10 +24,48 @@
   register: portainer_auth_try
   no_log: true
 
+# Portainer 2.39+ sem admin só aceita o /api/users/admin/init com o
+# X-Setup-Token que ele registra no log ao subir (`setup_token=...`); sem o
+# cabeçalho o init falhava (13/10/2026). O restart abre janela de init nova (o
+# Portainer a fecha minutos depois de subir) e gera token novo. Só roda sem
+# admin — Portainer já inicializado não é tocado.
+- name: Reiniciar o Portainer para abrir a janela de criação do admin
+  ansible.builtin.command: docker service update --force --detach=false portainer_portainer
+  when: portainer_auth_try.status != 200
+  changed_when: true
+
+- name: Aguardar a API do Portainer depois do restart
+  ansible.builtin.uri:
+    url: "http://localhost:9000/api/status"
+    status_code: 200
+  register: _portainer_pos_restart
+  until: _portainer_pos_restart.status == 200
+  retries: 24
+  delay: 5
+  when: portainer_auth_try.status != 200
+
+# Log da TASK em execução, não do serviço: `docker service logs` do serviço
+# mistura container antigo e novo sem garantir ordem, e o token antigo não vale.
+- name: Ler o setup token do log do Portainer
+  ansible.builtin.shell: |
+    set -o pipefail
+    tarefa=$(docker service ps portainer_portainer -q --filter desired-state=running | head -1)
+    docker service logs --no-trunc --raw "$tarefa" 2>&1 \
+      | sed -E 's/\x1b\[[0-9;]*m//g' | grep -oE 'setup_token=[^ ]+' | tail -1 | cut -d= -f2
+  args:
+    executable: /bin/bash
+  register: _portainer_setup_token
+  changed_when: false
+  failed_when: _portainer_setup_token.stdout | length == 0
+  when: portainer_auth_try.status != 200
+  no_log: true
+
 - name: Inicializar senha de admin se for o primeiro boot do Portainer
   ansible.builtin.uri:
     url: "http://localhost:9000/api/users/admin/init"
     method: POST
+    headers:
+      X-Setup-Token: "{{ _portainer_setup_token.stdout | default('') }}"
     body_format: json
     body:
       username: "admin"

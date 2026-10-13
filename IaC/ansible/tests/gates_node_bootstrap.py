@@ -91,6 +91,17 @@ if tpl.exists():
     checar(len(ret) == 6 and len(drop) == 3, f"6 RETURN e 3 DROP com 2 faixas (veio {len(ret)}/{len(drop)})")
     checar(ret and drop and max(ret) < min(drop), "todo RETURN vem antes de todo DROP")
 
+# 02-bootstrap-cluster: Portainer 2.39+ sem admin só aceita o
+# /api/users/admin/init com o X-Setup-Token que ele registra no log
+# (`setup_token=`). Sem o cabeçalho o init falhava (13/10/2026).
+login = yaml.safe_load((PB.parent.parent / "tasks" / "portainer_login.yml").read_text(encoding="utf-8"))
+init = next((t for t in login if "admin/init" in str((t.get("ansible.builtin.uri") or {}).get("url"))), None)
+checar(init is not None, "portainer_login tem a task de admin/init")
+if init is not None:
+    checar("X-Setup-Token" in (init["ansible.builtin.uri"].get("headers") or {}),
+           "o admin/init envia o X-Setup-Token")
+checar(any("setup_token=" in str(t) for t in login), "o token é lido do log do Portainer (setup_token=)")
+
 if falhas:
     sys.exit("\n✗ gates-node-bootstrap")
 print("\n✓ gates-node-bootstrap")
