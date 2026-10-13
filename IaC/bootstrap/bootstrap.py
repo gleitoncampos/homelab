@@ -106,6 +106,10 @@ GENERATED = [
     ("paperless_secret_key", "hex", False, ""),
     ("cronicle_secret_key", "hex", False, ""),
     ("bytestash_jwt_secret", "hex", False, ""),
+    # Segredo compartilhado entre o Portainer e os agentes do Swarm
+    # (AGENT_SECRET). Faltava: o 02-bootstrap-cluster abortava no gate do
+    # vault (13/10/2026).
+    ("portainer_agent_secret", "hex", False, ""),
     ("wifi_main_password", "wifi", True, "Wi-Fi principal"),
     ("wifi_iot_password", "wifi", True, "Wi-Fi IoT"),
     ("wifi_media_password", "wifi", True, "Wi-Fi mídia"),

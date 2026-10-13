@@ -51,6 +51,28 @@ for env in ("prod", "dev"):
     assert d["homelab_domain"] == "homelab.example"
     print(f"  OK vault/{env}: YAML valido, {len(d)} chaves")
 
+# 1b) todo segredo que algum playbook exige no gate do vault (`required_secrets`)
+#     tem de sair do bootstrap. `portainer_agent_secret` não saía e o
+#     02-bootstrap-cluster abortava no gate (13/10/2026).
+#     PENDENTE é dívida com dono, não isenção: pve_exporter_* espera a decisão
+#     token × usuário (tarefa "Exporter do Proxmox" na oficina, roadmap 1.2.16).
+PENDENTE = {"pve_exporter_user", "pve_exporter_password"}
+NAO_VAULT = {"system_user"}  # vem do 99-local.yml, testado em 2b
+def _exigidos(no, acc):
+    if isinstance(no, dict):
+        if isinstance(no.get("required_secrets"), list): acc.update(no["required_secrets"])
+        for x in no.values(): _exigidos(x, acc)
+    elif isinstance(no, list):
+        for x in no: _exigidos(x, acc)
+_raiz_pb = pathlib.Path(__file__).resolve().parents[1] / "ansible" / "playbooks"
+for env in ("prod", "dev"):
+    d = yaml.safe_load(bs.render_vault(env, resp, seg, pub))
+    for pb in sorted(_raiz_pb.rglob("*.yml")):
+        acc = set(); _exigidos(yaml.safe_load(pb.read_text(encoding="utf-8")), acc)
+        sem = sorted(acc - set(d) - NAO_VAULT - PENDENTE)
+        assert not sem, f"vault {env} não gera {sem}, exigido por {pb.relative_to(_raiz_pb)}"
+print("  OK vault: gera todo segredo que os playbooks exigem (fora a pendência com dono)")
+
 # prod e dev precisam ter senha de banco DIFERENTE (isolamento)
 p = yaml.safe_load(bs.render_vault("prod", resp, seg, pub))
 v = yaml.safe_load(bs.render_vault("dev", resp, seg, pub))
