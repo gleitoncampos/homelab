@@ -1000,6 +1000,18 @@
     # inativo — que é exatamente onde 06-backup.yml aborta, dois blocos depois
     # e com a causa fora de vista. Escrito ANTES do template, para que o
     # storage já nasça montável.
+    # Num PVE recém-instalado /etc/pve/priv/storage/ não existe, e o `copy` não
+    # cria diretório: a task abaixo falhava (escondida pelo no_log). 0700
+    # root:www-data é o que o pmxcfs impõe em priv/, então nada a recusar.
+    - name: Criar o diretório de senhas de storage do PVE
+      ansible.builtin.file:
+        path: /etc/pve/priv/storage
+        state: directory
+        owner: root
+        group: www-data
+        mode: '0700'
+      when: nas_disponivel
+
     - name: Gravar a senha do share CIFS de backup
       ansible.builtin.copy:
         # O arquivo é lido cru pelo PVE: só a senha, sem quebra de linha extra
