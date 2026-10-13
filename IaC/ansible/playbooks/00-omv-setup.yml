@@ -531,7 +531,9 @@
     # um OMV 8 real a partir deste repositório: se algum tiver mudado, a task
     # falha alto, com a saída do comando — nunca em silêncio.
     - name: Levantar os usuários do OMV
-      ansible.builtin.command: omv-rpc -u admin 'UserMgmt' 'enumerateUsers'
+      # `'{}'` obrigatório no OMV 8: sem parâmetros o schema rpc.usermgmt.enumerate
+      # recusa com 'The value "null" is not an object'.
+      ansible.builtin.command: omv-rpc -u admin 'UserMgmt' 'enumerateUsers' '{}'
       register: omv_users
       changed_when: false
       check_mode: false
@@ -813,18 +815,11 @@
       ansible.builtin.raw: '(crontab -l 2>/dev/null; echo "0 2 * * 0 /sbin/fstrim -av") | sort -u | crontab -'
       changed_when: false
 
-    - name: Configurar Otimizações de Desempenho no Samba/CIFS em /etc/samba/smb.conf.d/tuning.conf
-      ansible.builtin.copy:
-        dest: /etc/samba/smb.conf.d/tuning.conf
-        content: |
-          [global]
-          use sendfile = yes
-          aio read size = 16384
-          aio write size = 16384
-          socket options = TCP_NODELAY IPTOS_LOWDELAY SO_RCVBUF=131072 SO_SNDBUF=131072
-        owner: root
-        group: root
-        mode: '0644'
+    # Sem tuning de Samba em arquivo: o /etc/samba/smb.conf.d/ não existe no OMV 8
+    # e o smb.conf gerado não o inclui — o arquivo nunca foi lido. O que ele
+    # pedia o OMV já aplica pelo banco (conf.service.smb: usesendfile e aio
+    # ligados). Opção extra de Samba, se precisar, vai em `extraoptions` desse
+    # modelo, que o salt do OMV renderiza no [global].
 
     - name: Configurar Aumento de Threads do Servidor Kernel NFS (16 Threads) em /etc/nfs.conf
       community.general.ini_file:
