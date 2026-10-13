@@ -47,6 +47,17 @@ if up is not None:
     checar(int(up.get("async") or 0) > 0 and int(up.get("poll") or 0) > 0,
            "o upgrade do 01-bootstrap-os é assíncrono (async + poll)")
 
+# Repositório do Docker: `arch=` é nome do dpkg (amd64), não do kernel.
+# `ansible_architecture` dá `x86_64`, o apt ignora a linha e `docker-ce`
+# some (13/10/2026: "No package matching 'docker-ce' is available").
+repo = next((t for t in t01 if "ansible.builtin.apt_repository" in t
+             and "download.docker.com" in str(t["ansible.builtin.apt_repository"].get("repo"))
+             and t["ansible.builtin.apt_repository"].get("state", "present") == "present"), None)
+checar(repo is not None, "01-bootstrap-os adiciona o repositório do Docker")
+if repo is not None:
+    checar("ansible_architecture" not in str(repo["ansible.builtin.apt_repository"]["repo"]),
+           "o arch= do repositório do Docker não vem de ansible_architecture")
+
 if falhas:
     sys.exit("\n✗ gates-node-bootstrap")
 print("\n✓ gates-node-bootstrap")

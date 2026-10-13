@@ -43,10 +43,29 @@
         dest: /etc/apt/keyrings/docker.asc
         mode: '0644'
 
-    - name: Adicionar repositório oficial do Docker
+    # `arch=` é nome do dpkg (amd64), não do kernel: `ansible_architecture`
+    # dava `x86_64`, o apt ignorava a linha e `docker-ce` sumia (13/10/2026).
+    # Trava em tests/gates_node_bootstrap.py.
+    - name: Ler a arquitetura do dpkg
+      ansible.builtin.command: dpkg --print-architecture
+      register: _dpkg_arch
+      changed_when: false
+
+    # A linha errada que a versão anterior gravava fica no docker.list — o
+    # apt_repository só gerencia a linha que conhece.
+    - name: Remover a linha do repositório do Docker com arch do kernel
       ansible.builtin.apt_repository:
         repo: >-
           deb [arch={{ ansible_architecture }} signed-by=/etc/apt/keyrings/docker.asc]
+          https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable
+        state: absent
+        filename: docker
+      when: ansible_architecture != _dpkg_arch.stdout
+
+    - name: Adicionar repositório oficial do Docker
+      ansible.builtin.apt_repository:
+        repo: >-
+          deb [arch={{ _dpkg_arch.stdout }} signed-by=/etc/apt/keyrings/docker.asc]
           https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable
         state: present
         filename: docker
