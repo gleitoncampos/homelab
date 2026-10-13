@@ -35,6 +35,18 @@ i_sudoers = next((i for i, n in enumerate(nomes) if "sudoers.d" in n), None)
 checar(i_sudo is not None, "o play instala o pacote sudo")
 checar(None not in (i_sudo, i_sudoers) and i_sudo < i_sudoers,
        "o sudo é instalado antes de escrever em /etc/sudoers.d")
+# 01-bootstrap-os: o dist-upgrade atualiza a libc, o systemd se re-executa e
+# reinicia o systemd-networkd do CT — a conexão SSH da task morre e o
+# ansible-playbook fica pendurado sem timeout (13/10/2026, 21 min parado com
+# o upgrade já concluído nos nós). Assíncrona, cada consulta usa conexão nova.
+PB01 = PB.parent / "01-bootstrap-os.yml"
+t01 = [t for p in yaml.safe_load(PB01.read_text(encoding="utf-8")) for t in (p.get("tasks") or [])]
+up = next((t for t in t01 if (t.get("ansible.builtin.apt") or {}).get("upgrade")), None)
+checar(up is not None, "01-bootstrap-os tem a task de upgrade")
+if up is not None:
+    checar(int(up.get("async") or 0) > 0 and int(up.get("poll") or 0) > 0,
+           "o upgrade do 01-bootstrap-os é assíncrono (async + poll)")
+
 if falhas:
     sys.exit("\n✗ gates-node-bootstrap")
 print("\n✓ gates-node-bootstrap")

@@ -14,10 +14,16 @@
       community.general.timezone:
         name: "{{ timezone }}"
 
+    # ⚠️ Assíncrona de propósito: o upgrade da libc re-executa o systemd e
+    # reinicia o systemd-networkd do CT, a conexão SSH da task morre e o play
+    # ficava pendurado sem timeout (13/10/2026). Com async, cada consulta de
+    # andamento abre conexão nova. Trava em tests/gates_node_bootstrap.py.
     - name: Atualizar cache do APT e atualizar pacotes do sistema
       ansible.builtin.apt:
         update_cache: true
         upgrade: dist
+      async: 1800
+      poll: 15
 
     - name: Instalação de pacotes base do sistema
       ansible.builtin.apt:
