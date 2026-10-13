@@ -24,6 +24,7 @@
           - wifi_iot_ssid
           - wifi_media_ssid
           - wifi_guest_ssid
+          - ssh_public_key
 
     # =====================================================================
     # GATE DE IDENTIDADE — o apply não pode renomear o equipamento
@@ -140,6 +141,24 @@
       # `failed_when: false` o campo `failed` fica sempre falso, então testar
       # sucesso por ele não funciona — é `state` que distingue.
       when: (_ap_na_vlan.state | default('')) == 'started'
+
+    # O dropbear do OpenWrt não lê ~/.ssh/authorized_keys: lê
+    # /etc/dropbear/authorized_keys, e `ansible.posix.authorized_key` exige
+    # Python no AP. Sem esta tarefa, nenhum playbook entregava a chave do
+    # bootstrap — o AP seguia aceitando só a chave da instalação manual, e a
+    # primeira execução tinha de entrar com `--private-key` apontando para ela.
+    # ⚠️ Só acrescenta, nunca remove: tirar a chave antiga no mesmo passo que
+    # instala a nova tranca o AP se a nova estiver errada.
+    - name: Garantir a chave pública do bootstrap no dropbear do OpenWrt
+      tags: always
+      ansible.builtin.raw: |
+        f=/etc/dropbear/authorized_keys
+        k='{{ ssh_public_key | trim }}'
+        touch $f && chmod 600 $f
+        if grep -qxF "$k" $f; then echo CHAVE:PRESENTE; else echo "$k" >> $f && echo CHAVE:ADICIONADA; fi
+      register: _chave_ap
+      changed_when: "'CHAVE:ADICIONADA' in _chave_ap.stdout"
+      failed_when: "'CHAVE:' not in _chave_ap.stdout"
 
     - name: Fazer backup da configuração /etc/config/system no OpenWrt
       ansible.builtin.raw: "cp /etc/config/system /etc/config/system.bak"
