@@ -27,6 +27,14 @@ timezone: "America/Sao_Paulo"
 system_user: "TROCAR-usuario-de-sistema"
 containers_base_dir: "/srv/containers"
 
+# Chave que o Ansible usa em TODO host. É a que o `make bootstrap` gera e
+# distribui (`SSH_KEY` em IaC/bootstrap/bootstrap.py). Antes, a escolha vinha
+# do ~/.ssh/config da estação, escrito à mão e só para `192.168.100.*` e os
+# nomes — mas o Ansible conecta pelo IP de `ansible_host`, então todo host
+# fora da LAN (AP em 192.168.10.x, NAS e Swarm em 192.168.20.x) dependia de
+# `--private-key` (13/10/2026). Caminho, não segredo.
+ansible_ssh_private_key_file: "~/.ssh/homelab_ed25519"
+
 # Diretório onde os compose.yml das stacks são copiados para o host antes do
 # deploy (`docker stack deploy`). Não confundir com `containers_base_dir`:
 # aquele é dado persistente (ex.: /srv/containers/portainer é o /data do
