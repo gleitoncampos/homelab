@@ -43,6 +43,18 @@ for nome in ("docker_swarm_node01", "docker_swarm_node02"):
 
 checar("unprivileged: 1" in PB, "00-proxmox-setup só aplica keyctl em CT `unprivileged: 1`")
 
+# CT privilegiado só é criado por quem tem Sys.Modify em `/`: sem ele, o
+# apply destruía os CTs e falhava ao recriar com 403 (13/10/2026).
+TOKEN = (RAIZ / "ansible" / "playbooks" / "00-proxmox-api-token.yml").read_text(encoding="utf-8")
+m = re.search(r"tf_privs_root:\s*(.+)", TOKEN)
+checar(m is not None and m.group(1).split() == ["Sys.Modify"],
+       "role à parte para a raiz, só com Sys.Modify")
+m = re.search(r"tf_privs:\s*>-\s*\n((?:[ ]{6}[^#\n]+\n)+)", TOKEN)
+checar(m is not None and "VM.Allocate" in m.group(1) and "Sys.Modify" not in set(m.group(1).split() if m else []),
+       "a role principal NÃO ganha Sys.Modify (ela não vai para a raiz)")
+checar("aclmod / -user" in TOKEN and "aclmod / -token" in TOKEN,
+       "a role da raiz vai para o usuário E para o token (privsep=1)")
+
 if falhas:
     sys.exit(f"\n✗ gates-swarm-ct: {len(falhas)} falha(s)")
 print("\n✓ gates-swarm-ct")

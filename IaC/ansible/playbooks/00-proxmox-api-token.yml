@@ -45,14 +45,21 @@
       VM.PowerMgmt VM.Console Datastore.AllocateSpace SDN.Use Sys.Audit
       Sys.AccessNetwork Datastore.AllocateTemplate VM.Config.Cloudinit
       VM.GuestAgent.Audit Mapping.Use VM.Audit Datastore.Audit
-    # Escopo restrito — nunca a raiz "/". /nodes é onde o PVE checa
-    # Sys.AccessNetwork; /mapping/pci, onde checa Mapping.Use.
+    # Escopo restrito — nunca a raiz "/" para esta role. /nodes é onde o PVE
+    # checa Sys.AccessNetwork; /mapping/pci, onde checa Mapping.Use.
     tf_acl_paths:
       - /vms
       - /storage
       - /sdn
       - /nodes
       - /mapping/pci
+    # A ÚNICA permissão em "/", numa role à parte só com ela: o PVE exige
+    # Sys.Modify em "/" para criar CT privilegiado, e os CTs do Swarm passaram a
+    # privilegiados (IPVS, 13/10/2026). Sem ela o apply destruía os CTs e
+    # falhava ao recriar com 403 "Permission check failed (/, Sys.Modify)".
+    # Role separada para não levar o resto de tf_privs para a raiz.
+    tf_role_root: TerraformCTPrivilegiado
+    tf_privs_root: Sys.Modify
     # Os nomes são o contrato com o Terraform (`mapping =` nos blocos hostpci
     # de main.tf). Cada endereço vem da linha do nó no hosts.ini, escrito pelo
     # bootstrap; nó sem a variável não cria aquele mapping.
@@ -85,6 +92,16 @@
       when: tf_role in (pve_roles.stdout | from_json | map(attribute='roleid') | list)
       changed_when: true
 
+    - name: "Criar a role só com Sys.Modify para a raiz: {{ tf_role_root }}"
+      ansible.builtin.command: "pveum role add {{ tf_role_root }} -privs '{{ tf_privs_root }}'"
+      when: tf_role_root not in (pve_roles.stdout | from_json | map(attribute='roleid') | list)
+      changed_when: true
+
+    - name: "Reconciliar os privilégios da role {{ tf_role_root }}"
+      ansible.builtin.command: "pveum role modify {{ tf_role_root }} -privs '{{ tf_privs_root }}'"
+      when: tf_role_root in (pve_roles.stdout | from_json | map(attribute='roleid') | list)
+      changed_when: true
+
     - name: Levantar os usuários existentes
       ansible.builtin.command: "pveum user list --output-format json"
       register: pve_users
@@ -100,6 +117,10 @@
     - name: Aplicar a role ao usuário nos escopos necessários
       ansible.builtin.command: "pveum aclmod {{ item }} -user {{ tf_user }} -role {{ tf_role }}"
       loop: "{{ tf_acl_paths }}"
+      changed_when: true
+
+    - name: "Aplicar ao usuário, na raiz, a role {{ tf_role_root }}"
+      ansible.builtin.command: "pveum aclmod / -user {{ tf_user }} -role {{ tf_role_root }}"
       changed_when: true
 
     # hostpci com endereço cru só é aceito do root@pam ("only root can set
@@ -179,6 +200,13 @@
       ansible.builtin.command: >-
         pveum aclmod {{ item }} -token '{{ tf_user }}!{{ tf_token }}' -role {{ tf_role }}
       loop: "{{ tf_acl_paths }}"
+      changed_when: true
+
+    # privsep=1: o efetivo é a interseção — a role da raiz precisa estar no
+    # usuário E no token.
+    - name: "Aplicar ao token, na raiz, a role {{ tf_role_root }}"
+      ansible.builtin.command: >-
+        pveum aclmod / -token '{{ tf_user }}!{{ tf_token }}' -role {{ tf_role_root }}
       changed_when: true
 
     - name: Ver se o tokens.auto.tfvars já existe na máquina de controle
