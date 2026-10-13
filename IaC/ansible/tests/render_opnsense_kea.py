@@ -115,6 +115,20 @@ checar(p_kea != -1, "o playbook reinicia o Kea")
 checar(-1 not in (p_reload, p_tpl, p_kea) and p_reload < p_tpl < p_kea,
        "ordem: rc.reload_all → template reload → kea restart")
 
+print("\nInvariante 7 — o rc.reload_all roda fora da sessão SSH e o play reconecta:")
+# Toda execução de 13/10/2026 perdeu a sessão no meio do `rc.reload_all`: o
+# estado dela some do pf, o resto do fluxo cai no block padrão (`block drop
+# in ... inet all`) e o sshd registra `Read error ... Operation timed out`.
+# As tasks seguintes — inclusive a do Kea — nunca rodavam. O reload vai
+# destacado (`daemon`) e o play só segue por conexão NOVA.
+p_daemon = pb.find("daemon -f -p /var/run/iac-reload_all.pid /usr/local/etc/rc.reload_all")
+p_reset = pb.find("meta: reset_connection", max(p_daemon, 0))
+p_espera = pb.find("wait_for_connection", max(p_daemon, 0))
+checar(p_daemon != -1, "o rc.reload_all é disparado com `daemon`, fora da sessão")
+checar("command: /usr/local/etc/rc.reload_all" not in pb, "nenhuma task roda o rc.reload_all preso à sessão")
+checar(-1 not in (p_daemon, p_reset, p_espera, p_kea) and p_daemon < p_reset < p_espera < p_kea,
+       "ordem: daemon → reset_connection → wait_for_connection → Kea")
+
 if falhas:
     print(f"\n✗ render-opnsense-kea: {len(falhas)} falha(s)")
     sys.exit(1)

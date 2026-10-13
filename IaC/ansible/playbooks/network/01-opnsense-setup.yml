@@ -443,9 +443,37 @@
         validate: 'xmllint --noout %s'
       no_log: true
 
-    - name: Recarregar todos os serviços e regras do OPNsense sem reiniciar
-      ansible.builtin.command: /usr/local/etc/rc.reload_all
+    # ⚠️ O reload roda DESTACADO da sessão SSH. Preso a ela, toda execução de
+    # 13/10/2026 perdeu a conexão no meio do reload: o estado da sessão some do
+    # pf, o resto do fluxo cai no block padrão e o sshd registra `Read error
+    # ... Operation timed out` — as tasks abaixo, inclusive a do Kea, nunca
+    # rodavam. O que apaga o estado não foi provado; o efeito, sim (log de
+    # filtro com A/PA da sessão bloqueados). Duração medida: 22–37 s.
+    - name: Disparar o reload de todos os serviços e regras do OPNsense, fora da sessão
+      ansible.builtin.command: daemon -f -p /var/run/iac-reload_all.pid /usr/local/etc/rc.reload_all
       changed_when: true
+
+    - name: Esperar o reload derrubar e refazer as regras antes de reconectar
+      ansible.builtin.wait_for:
+        timeout: 60
+      delegate_to: localhost
+      become: false
+
+    # A conexão antiga pode ter perdido o estado no pf: só conexão nova serve.
+    - name: Encerrar a conexão antiga com o OPNsense
+      ansible.builtin.meta: reset_connection
+
+    - name: Esperar o OPNsense aceitar conexão nova
+      ansible.builtin.wait_for_connection:
+        timeout: 120
+
+    - name: Esperar o reload terminar
+      ansible.builtin.shell: kill -0 "$(cat /var/run/iac-reload_all.pid)" 2>/dev/null && echo RODANDO || echo FIM
+      register: _reload_all
+      until: "'FIM' in _reload_all.stdout"
+      retries: 24
+      delay: 5
+      changed_when: false
 
     # `rc.reload_all` não toca no Kea: `/etc/rc.conf.d/kea` seguia com
     # `kea_enable="NO"` e o kea-dhcp4.conf era o .sample do pacote — nenhum
