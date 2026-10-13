@@ -13,8 +13,28 @@ import yaml
 
 PB = Path(__file__).resolve().parents[1] / "playbooks" / "00-node-bootstrap.yml"
 play = yaml.safe_load(PB.read_text(encoding="utf-8"))[0]
-ok = (play.get("vars") or {}).get("ansible_user") == "root"
-print(f"  {'OK' if ok else 'FALHOU'} play declara vars.ansible_user = root")
-if not ok:
+falhas = []
+
+
+def checar(condicao, msg):
+    print(f"  {'OK' if condicao else 'FALHOU'} {msg}")
+    if not condicao:
+        falhas.append(msg)
+
+
+checar((play.get("vars") or {}).get("ansible_user") == "root", "play declara vars.ansible_user = root")
+
+# O template Debian 13 do CT vem SEM o pacote sudo: /etc/sudoers.d não existe
+# e o `visudo` do validate também não (13/10/2026). O pacote tem de entrar
+# antes da task que escreve em /etc/sudoers.d.
+tarefas = (play.get("pre_tasks") or []) + (play.get("tasks") or [])
+nomes = [t.get("name", "") for t in tarefas]
+i_sudo = next((i for i, t in enumerate(tarefas)
+               if (t.get("ansible.builtin.apt") or {}).get("name") == "sudo"), None)
+i_sudoers = next((i for i, n in enumerate(nomes) if "sudoers.d" in n), None)
+checar(i_sudo is not None, "o play instala o pacote sudo")
+checar(None not in (i_sudo, i_sudoers) and i_sudo < i_sudoers,
+       "o sudo é instalado antes de escrever em /etc/sudoers.d")
+if falhas:
     sys.exit("\n✗ gates-node-bootstrap")
 print("\n✓ gates-node-bootstrap")

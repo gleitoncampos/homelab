@@ -88,6 +88,17 @@
       changed_when: "'PYTHON3_INSTALADO' in _python3_bootstrap.stdout"
 
   tasks:
+    # O template Debian 13 do CT vem SEM o pacote sudo: /etc/sudoers.d não
+    # existe e o `visudo` do validate abaixo também não (13/10/2026). Os CTs
+    # antigos o tinham por instalação manual. Trava em
+    # tests/gates_node_bootstrap.py.
+    - name: Instalar o sudo
+      ansible.builtin.apt:
+        name: sudo
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
     - name: "Criar o usuário de automação {{ system_user }}"
       ansible.builtin.user:
         name: "{{ system_user }}"
