@@ -53,7 +53,16 @@
      <item uuid="02b84301-167e-4db4-8e73-8d3edef6b198">
        <tunable>net.inet.tcp.tso</tunable>
        <value/>
-@@ -330,12 +314,13 @@
+@@ -319,8 +303,6 @@
+     <maxmss>1420</maxmss>
+     <maximumtableentries>2000000</maximumtableentries>
+     <maximumstates>1000000</maximumstates>
+-    <adaptivestart>80</adaptivestart>
+-    <adaptiveend>95</adaptiveend>
+     <powerd_ac_mode>hadp</powerd_ac_mode>
+     <powerd_battery_mode>hadp</powerd_battery_mode>
+     <powerd_normal_mode>hadp</powerd_normal_mode>
+@@ -330,12 +312,13 @@
      <logdefaultblock>1</logdefaultblock>
      <pf_share_forward>1</pf_share_forward>
      <lb_use_sticky>1</lb_use_sticky>

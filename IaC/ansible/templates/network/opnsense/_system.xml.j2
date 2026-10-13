@@ -72,8 +72,12 @@
     <maxmss>1420</maxmss>
     <maximumtableentries>2000000</maximumtableentries>
     <maximumstates>1000000</maximumstates>
-    <adaptivestart>80</adaptivestart>
-    <adaptiveend>95</adaptiveend>
+    {# SEM adaptivestart/adaptiveend: o pf os lê como NÚMERO de estados, não
+       porcentagem. Com 80/95 a tabela (~76 em repouso) passava de 80 em
+       qualquer pico e todo timeout encolhia até zero — sessões ociosas
+       expiravam e o fluxo era bloqueado nos dois sentidos (13/10/2026).
+       Ausentes = adaptativo desligado, como no firewall antigo. Trava em
+       tests/render_opnsense_pf_estados.py. #}
     <powerd_ac_mode>hadp</powerd_ac_mode>
     <powerd_battery_mode>hadp</powerd_battery_mode>
     <powerd_normal_mode>hadp</powerd_normal_mode>

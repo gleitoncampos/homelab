@@ -1,4 +1,4 @@
-@@ -1203,7 +1175,7 @@
+@@ -1203,7 +1173,7 @@
              <interface>lan,vlan10,vlan20,vlan30,vlan40,vlan50</interface>
              <direction>in</direction>
              <ipprotocol>inet</ipprotocol>
