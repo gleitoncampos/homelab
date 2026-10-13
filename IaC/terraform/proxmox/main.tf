@@ -436,6 +436,14 @@ resource "proxmox_virtual_environment_vm" "omv_nas" {
     type = "l26"
   }
 
+  # A imagem genericcloud do Debian sobe com `console=ttyS0` no kernel. Sem
+  # porta serial, o serial-getty@ttyS0 falha e reinicia a cada 10 s para
+  # sempre (1.256 reinícios em 12/10/2026). De quebra, `qm terminal 300` vira
+  # console de emergência quando o SSH cair.
+  serial_device {
+    device = "socket"
+  }
+
   # Sem cdrom/ide3 aqui: diferente da OPNsense, esta VM não instala a partir
   # de ISO, então não há CD-ROM na cadeia de boot. O disco importado
   # (scsi0) já vem particionado e pronto.
