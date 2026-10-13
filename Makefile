@@ -25,7 +25,7 @@ PLAYBOOKS   := $(wildcard $(ANSIBLE_DIR)/playbooks/*.yml $(ANSIBLE_DIR)/playbook
 .PHONY: help hooks check lint lint-yaml lint-ansible lint-shell lint-tf ssh-keys \
         validate-compose validate-ansible validate-patterns check-common-copies \
         secrets links snapshot omv-fs discover clean render-opnsense render-monitoring \
-        render-proxmox-ifaces render-openwrt-led render-openwrt-network render-opnsense-kea \
+        render-proxmox-ifaces render-openwrt-led render-openwrt-network render-opnsense-kea render-opnsense-wan6 \
         gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade \
         gates-tailscale gates-cpu-pinning validate-alloy render-traefik \
         gates-repositorios
@@ -57,7 +57,7 @@ ssh-keys: ## Instala a chave gerada pelo bootstrap em todo host do inventário (
 test-bootstrap: ## Testa os renderizadores do bootstrap contra os consumidores reais
 	@python3 IaC/bootstrap/test_render.py
 
-check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network render-opnsense-kea gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade gates-tailscale gates-cpu-pinning validate-alloy render-traefik gates-repositorios ## Tudo que a CI roda
+check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network render-opnsense-kea render-opnsense-wan6 gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade gates-tailscale gates-cpu-pinning validate-alloy render-traefik gates-repositorios ## Tudo que a CI roda
 	@echo
 	@echo "✓ check completo"
 
@@ -159,6 +159,9 @@ render-openwrt-network: ## Renderiza a rede do AP e trava o que tranca o equipam
 
 render-opnsense-kea: ## Confere o DHCPv4 do Kea no render do OPNsense (interfaces, subnets, gateway, reservas)
 	@python3 $(ANSIBLE_DIR)/tests/render_opnsense_kea.py
+
+render-opnsense-wan6: ## Confere o modo IPv6 da WAN PPPoE (dhcp6 com prefixo delegado)
+	@python3 $(ANSIBLE_DIR)/tests/render_opnsense_wan6.py
 
 render-opnsense: ## Renderiza o template do OPNsense e compara com o baseline congelado
 	@set -euo pipefail; \

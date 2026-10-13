@@ -39,7 +39,15 @@
       <blockpriv>1</blockpriv>
       <blockbogons>1</blockbogons>
       <ipaddr>pppoe</ipaddr>
-      <ipaddrv6>pppoev6</ipaddrv6>
+      {# `dhcp6`, não `pppoev6`: no 26.7 `pppoev6` só negocia IPV6CP e a pppoe0
+         fica com link-local — nem dhcp6c nem SLAAC (`interface_dhcpv6_prepare`
+         e `ppp-ipv6.php` só tratam dhcp6/slaac). Gateway v6 down até 13/10/2026.
+         `dhcp6-ia-pd-len` é o sla-len: 8 = prefixo /56, que a LAN (track6)
+         recorta em /64. O gateway segue chamando WAN_PPPOEV6 (_plugins.xml.j2):
+         o nome é livre, quem casa é interface + família. #}
+      <ipaddrv6>dhcp6</ipaddrv6>
+      <dhcp6-ia-pd-len>8</dhcp6-ia-pd-len>
+      <dhcp6-ia-pd-send-hint>1</dhcp6-ia-pd-send-hint>
       <mss>1420</mss>
     </wan>
     {# 2ª WAN (CLARO): DHCP na NIC física dedicada (pass-through). No OPNsense a
