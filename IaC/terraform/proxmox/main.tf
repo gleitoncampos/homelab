@@ -227,10 +227,15 @@ resource "proxmox_download_file" "opnsense_iso" {
 
 # 2. CT 200 - Docker Swarm Manager Node 01 (no nó primário)
 resource "proxmox_virtual_environment_container" "docker_swarm_node01" {
-  node_name    = var.proxmox_node_primary
-  provider     = proxmox.primary
-  vm_id        = 200
-  unprivileged = true
+  node_name = var.proxmox_node_primary
+  provider  = proxmox.primary
+  vm_id     = 200
+  # PRIVILEGIADO: em CT não privilegiado o kernel recusa o IPVS ("Failed to
+  # create a new service for vip ... operation not permitted") e o Swarm perde
+  # routing mesh e VIP de serviço (13/10/2026). É a opção "Privileged" do script
+  # de Docker do community-scripts (`var_unprivileged=0`). Trava em
+  # IaC/ansible/tests/gates_swarm_ct.py.
+  unprivileged = false
 
   initialization {
     hostname = "docker-swarm-node01"
@@ -253,19 +258,19 @@ resource "proxmox_virtual_environment_container" "docker_swarm_node01" {
   }
 
   cpu {
-    cores = 4
+    cores = 1 # decisão de 13/10/2026: aumentar quando a carga pedir
   }
 
   memory {
-    dedicated = 8192 # 8GB RAM
+    dedicated = 4096 # 4GB RAM (13/10/2026: aumentar quando a carga pedir)
     swap      = 2048 # 2GB Swap ZRAM
   }
 
   # Só `nesting` aqui: o PVE só aceita outra feature flag de root@pam
   # ("changing feature flags (except nesting) is only allowed for root"), e
-  # quem aplica é o token. O `keyctl=1`, que o Docker exige em CT
-  # unprivileged, é gravado como root por ansible/playbooks/00-proxmox-setup.yml
-  # (passo 10, antes do bootstrap do Swarm). Ver `ignore_changes` abaixo.
+  # quem aplica é o token. O `keyctl=1` só vale em CT não privilegiado; o
+  # 00-proxmox-setup.yml o grava como root apenas nesse caso, e neste CT
+  # (privilegiado) não grava. Ver `ignore_changes` abaixo.
   features {
     nesting = true # Habilita Nesting para execução segura de Docker Engine dentro do LXC
   }
@@ -470,10 +475,15 @@ resource "proxmox_virtual_environment_vm" "omv_nas" {
 
 # 4. CT 201 - Docker Swarm Worker Node 02 (no nó secundário)
 resource "proxmox_virtual_environment_container" "docker_swarm_node02" {
-  node_name    = var.proxmox_node_secondary
-  provider     = proxmox.secondary
-  vm_id        = 201
-  unprivileged = true
+  node_name = var.proxmox_node_secondary
+  provider  = proxmox.secondary
+  vm_id     = 201
+  # PRIVILEGIADO: em CT não privilegiado o kernel recusa o IPVS ("Failed to
+  # create a new service for vip ... operation not permitted") e o Swarm perde
+  # routing mesh e VIP de serviço (13/10/2026). É a opção "Privileged" do script
+  # de Docker do community-scripts (`var_unprivileged=0`). Trava em
+  # IaC/ansible/tests/gates_swarm_ct.py.
+  unprivileged = false
 
   initialization {
     hostname = "docker-swarm-node02"
@@ -496,19 +506,19 @@ resource "proxmox_virtual_environment_container" "docker_swarm_node02" {
   }
 
   cpu {
-    cores = 4
+    cores = 1 # decisão de 13/10/2026: aumentar quando a carga pedir
   }
 
   memory {
-    dedicated = 8192 # 8GB RAM
+    dedicated = 4096 # 4GB RAM (13/10/2026: aumentar quando a carga pedir)
     swap      = 2048 # 2GB Swap ZRAM
   }
 
   # Só `nesting` aqui: o PVE só aceita outra feature flag de root@pam
   # ("changing feature flags (except nesting) is only allowed for root"), e
-  # quem aplica é o token. O `keyctl=1`, que o Docker exige em CT
-  # unprivileged, é gravado como root por ansible/playbooks/00-proxmox-setup.yml
-  # (passo 10, antes do bootstrap do Swarm). Ver `ignore_changes` abaixo.
+  # quem aplica é o token. O `keyctl=1` só vale em CT não privilegiado; o
+  # 00-proxmox-setup.yml o grava como root apenas nesse caso, e neste CT
+  # (privilegiado) não grava. Ver `ignore_changes` abaixo.
   features {
     nesting = true # Habilita Nesting para execução segura de Docker Engine dentro do LXC
   }
@@ -556,11 +566,11 @@ resource "proxmox_virtual_environment_container" "docker_dev_node" {
   provider  = proxmox.secondary
   vm_id     = 210
 
-  # Unprivileged, EXATAMENTE como os CTs de produção (200/201). Paridade de
-  # guest é o ponto inteiro do split prod/dev: testar num CT privileged (ou
-  # numa VM) e depois promover para produção num CT unprivileged invalidaria
-  # o teste - o comportamento do Docker/overlay/AppArmor muda entre os dois.
-  unprivileged = true
+  # Privilegiado, EXATAMENTE como os CTs de produção (200/201). Paridade de
+  # guest é o ponto inteiro do split prod/dev: testar num tipo de CT e promover
+  # para outro invalidaria o teste - o comportamento do Docker/overlay/IPVS
+  # muda entre os dois (13/10/2026: não privilegiado recusa IPVS).
+  unprivileged = false
 
   initialization {
     hostname = "docker-swarm-dev-node"

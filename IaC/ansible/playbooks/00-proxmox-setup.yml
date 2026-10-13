@@ -781,11 +781,15 @@
       changed_when: false
       check_mode: false
 
-    - name: Separar os CTs do Docker ainda sem keyctl
+    # Só CT `unprivileged: 1` recebe keyctl, igual ao community-scripts: em CT
+    # privilegiado a feature não se aplica. Os CTs do Swarm passaram a
+    # privilegiados em 13/10/2026 (IPVS), ver o main.tf.
+    - name: Separar os CTs do Docker não privilegiados ainda sem keyctl
       tags: docker_ct
       ansible.builtin.set_fact:
         docker_ct_sem_keyctl: >-
           {{ docker_ct_cfg.results
+             | selectattr('stdout', 'search', '(?m)^unprivileged: 1')
              | rejectattr('stdout', 'search', '(?m)^features:.*keyctl=1')
              | map(attribute='item.item') | list }}
 
