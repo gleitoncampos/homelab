@@ -52,6 +52,12 @@
 - name: "00 - Bootstrap de Acesso do Nó, de root para {{ system_user | default('usuário de automação') }}"
   hosts: "{{ target | default('dev_bootstrap') }}"
   remote_user: root
+  # ⚠️ `remote_user` PERDE para `ansible_user` de host, e o hosts.ini de prod
+  # declara `ansible_user=<system_user>` — a conta que este play existe para
+  # criar (13/10/2026: Permission denied como gleiton). Só a variável de play
+  # vence a de host. Trava em tests/gates_node_bootstrap.py.
+  vars:
+    ansible_user: root
   become: false
   gather_facts: false
   # Sem gather_facts: um LXC recém-criado pode não ter nenhum interpretador
