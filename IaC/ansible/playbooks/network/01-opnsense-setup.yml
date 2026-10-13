@@ -432,6 +432,15 @@
 
     # no_log: o arquivo renderizado contém hashes de senha, a credencial PPPoE e
     # a chave privada TLS da GUI. validate: XML inválido aborta ANTES de escrever.
+    # O Traefik roda em manager do Swarm e emite certificado por DNS-01 com
+    # resolvedor público; o NAT de DNS forçado o desviava de volta ao Unbound,
+    # que não devolve o SOA do domínio do homelab (13/10/2026). Os managers
+    # entram no alias DNS_REDIRECT_BYPASS (_aliases.xml.j2) a partir do
+    # inventário. Trava em tests/render_opnsense_dns_bypass.py.
+    - name: Listar os managers do Swarm isentos do redirecionamento de DNS
+      ansible.builtin.set_fact:
+        _dns_bypass_managers: "{{ groups['homelab_managers'] | default([]) | map('extract', hostvars, 'ansible_host') | list }}"
+
     - name: Aplicar novo arquivo /conf/config.xml a partir do Template Jinja2  # noqa: no-relative-paths
       ansible.builtin.template:
         src: "../../templates/network/opnsense/config.xml.j2"

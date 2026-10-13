@@ -12,7 +12,11 @@
           <alias uuid="{{ a.uuid }}">
 {% for campo in a if campo != 'uuid' %}
 {% if a.name == 'DNS_REDIRECT_BYPASS' and campo == 'content' %}
-            <content>{{ dns_redirect_bypass_ips | default([]) | join('\n') }}</content>
+{#  Managers do Swarm entram sempre: o Traefik roda neles e o DNS-01 da
+    Cloudflare precisa do SOA público, que o Unbound não devolve para o
+    domínio do homelab (override curinga). `_dns_bypass_managers` vem do
+    inventário, no 01-opnsense-setup.yml (13/10/2026). #}
+            <content>{{ ((dns_redirect_bypass_ips | default([])) + (_dns_bypass_managers | default([]))) | unique | join('\n') }}</content>
 {% else %}
             <{{ campo }}>{{ a[campo] }}</{{ campo }}>
 {% endif %}
