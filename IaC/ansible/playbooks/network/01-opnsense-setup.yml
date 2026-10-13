@@ -467,8 +467,25 @@
       ansible.builtin.wait_for_connection:
         timeout: 120
 
+    # O php do reload NÃO sai sozinho com o Kea ligado: a última etapa é
+    # `pass_safe('/usr/local/etc/rc.freebsd start')`, que lê a saída do script
+    # por pipe; o kea-dhcp4 que ele sobe herda esse pipe como stdout e nunca o
+    # fecha (13/10/2026: php em `pipe_read`, filho `<defunct>`, fstat mostrando
+    # o pipe no fd 1 do kea-dhcp4). O trabalho já acabou quando o rc.freebsd
+    # saiu, o php não tem filho vivo e está parado em leitura de pipe
+    # (`piperd`). Zumbi não serve de sinal: o php recolhe o filho e o zumbi
+    # some. A task do Kea abaixo reinicia o serviço pelo configd: o kea antigo
+    # morre, o pipe fecha e o php sai.
     - name: Esperar o reload terminar
-      ansible.builtin.shell: kill -0 "$(cat /var/run/iac-reload_all.pid)" 2>/dev/null && echo RODANDO || echo FIM
+      ansible.builtin.shell: |
+        set -o pipefail
+        p="$(cat /var/run/iac-reload_all.pid)"
+        if ! kill -0 "$p" 2>/dev/null; then echo FIM; exit 0; fi
+        # Formato com cabeçalho: com `-o ppid=,stat=` o `stat` do zumbi sai vazio.
+        vivos=$(ps -ax -o pid,ppid,stat | awk -v p="$p" 'NR > 1 && $2 == p && $3 !~ /^Z/' | wc -l)
+        freebsd=$(ps -ax -o command= | awk '/^\/bin\/sh \/usr\/local\/etc\/rc\.freebsd/' | wc -l)
+        espera=$(ps -o wchan= -p "$p" | tr -d ' ')
+        if [ "$vivos" -eq 0 ] && [ "$freebsd" -eq 0 ] && [ "$espera" = piperd ]; then echo FIM; else echo RODANDO; fi
       register: _reload_all
       until: "'FIM' in _reload_all.stdout"
       retries: 24
