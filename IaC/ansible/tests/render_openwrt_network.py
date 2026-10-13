@@ -139,6 +139,29 @@ if bloco is not None:
         "ansible_host" not in str(bloco.get("when", "")),
         "o `when` do bloco não depende de `ansible_host`",
     )
+    # O rescue espera o AP voltar no endereço ANTERIOR. Lido de
+    # `hostvars[...]['ansible_host']`, ele já devolve o de gerência, porque o
+    # `set_fact` do bloco sobrepõe o inventário.
+    checar(
+        "ansible_host" not in str(bloco.get("rescue", "")),
+        "o rescue não lê `ansible_host` (o bloco já o reescreveu)",
+    )
+
+
+def _tarefas(lista):
+    for t in lista or []:
+        yield t
+        for chave in ("block", "rescue", "always"):
+            yield from _tarefas(t.get(chave))
+
+
+print("\nInvariante 7 — tarefa delegada ao nó de controle não pede sudo:")
+# `ansible.cfg` liga `become = True`; delegada ao localhost sem
+# `become: false`, a tarefa pede senha de sudo na estação e falha antes de
+# fazer o que veio fazer. Aconteceu em 13/10/2026 no `wait_for` da reconexão.
+for t in _tarefas(tarefas):
+    if t.get("delegate_to") == "localhost":
+        checar(t.get("become") is False, f"`{t.get('name')}` tem `become: false`")
 
 print("\nHigiene do render:")
 for rotulo, texto_render in (("network", rede), ("system", sistema)):

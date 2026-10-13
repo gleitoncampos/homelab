@@ -247,6 +247,8 @@
       tags: rede
       ansible.builtin.set_fact:
         _trocar_rede: "{{ ansible_host != openwrt_mgmt_ip }}"
+        # O rescue precisa do endereço de ANTES: o bloco sobrepõe `ansible_host`.
+        _ap_endereco_anterior: "{{ ansible_host }}"
 
     # A troca roda DESTACADA da sessão SSH: reiniciar a rede derruba a conexão
     # que está executando o comando, e um `raw` síncrono ficaria pendurado até
@@ -291,6 +293,7 @@
             timeout: "{{ (openwrt_failsafe_seconds | int) - 30 }}"
             delay: 10
           delegate_to: localhost
+          become: false
 
         - name: Confirmar o acesso e cancelar o failsafe do OpenWrt
           ansible.builtin.raw: |
@@ -313,11 +316,12 @@
 
         - name: Esperar o AP voltar no endereço anterior depois do failsafe
           ansible.builtin.wait_for:
-            host: "{{ hostvars[inventory_hostname]['ansible_host'] | default(inventory_hostname) }}"
+            host: "{{ _ap_endereco_anterior }}"
             port: 22
             timeout: "{{ (openwrt_failsafe_seconds | int) + 180 }}"
             delay: 15
           delegate_to: localhost
+          become: false
           failed_when: false
 
         - name: Falhar informando que a transição foi revertida
