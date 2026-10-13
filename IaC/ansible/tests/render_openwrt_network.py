@@ -126,6 +126,20 @@ checar(
     "a espera pelo endereço novo roda do nó de controle, não do AP",
 )
 
+print("\nInvariante 6 — o `when` do bloco de reconexão não lê o que o bloco reescreve:")
+# O `when` de um bloco é reavaliado em CADA tarefa dele. O bloco faz
+# `set_fact: ansible_host=<gerência>`; um `when` sobre `ansible_host` vira
+# falso logo depois, e a espera e a confirmação são puladas — o failsafe
+# nunca é cancelado e reverte o AP. Aconteceu em 13/10/2026.
+tarefas = yaml.safe_load(texto)[0]["tasks"]
+bloco = next((t for t in tarefas if "block" in t and "Reconectar" in t.get("name", "")), None)
+checar(bloco is not None, "o bloco de reconexão existe")
+if bloco is not None:
+    checar(
+        "ansible_host" not in str(bloco.get("when", "")),
+        "o `when` do bloco não depende de `ansible_host`",
+    )
+
 print("\nHigiene do render:")
 for rotulo, texto_render in (("network", rede), ("system", sistema)):
     checar(

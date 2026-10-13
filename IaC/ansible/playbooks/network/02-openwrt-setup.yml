@@ -117,7 +117,7 @@
     #
     # Vale nos dois sentidos e nas duas ordens: antes da migração o endereço
     # novo não atende e nada muda; depois dela, o `when` da transição
-    # (`ansible_host != openwrt_mgmt_ip`) vê os dois iguais e pula a troca,
+    # (`_trocar_rede`, congelado de `ansible_host != openwrt_mgmt_ip`) vê os dois iguais e pula a troca,
     # que é o que torna a etapa `rede` idempotente.
     - name: Localizar o AP — sondar o endereço da VLAN de gerência
       tags: always
@@ -238,6 +238,16 @@
         EOF
       changed_when: true
 
+    # ⚠️ A decisão de trocar é CONGELADA aqui. O `when` de um bloco é
+    # reavaliado em cada tarefa dele, e o bloco abaixo reescreve
+    # `ansible_host`: com `when: ansible_host != openwrt_mgmt_ip` a espera e a
+    # confirmação eram puladas, o failsafe nunca era cancelado e revertia o AP
+    # (13/10/2026). Trava em tests/render_openwrt_network.py, invariante 6.
+    - name: Decidir se a rede do AP vai trocar nesta execução
+      tags: rede
+      ansible.builtin.set_fact:
+        _trocar_rede: "{{ ansible_host != openwrt_mgmt_ip }}"
+
     # A troca roda DESTACADA da sessão SSH: reiniciar a rede derruba a conexão
     # que está executando o comando, e um `raw` síncrono ficaria pendurado até
     # o timeout, reportando falha de uma coisa que deu certo.
@@ -254,11 +264,11 @@
         chmod +x /tmp/iac-apply-net.sh
         start-stop-daemon -S -b -m -p /tmp/iac-apply-net.pid -x /bin/sh -- /tmp/iac-apply-net.sh
       changed_when: true
-      when: ansible_host != openwrt_mgmt_ip
+      when: _trocar_rede | bool
 
     - name: Reconectar o AP no endereço e porta novos
       tags: rede
-      when: ansible_host != openwrt_mgmt_ip
+      when: _trocar_rede | bool
       block:
         # ⚠️ A CONFIRMAÇÃO TEM DE VIR DE CONEXÃO NOVA. Uma sessão SSH já
         # estabelecida continua fluindo mesmo depois de a interface mudar de
