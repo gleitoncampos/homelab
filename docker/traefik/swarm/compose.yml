@@ -1,6 +1,8 @@
 services:
   traefik:
-    image: traefik:v3.5
+    # v3.6+: o Docker 29 recusa a API 1.24 que a v3.5 usava no provider
+    # Swarm ("client version 1.24 is too old", 13/10/2026); a v3.6 negocia.
+    image: traefik:v3.6
     command:
       - --api.insecure=false  #Enable the API dashboard access
       - --log.level=INFO
