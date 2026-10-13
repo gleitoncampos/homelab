@@ -100,6 +100,21 @@ for m, r in zip(mapas, reservas):
     checar(r.findtext("ip_address") == m["ipaddr"], f"{m['hostname']}: ip {m['ipaddr']}")
     checar(r.findtext("hw_address") == m["mac"], f"{m['hostname']}: mac {m['mac']}")
 
+print("\nInvariante 6 — o playbook gera a config do Kea e sobe o serviço:")
+# `rc.reload_all` não toca no Kea: `/etc/rc.conf.d/kea` ficava com
+# `kea_enable="NO"` e o kea-dhcp4.conf era o .sample do pacote (13/10/2026).
+# É o template `OPNsense/Kea` que escreve `kea_enable` e o `kea_setup`
+# (`pluginctl -c kea_sync`, que gera o kea-dhcp4.conf) — o mesmo par que o
+# reconfigure da GUI roda.
+pb = (RAIZ / "playbooks" / "network" / "01-opnsense-setup.yml").read_text(encoding="utf-8")
+p_reload = pb.find("/usr/local/etc/rc.reload_all")
+p_tpl = pb.find("configctl template reload OPNsense/Kea")
+p_kea = pb.find("configctl kea restart")
+checar(p_tpl != -1, "o playbook recarrega o template OPNsense/Kea")
+checar(p_kea != -1, "o playbook reinicia o Kea")
+checar(-1 not in (p_reload, p_tpl, p_kea) and p_reload < p_tpl < p_kea,
+       "ordem: rc.reload_all → template reload → kea restart")
+
 if falhas:
     print(f"\n✗ render-opnsense-kea: {len(falhas)} falha(s)")
     sys.exit(1)
