@@ -13,7 +13,7 @@ config zone
 	option output 'ACCEPT'
 	option forward 'ACCEPT'
 {#
-  A gerência é a interface que o dropbear escuta (openwrt_system.j2). Fora de
+  A gerência é a interface que o dropbear escuta (openwrt_dropbear.j2). Fora de
   zona, ela cai no `input REJECT` dos defaults e o SSH é recusado.
 #}
 	list network 'vlan{{ openwrt_mgmt_vlan | default(10) }}'

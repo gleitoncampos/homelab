@@ -22,7 +22,7 @@
 BACKUP_DIR="{{ openwrt_failsafe_backup_dir | default('/root/iac-failsafe') }}"
 CONFIRMACAO="{{ openwrt_failsafe_confirm_file | default('/tmp/openwrt-net-ok') }}"
 JANELA={{ openwrt_failsafe_seconds | default(120) }}
-ARQUIVOS="{{ openwrt_failsafe_files | default(['network', 'system', 'wireless', 'firewall', 'dhcp']) | join(' ') }}"
+ARQUIVOS="{{ openwrt_failsafe_files | default(['network', 'system', 'wireless', 'firewall', 'dhcp', 'dropbear']) | join(' ') }}"
 
 logger -t net-failsafe "armado; janela de ${JANELA}s, backup em ${BACKUP_DIR}"
 

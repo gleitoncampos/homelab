@@ -380,4 +380,4 @@ openwrt_ssh_root_key_only: "1"
 openwrt_failsafe_seconds: 120
 openwrt_failsafe_backup_dir: "/root/iac-failsafe"
 openwrt_failsafe_confirm_file: "/tmp/openwrt-net-ok"
-openwrt_failsafe_files: ["network", "system", "wireless", "firewall", "dhcp"]
+openwrt_failsafe_files: ["network", "system", "wireless", "firewall", "dhcp", "dropbear"]

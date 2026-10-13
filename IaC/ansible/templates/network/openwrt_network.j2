@@ -44,7 +44,7 @@ config bridge-vlan
 
 {% endfor %}
 {#
-  Gerência. É a interface que o dropbear referencia em openwrt_system.j2, e
+  Gerência. É a interface que o dropbear referencia em openwrt_dropbear.j2, e
   o nome `vlan{{ openwrt_mgmt_vlan }}` precisa bater com o que está lá.
 #}
 config interface 'vlan{{ openwrt_mgmt_vlan }}'

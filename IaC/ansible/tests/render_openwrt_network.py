@@ -7,7 +7,7 @@ AP que some da rede e só volta por console físico. Três invariantes, todas
 verificadas contra a fonte do OpenWrt e não contra suposição:
 
 1. **O nome da interface de gerência bate entre os dois templates.** O
-   `openwrt_system.j2` escreve `option Interface 'vlanN'` no dropbear, e o
+   `openwrt_dropbear.j2` escreve `option Interface 'vlanN'` no dropbear, e o
    `openwrt_network.j2` cria a interface. Se os dois discordarem,
    `/etc/init.d/dropbear:145-152` faz `return 1` ANTES do
    `procd_open_instance` — nenhuma instância nasce e não há listener em porta
@@ -72,10 +72,18 @@ env = Environment(
 rede = env.get_template("openwrt_network.j2").render(**CONTEXTO)
 sistema = env.get_template("openwrt_system.j2").render(**CONTEXTO)
 firewall = env.get_template("openwrt_firewall.j2").render(**CONTEXTO)
+dropbear = (
+    env.get_template("openwrt_dropbear.j2").render(**CONTEXTO)
+    if (TEMPLATES / "openwrt_dropbear.j2").exists()
+    else ""
+)
 
 print("Invariante 1 — o dropbear aponta para uma interface que existe:")
-m = re.search(r"option Interface '([^']+)'", sistema)
-checar(m is not None, "o system declara uma Interface para o dropbear")
+# O dropbear só lê /etc/config/dropbear. A seção dentro do system era
+# ignorada: o AP seguia na 22 com senha ligada (13/10/2026).
+checar("config dropbear" not in sistema, "o system não carrega seção dropbear (seria ignorada)")
+m = re.search(r"option Interface '([^']+)'", dropbear)
+checar(m is not None, "o template do dropbear declara uma Interface")
 if m:
     iface = m.group(1)
     checar(
@@ -176,6 +184,26 @@ if m:
         if f"list network '{iface}'" in z and "option input 'ACCEPT'" in z
     ]
     checar(len(aceita) == 1, f"a interface '{iface}' está numa zona com input ACCEPT")
+
+print("\nInvariante 9 — o failsafe restaura o dropbear:")
+# O dropbear passa a escutar só na interface de gerência. Revertido o network
+# sem reverter o dropbear, a interface some e o AP fica sem SSH nenhum.
+checar("Aplicar configuração do dropbear" in texto, "o playbook escreve /etc/config/dropbear")
+for padroes in (
+    RAIZ / "IaC/ansible/inventories/prod/group_vars/network/10-defaults.yml",
+    RAIZ / "IaC/ansible/inventories/dev/group_vars/network/10-defaults.yml",
+):
+    lista = yaml.safe_load(padroes.read_text(encoding="utf-8"))["openwrt_failsafe_files"]
+    checar("dropbear" in lista, f"`openwrt_failsafe_files` inclui dropbear em {padroes.parents[2].name}")
+checar(
+    "'dropbear'" in (TEMPLATES / "openwrt_failsafe.sh.j2").read_text(encoding="utf-8"),
+    "o default do failsafe inclui dropbear",
+)
+
+print("\nInvariante 10 — a troca recarrega o firewall do AP:")
+# Sem restart do fw4, a uci nova fica gravada e o nft segue com as
+# interfaces antigas: a gerência nova cai no reject (13/10/2026).
+checar("/etc/init.d/firewall restart" in texto, "o script da troca reinicia o firewall")
 
 print("\nHigiene do render:")
 for rotulo, texto_render in (("network", rede), ("system", sistema)):

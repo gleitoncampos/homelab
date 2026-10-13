@@ -222,6 +222,14 @@
         EOF
       changed_when: true
 
+    - name: Aplicar configuração do dropbear em /etc/config/dropbear
+      tags: rede
+      ansible.builtin.raw: |
+        cat << 'EOF' > /etc/config/dropbear
+        {{ lookup('template', '../../templates/network/openwrt_dropbear.j2') }}
+        EOF
+      changed_when: true
+
     - name: Aplicar arquivo de Firewall padronizado em /etc/config/firewall
       tags: rede
       ansible.builtin.raw: |
@@ -261,6 +269,7 @@
         sleep 3
         /etc/init.d/network restart
         sleep 5
+        /etc/init.d/firewall restart
         /etc/init.d/dropbear restart
         EOF
         chmod +x /tmp/iac-apply-net.sh
