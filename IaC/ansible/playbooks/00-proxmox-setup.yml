@@ -1012,17 +1012,31 @@
         mode: '0700'
       when: nas_disponivel
 
-    - name: Gravar a senha do share CIFS de backup
-      ansible.builtin.copy:
-        # O arquivo é lido cru pelo PVE: só a senha, sem quebra de linha extra
-        # nem aspas.
-        content: "{{ proxmox_backup_share_password }}"
-        dest: "/etc/pve/priv/storage/{{ backup_storage }}.pw"
-        owner: root
-        group: www-data
-        mode: '0600'
-      no_log: true
+    # ⚠️ Não é `copy`: o arquivo temporário do Ansible nasce 0644 e, ao movê-lo
+    # para dentro do pmxcfs, o `copystat` tenta repetir esse modo — e em priv/ o
+    # pmxcfs só aceita 0600 ("Operation not permitted", provado em 12/10/2026).
+    # Escrita direta: o pmxcfs dá ao arquivo novo 0600 root:www-data sozinho.
+    # Idempotência pelo checksum, sem a senha sair do no_log.
+    - name: Ler o checksum da senha do share CIFS gravada
+      ansible.builtin.stat:
+        path: "/etc/pve/priv/storage/{{ backup_storage }}.pw"
+        checksum_algorithm: sha1
+      register: cifs_pw
       when: nas_disponivel
+
+    - name: Gravar a senha do share CIFS de backup
+      ansible.builtin.command:
+        # O arquivo é lido cru pelo PVE: só a senha, sem quebra de linha extra
+        # nem aspas — daí o stdin_add_newline: false.
+        argv: [dd, "of=/etc/pve/priv/storage/{{ backup_storage }}.pw", status=none]
+        stdin: "{{ proxmox_backup_share_password }}"
+        stdin_add_newline: false
+      no_log: true
+      changed_when: true
+      when:
+        - nas_disponivel
+        - not ansible_check_mode
+        - cifs_pw.stat.checksum | default('') != (proxmox_backup_share_password | hash('sha1'))
 
     # root:www-data 0640 nas duas tasks de /etc/pve não é escolha: é o que o
     # pmxcfs impõe, e ele recusa chown/chmod. Pedir root:root fazia o conteúdo
