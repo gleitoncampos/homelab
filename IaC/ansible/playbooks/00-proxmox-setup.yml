@@ -1026,17 +1026,22 @@
 
     - name: Gravar a senha do share CIFS de backup
       ansible.builtin.command:
-        # O arquivo é lido cru pelo PVE: só a senha, sem quebra de linha extra
-        # nem aspas — daí o stdin_add_newline: false.
+        # ⚠️ NÃO é a senha crua: é o arquivo de credencial que o PVE passa ao
+        # `smbclient -A` e ao `mount.cifs credentials=`, no formato que o
+        # próprio PVE grava (CIFSPlugin.pm, cifs_set_credentials):
+        # "password=<senha>\n". Com a senha crua o login dá
+        # NT_STATUS_LOGON_FAILURE (visto em 12/10/2026).
         argv: [dd, "of=/etc/pve/priv/storage/{{ backup_storage }}.pw", status=none]
-        stdin: "{{ proxmox_backup_share_password }}"
+        stdin: "{{ cifs_credencial }}"
         stdin_add_newline: false
+      vars:
+        cifs_credencial: "password={{ proxmox_backup_share_password }}\n"
       no_log: true
       changed_when: true
       when:
         - nas_disponivel
         - not ansible_check_mode
-        - cifs_pw.stat.checksum | default('') != (proxmox_backup_share_password | hash('sha1'))
+        - cifs_pw.stat.checksum | default('') != (cifs_credencial | hash('sha1'))
 
     # root:www-data 0640 nas duas tasks de /etc/pve não é escolha: é o que o
     # pmxcfs impõe, e ele recusa chown/chmod. Pedir root:root fazia o conteúdo
