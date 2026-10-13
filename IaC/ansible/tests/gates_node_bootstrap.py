@@ -58,6 +58,16 @@ if repo is not None:
     checar("ansible_architecture" not in str(repo["ansible.builtin.apt_repository"]["repo"]),
            "o arch= do repositório do Docker não vem de ansible_architecture")
 
+# DOCKER-USER: a faixa de gerência é LISTA (`mgmt_allowed_cidrs`), e os DROP
+# entram DEPOIS de todos os RETURN dela — posição fixa 4/5/6 só valia para uma
+# faixa; com três, DROP no meio dos RETURN fecharia a porta a quem foi liberado.
+regras = (PB.parent.parent / "tasks" / "docker_user_rules.yml").read_text(encoding="utf-8")
+checar("mgmt_allowed_cidr " not in regras and "mgmt_allowed_cidr }}" not in regras
+       and "mgmt_allowed_cidr is" not in regras,
+       "docker_user_rules não usa mais a faixa única `mgmt_allowed_cidr`")
+checar("mgmt_allowed_cidrs | length" in regras,
+       "a posição dos DROP é calculada pelo tamanho de `mgmt_allowed_cidrs`")
+
 if falhas:
     sys.exit("\n✗ gates-node-bootstrap")
 print("\n✓ gates-node-bootstrap")

@@ -91,7 +91,14 @@ print(f"  OK hosts.ini: INI valido, secoes={len(cp.sections())}, worker ausente 
 # 2b) 99-local.yml de group_vars/all -> system_user e o MESMO ssh_user do
 #     hosts.ini: um cria a conta nos nos, o outro entra por ela.
 loc = yaml.safe_load(bs.render_local_all(resp))
-assert loc == {"system_user": resp["ssh_user"]}, f"99-local inesperado: {loc}"
+# mgmt_allowed_cidrs: quem pode chegar às portas administrativas do Swarm
+# (9000 do Portainer, 1514 do syslog). Uma faixa só não servia: o syslog vem
+# do firewall e do NAS (VLAN 20), do Proxmox (LAN), e o operador da LAN
+# (13/10/2026). LAN = gateway atual /24; homelab = gateway-alvo /cidr;
+# gerência = <prefixo>.10.0/24, pela convenção <prefixo>.<vlan>.x.
+assert loc == {"system_user": resp["ssh_user"],
+               "mgmt_allowed_cidrs": ["192.0.2.0/24", "198.51.10.0/24", "198.51.100.0/24"]}, \
+    f"99-local inesperado: {loc}"
 assert f"ansible_user={resp['ssh_user']}" in ini, "hosts.ini sem o ssh_user respondido"
 print("  OK 99-local: system_user igual ao ansible_user dos nos")
 

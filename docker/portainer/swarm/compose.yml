@@ -53,7 +53,7 @@ services:
     # o publish do Docker faz DNAT em nat/PREROUTING, antes da chain filter.
     # O fecho real é uma regra em DOCKER-USER, e ela já existe:
     # IaC/ansible/tasks/docker_user_rules.yml, incluída por
-    # playbooks/01-bootstrap-os.yml. Ela libera só `mgmt_allowed_cidr` na 9000
+    # playbooks/01-bootstrap-os.yml. Ela libera só `mgmt_allowed_cidrs` na 9000
     # e descarta o resto.
     ports:
       - target: 9000

@@ -799,11 +799,31 @@ def render_vault(env: str, resp: dict, seg: dict, ssh_pub: str) -> str:
 def render_local_all(resp: dict) -> str:
     """group_vars/all/99-local.yml: o que é do operador e não pode morar no
     00-common.yml versionado. `system_user` precisa ser o mesmo `ssh_user` do
-    hosts.ini — um cria a conta, o outro entra por ela."""
+    hosts.ini — um cria a conta, o outro entra por ela.
+
+    `mgmt_allowed_cidrs`: quem chega às portas administrativas dos nós do
+    Swarm (9000 do Portainer, 1514 do syslog) — tasks/docker_user_rules.yml.
+    O syslog vem do firewall e do NAS (VLAN 20) e do Proxmox (LAN), e o
+    operador está na LAN: uma faixa só fechava a porta a alguém (13/10/2026).
+    LAN = gateway atual /24 (máscara fixa no template do OPNsense); homelab =
+    gateway-alvo /cidr; gerência = <prefixo>.10.0/24, pela convenção
+    <prefixo>.<vlan>.x do prefixo perguntado no passo de rede."""
+    import ipaddress
+
+    alvo = resp["rede_alvo"]
+    prefixo = ".".join(alvo["gateway"].split(".")[:2])
+    redes = [
+        ipaddress.ip_interface(f"{resp['rede_atual']['gateway']}/24").network,
+        ipaddress.ip_network(f"{prefixo}.10.0/24"),
+        ipaddress.ip_interface(f"{alvo['gateway']}/{alvo['cidr']}").network,
+    ]
+    linhas = "".join(f"  - {r}\n" for r in redes)
     return (
         f"# Gerado por IaC/bootstrap/bootstrap.py em {date.today().isoformat()}.\n"
         "# NÃO versionado. Vence o 00-common.yml ao lado (ordem alfabética).\n"
         f"system_user: {resp['ssh_user']!r}\n"
+        "# LAN, gerência (VLAN 10) e homelab (VLAN 20): ver render_local_all.\n"
+        f"mgmt_allowed_cidrs:\n{linhas}"
     )
 
 
