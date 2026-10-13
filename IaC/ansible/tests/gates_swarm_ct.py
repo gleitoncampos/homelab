@@ -65,6 +65,13 @@ checar(m is not None and "VM.Allocate" in m.group(1) and "Sys.Modify" not in set
 checar("aclmod / -user" in TOKEN and "aclmod / -token" in TOKEN,
        "a role da raiz vai para o usuário E para o token (privsep=1)")
 
+# Namespace de rede novo herda o IPv4 do namespace INICIAL do kernel
+# (devconf_inherit_init_net=0), que num CT é o do HOST Proxmox. Com o host em
+# ip_forward=0, o ingress_sbox e os lb_* do Swarm nasciam sem encaminhamento:
+# o IPVS recebia e a resposta não saía (13/10/2026, timeout em 80/443).
+checar(re.search(r"^\s*net\.ipv4\.ip_forward\s*=\s*1\s*$", PB, re.M) is not None,
+       "00-proxmox-setup liga net.ipv4.ip_forward=1 no host")
+
 if falhas:
     sys.exit(f"\n✗ gates-swarm-ct: {len(falhas)} falha(s)")
 print("\n✓ gates-swarm-ct")
