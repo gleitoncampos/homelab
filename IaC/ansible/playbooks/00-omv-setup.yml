@@ -120,6 +120,13 @@
     # administrador humano, e administrar um NAS eventualmente exige console.
     omv_admin_shell: /usr/bin/bash
 
+    # Hostname do NAS. O Samba do OMV recusa ligar com hostname acima de 15
+    # caracteres (limite de nome NetBIOS), e o que a VM recebe do cloud-init é
+    # o nome dela no Terraform (`openmediavault-nas`, 18). O nome da VM fica:
+    # trocá-lo muda o instance-id do cloud-init, que roda de novo e regera as
+    # chaves SSH do host.
+    omv_hostname: kamartaj
+
   pre_tasks:
     - name: Validar segredos do Vault exigidos por este play
       ansible.builtin.include_tasks: "../tasks/validate_vault.yml"
@@ -585,6 +592,195 @@
       changed_when: true
       no_log: true
 
+    # ------------------------------------------------------------------------
+    # Hostname, pasta e compartilhamento SMB do backup, Samba ligado
+    # ------------------------------------------------------------------------
+    # ⚠️ O cloud-init sai de cena antes de o hostname mudar. O user-data da VM
+    # traz `hostname:` e `manage_etc_hosts: true`, e user-data vence qualquer
+    # arquivo em /etc/cloud/cloud.cfg.d — a cada boot ele devolveria o nome
+    # antigo e reescreveria o /etc/hosts que o OMV gera. O próprio instalador
+    # do OMV faz `purge` do cloud-init (no bloco de rede que o `-n` desarma).
+    # A rede não depende dele depois do primeiro boot: o 50-cloud-init.yaml
+    # gerado continua em /etc/netplan.
+    - name: Desligar o cloud-init depois do primeiro boot
+      ansible.builtin.copy:
+        dest: /etc/cloud/cloud-init.disabled
+        content: "Desligado pelo 00-omv-setup.yml: hostname e /etc/hosts são do OMV.\n"
+        owner: root
+        group: root
+        mode: '0644'
+      when: omv_bin.stat.exists
+
+    - name: Ler o hostname do OMV
+      ansible.builtin.command:
+        cmd: omv-confdbadm read conf.system.network.dns
+      register: omv_dns
+      changed_when: false
+      check_mode: false
+      when: omv_bin.stat.exists
+
+    - name: "Gravar o hostname do OMV ({{ omv_hostname }})"
+      ansible.builtin.command:
+        argv:
+          - omv-confdbadm
+          - update
+          - conf.system.network.dns
+          - "{{ omv_dns.stdout | from_json | combine({'hostname': omv_hostname}) | to_json }}"
+      when:
+        - omv_bin.stat.exists
+        - (omv_dns.stdout | from_json).hostname != omv_hostname
+      changed_when: true
+
+    # Conferido contra o sistema vivo, pelo mesmo motivo do SSH: se o play cair
+    # entre o banco e o deploy, o rerun acha o banco certo e não aplicaria.
+    - name: Aplicar o hostname e o /etc/hosts
+      ansible.builtin.command:
+        cmd: omv-salt deploy run hostname hosts
+      when:
+        - omv_bin.stat.exists
+        - ansible_facts.hostname != omv_hostname
+        - not ansible_check_mode
+      changed_when: true
+
+    # Pasta no pool SEM SSD: decisão registrada no roadmap (backup e ISO são
+    # escrita esporádica e grande; passar pelo cache só gastaria o SSD).
+    - name: Levantar as pastas compartilhadas do OMV
+      ansible.builtin.command: omv-rpc -u admin 'ShareMgmt' 'getList' '{"start":0,"limit":-1}'
+      register: omv_pastas
+      changed_when: false
+      check_mode: false
+      when: omv_bin.stat.exists
+
+    - name: Levantar os pools do mergerfs para achar o ponto de montagem do pool base
+      ansible.builtin.command: omv-rpc -u admin 'Mergerfs' 'getList' '{"start":0,"limit":-1}'
+      register: omv_pools
+      changed_when: false
+      check_mode: false
+      when: omv_bin.stat.exists
+
+    - name: "Criar a pasta compartilhada do backup no pool sem SSD: {{ proxmox_backup_share }}"
+      ansible.builtin.command:
+        argv:
+          - omv-rpc
+          - -u
+          - admin
+          - ShareMgmt
+          - set
+          - "{{ {'uuid': mergerfs_new_object_uuid,
+                 'name': proxmox_backup_share,
+                 'reldirpath': proxmox_backup_share ~ '/',
+                 'comment': 'Backup do Proxmox (vzdump)',
+                 'mntentref': ((omv_pools.stdout | from_json).data
+                               | selectattr('name', 'equalto', mergerfs_base_pool_name)
+                               | map(attribute='mntentref') | first),
+                 'mode': '770'} | to_json }}"
+      register: omv_pasta_backup
+      when:
+        - omv_bin.stat.exists
+        - proxmox_backup_share not in ((omv_pastas.stdout | from_json).data | map(attribute='name') | list)
+      changed_when: true
+
+    - name: Guardar o uuid da pasta do backup
+      ansible.builtin.set_fact:
+        omv_pasta_backup_uuid: >-
+          {{ (omv_pasta_backup.stdout | from_json).uuid
+             if omv_pasta_backup is changed else
+             ((omv_pastas.stdout | from_json).data
+              | selectattr('name', 'equalto', proxmox_backup_share)
+              | map(attribute='uuid') | first) }}
+      when:
+        - omv_bin.stat.exists
+        - not ansible_check_mode
+
+    - name: Ler os privilégios atuais da pasta do backup
+      ansible.builtin.command:
+        argv: [omv-rpc, -u, admin, ShareMgmt, get, "{{ {'uuid': omv_pasta_backup_uuid} | to_json }}"]
+      register: omv_pasta_backup_atual
+      changed_when: false
+      when:
+        - omv_bin.stat.exists
+        - not ansible_check_mode
+
+    # Só o usuário do backup lê e escreve. O OMV gera o `valid users` e o
+    # `write list` do compartilhamento a partir destes privilégios. Comparado
+    # contra o estado gravado, e não contra "a pasta acabou de nascer": se o
+    # play cair entre as duas tasks, o rerun ainda acerta.
+    - name: "Dar leitura e escrita na pasta do backup só ao usuário {{ omv_backup_user }}"
+      ansible.builtin.command:
+        argv:
+          - omv-rpc
+          - -u
+          - admin
+          - ShareMgmt
+          - setPrivileges
+          - "{{ {'uuid': omv_pasta_backup_uuid,
+                 'privileges': [{'type': 'user', 'name': omv_backup_user, 'perms': 7}]} | to_json }}"
+      when:
+        - omv_bin.stat.exists
+        - not ansible_check_mode
+        - not (omv_privs | length == 1
+               and omv_privs[0].type == 'user'
+               and omv_privs[0].name == omv_backup_user
+               and omv_privs[0].perms | int == 7)
+      vars:
+        omv_privs: >-
+          {{ (omv_pasta_backup_atual.stdout | from_json).privileges.privilege
+             | default([], true) }}
+      changed_when: true
+
+    - name: Levantar os compartilhamentos SMB
+      ansible.builtin.command: omv-rpc -u admin 'SMB' 'getShareList' '{"start":0,"limit":-1}'
+      register: omv_smb_shares
+      changed_when: false
+      check_mode: false
+      when: omv_bin.stat.exists
+
+    - name: "Criar o compartilhamento SMB do backup ({{ proxmox_backup_share }})"
+      ansible.builtin.command:
+        argv:
+          - omv-rpc
+          - -u
+          - admin
+          - SMB
+          - setShare
+          - "{{ {'uuid': mergerfs_new_object_uuid, 'enable': true,
+                 'sharedfolderref': omv_pasta_backup_uuid,
+                 'comment': 'Backup do Proxmox (vzdump)',
+                 'guest': 'no', 'readonly': false, 'browseable': false,
+                 'recyclebin': false, 'recyclemaxsize': 0, 'recyclemaxage': 0,
+                 'hidedotfiles': true, 'inheritacls': false,
+                 'inheritpermissions': false, 'easupport': false,
+                 'storedosattributes': false, 'hostsallow': '', 'hostsdeny': '',
+                 'audit': false, 'timemachine': false,
+                 'extraoptions': ''} | to_json }}"
+      when:
+        - omv_bin.stat.exists
+        - not ansible_check_mode
+        - omv_pasta_backup_uuid not in ((omv_smb_shares.stdout | from_json).data
+                                        | map(attribute='sharedfolderref') | list)
+      changed_when: true
+
+    - name: Ler a configuração do Samba
+      ansible.builtin.command: omv-rpc -u admin 'SMB' 'getSettings' '{}'
+      register: omv_smb
+      changed_when: false
+      check_mode: false
+      when: omv_bin.stat.exists
+
+    - name: Ligar o Samba
+      ansible.builtin.command:
+        argv:
+          - omv-rpc
+          - -u
+          - admin
+          - SMB
+          - setSettings
+          - "{{ omv_smb.stdout | from_json | combine({'enable': true}) | to_json }}"
+      when:
+        - omv_bin.stat.exists
+        - not (omv_smb.stdout | from_json).enable
+      changed_when: true
+
     - name: Aplicar a configuração de usuários e do Samba
       ansible.builtin.command: "omv-salt deploy run {{ item }}"
       loop:
@@ -849,9 +1045,11 @@
         regexp: '\bdefaults(?!,noatime)'
         replace: 'defaults,noatime,nodiratime'
 
-    - name: Configurar Chave SSH Pública do Administrador no OpenMediaVault NAS Host
+    # No usuário do Ansible, e não no root: o login de root por SSH é desligado
+    # mais acima, e a chave no root não teria efeito.
+    - name: Garantir a chave SSH pública do administrador no usuário do Ansible
       ansible.posix.authorized_key:
-        user: root
+        user: "{{ ansible_user }}"
         state: present
         key: "{{ ssh_public_key }}"
 

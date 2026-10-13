@@ -342,7 +342,12 @@ ssh root@<no> reboot                                              # nos dois: os
 
 Prova: do firewall, `ping` em cada IP da VLAN 20 (os CTs e o NAS).
 
-O playbook instala o OMV, semeia a configuração e cria o usuário SMB.
+O playbook instala o OMV, semeia a configuração, monta os discos e os pools,
+cria os usuários, a pasta e o compartilhamento SMB de backup
+(`proxmox_backup_share`, no pool sem SSD, só o usuário `smb`) e liga o Samba.
+Também troca o hostname para `omv_hostname` (o Samba exige no máximo 15
+caracteres) e desliga o cloud-init da VM, que senão devolveria o nome antigo a
+cada boot.
 
 ```bash
 cd ../../ansible
@@ -350,8 +355,8 @@ ansible-playbook playbooks/00-omv-setup.yml --check --diff
 ansible-playbook playbooks/00-omv-setup.yml
 ```
 
-Na UI do OMV, crie a pasta compartilhada com o nome que você deu em
-`proxmox_backup_share`.
+Prova: `smbclient //<IP do NAS>/<proxmox_backup_share> -U smb -c ls` entra no
+compartilhamento (ele não aparece no `smbclient -L`: `browseable` desligado).
 
 ## 10. Hipervisor, segunda passada
 
