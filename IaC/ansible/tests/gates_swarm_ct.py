@@ -43,6 +43,16 @@ for nome in ("docker_swarm_node01", "docker_swarm_node02"):
 
 checar("unprivileged: 1" in PB, "00-proxmox-setup só aplica keyctl em CT `unprivileged: 1`")
 
+# Em CT privilegiado, QUALQUER feature (nesting incluso) só pode ser definida
+# por root@pam: com `features {}` no Terraform o token tomava 403 na criação
+# (13/10/2026). As features vêm do 00-proxmox-setup (root), como o keyctl.
+for nome in ("docker_swarm_node01", "docker_swarm_node02", "docker_dev_node"):
+    corpo = recurso(nome)
+    checar(re.search(r"^\s*features\s*\{", corpo, re.M) is None,
+           f"{nome}: sem bloco features no Terraform (privilegiado = só root@pam)")
+checar("else 'nesting=1'" in PB and "'nesting=1,keyctl=1' if" in PB,
+       "00-proxmox-setup grava nesting=1 em privilegiado e nesting+keyctl em não privilegiado")
+
 # CT privilegiado só é criado por quem tem Sys.Modify em `/`: sem ele, o
 # apply destruía os CTs e falhava ao recriar com 403 (13/10/2026).
 TOKEN = (RAIZ / "ansible" / "playbooks" / "00-proxmox-api-token.yml").read_text(encoding="utf-8")

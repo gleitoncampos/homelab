@@ -266,14 +266,12 @@ resource "proxmox_virtual_environment_container" "docker_swarm_node01" {
     swap      = 2048 # 2GB Swap ZRAM
   }
 
-  # Só `nesting` aqui: o PVE só aceita outra feature flag de root@pam
-  # ("changing feature flags (except nesting) is only allowed for root"), e
-  # quem aplica é o token. O `keyctl=1` só vale em CT não privilegiado; o
-  # 00-proxmox-setup.yml o grava como root apenas nesse caso, e neste CT
-  # (privilegiado) não grava. Ver `ignore_changes` abaixo.
-  features {
-    nesting = true # Habilita Nesting para execução segura de Docker Engine dentro do LXC
-  }
+  # SEM bloco `features`: em CT privilegiado o PVE só aceita QUALQUER feature
+  # flag (nesting incluso) de root@pam ("changing feature flags for privileged
+  # container is only allowed for root@pam") e quem aplica é o token — a
+  # criação tomava 403 (13/10/2026). O `nesting=1` é gravado como root pelo
+  # ansible/playbooks/00-proxmox-setup.yml (tag docker_ct), logo depois do
+  # apply. Ver `ignore_changes` abaixo.
 
   network_interface {
     name    = "eth0"
@@ -514,14 +512,12 @@ resource "proxmox_virtual_environment_container" "docker_swarm_node02" {
     swap      = 2048 # 2GB Swap ZRAM
   }
 
-  # Só `nesting` aqui: o PVE só aceita outra feature flag de root@pam
-  # ("changing feature flags (except nesting) is only allowed for root"), e
-  # quem aplica é o token. O `keyctl=1` só vale em CT não privilegiado; o
-  # 00-proxmox-setup.yml o grava como root apenas nesse caso, e neste CT
-  # (privilegiado) não grava. Ver `ignore_changes` abaixo.
-  features {
-    nesting = true # Habilita Nesting para execução segura de Docker Engine dentro do LXC
-  }
+  # SEM bloco `features`: em CT privilegiado o PVE só aceita QUALQUER feature
+  # flag (nesting incluso) de root@pam ("changing feature flags for privileged
+  # container is only allowed for root@pam") e quem aplica é o token — a
+  # criação tomava 403 (13/10/2026). O `nesting=1` é gravado como root pelo
+  # ansible/playbooks/00-proxmox-setup.yml (tag docker_ct), logo depois do
+  # apply. Ver `ignore_changes` abaixo.
 
   network_interface {
     name    = "eth0"
@@ -619,10 +615,8 @@ resource "proxmox_virtual_environment_container" "docker_dev_node" {
   # namespaces de rede/mount que o dockerd cria em runtime. Isso já é
   # verdade para os CTs de produção (200/201); o dev node herda a mesma
   # fragilidade de propósito, pela regra de paridade de guest acima.
-  # Só `nesting`, pelo mesmo motivo dos CTs 200/201: `keyctl` é do Ansible.
-  features {
-    nesting = true
-  }
+  # SEM bloco `features`, pelo mesmo motivo dos CTs 200/201: em CT
+  # privilegiado só root@pam define feature; o nesting vem do Ansible.
 
   network_interface {
     name   = "eth0"

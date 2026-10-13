@@ -756,14 +756,15 @@
         create: false
       when: opnsense_vm_conf.stat.exists
 
-    # `keyctl=1` nos CTs do Docker: o Docker exige em CT unprivileged, e o PVE
-    # só aceita feature flag além de `nesting` do root@pam — o Terraform, que
-    # aplica com token, cria os CTs só com `nesting` e ignora `features`. Os
-    # VMIDs são os do main.tf (200/201 Swarm, 210 dev). Roda no passo 10,
-    # antes do bootstrap do Swarm (passo 12); a feature só vale no próximo
-    # start, daí o reboot de quem acabou de ganhá-la. Tag `docker_ct`: o passo 8
-    # do guia roda só este bloco logo depois do `terraform apply`, e os CTs
-    # ficam completos na criação — o passo 10 apenas confere.
+    # Features dos CTs do Docker, gravadas como ROOT porque o token do
+    # Terraform não pode: em CT privilegiado o PVE só aceita qualquer feature
+    # (nesting incluso) de root@pam, e em não privilegiado só aceita `nesting`
+    # do token. Por isso o Terraform cria os CTs SEM `features` e o ignora.
+    # Igual ao community-scripts: `nesting=1` sempre; `keyctl=1` só em CT não
+    # privilegiado. Os CTs do Swarm são privilegiados desde 13/10/2026 (IPVS).
+    # VMIDs do main.tf (200/201 Swarm, 210 dev). A feature só vale no próximo
+    # start, daí o reboot de quem mudou. Tag `docker_ct`: o guia roda este bloco
+    # logo depois do `terraform apply`. Trava em tests/gates_swarm_ct.py.
     - name: Levantar os CTs do Docker presentes neste nó
       tags: docker_ct
       ansible.builtin.stat:
@@ -781,32 +782,38 @@
       changed_when: false
       check_mode: false
 
-    # Só CT `unprivileged: 1` recebe keyctl, igual ao community-scripts: em CT
-    # privilegiado a feature não se aplica. Os CTs do Swarm passaram a
-    # privilegiados em 13/10/2026 (IPVS), ver o main.tf.
-    - name: Separar os CTs do Docker não privilegiados ainda sem keyctl
+    - name: Separar os CTs do Docker cujas features não batem com o tipo
       tags: docker_ct
+      vars:
+        _desejado: >-
+          {{ 'nesting=1,keyctl=1' if (item.stdout is search('(?m)^unprivileged: 1')) else 'nesting=1' }}
       ansible.builtin.set_fact:
-        docker_ct_sem_keyctl: >-
-          {{ docker_ct_cfg.results
-             | selectattr('stdout', 'search', '(?m)^unprivileged: 1')
-             | rejectattr('stdout', 'search', '(?m)^features:.*keyctl=1')
-             | map(attribute='item.item') | list }}
+        docker_ct_features: >-
+          {{ docker_ct_features | default([])
+             + ([{'id': item.item.item, 'features': _desejado}]
+                if not (item.stdout is search('(?m)^features: ' ~ _desejado ~ '$')) else []) }}
+      loop: "{{ docker_ct_cfg.results }}"
+      loop_control:
+        label: "{{ item.item.item }}"
 
-    - name: Habilitar keyctl nos CTs do Docker (exige root; o token do Terraform não pode)
+    - name: Gravar as features dos CTs do Docker (exige root; o token do Terraform não pode)
       tags: docker_ct
-      ansible.builtin.command: "pct set {{ item }} --features nesting=1,keyctl=1"
-      loop: "{{ docker_ct_sem_keyctl }}"
+      ansible.builtin.command: "pct set {{ item.id }} --features {{ item.features }}"
+      loop: "{{ docker_ct_features | default([]) }}"
+      loop_control:
+        label: "{{ item.id }}: {{ item.features }}"
       changed_when: true
 
-    - name: Reiniciar os CTs que acabaram de ganhar keyctl
+    - name: Reiniciar os CTs cujas features mudaram
       tags: docker_ct
       ansible.builtin.shell: |
         set -euo pipefail
-        if pct status {{ item }} | grep -q running; then pct reboot {{ item }}; fi
+        if pct status {{ item.id }} | grep -q running; then pct reboot {{ item.id }}; fi
       args:
         executable: /bin/bash
-      loop: "{{ docker_ct_sem_keyctl }}"
+      loop: "{{ docker_ct_features | default([]) }}"
+      loop_control:
+        label: "{{ item.id }}"
       changed_when: true
 
     # Trim semanal dos CTs. O `fstrim.timer` do host não alcança o rootfs dos
