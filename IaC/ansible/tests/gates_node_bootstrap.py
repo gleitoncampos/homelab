@@ -102,6 +102,21 @@ if init is not None:
            "o admin/init envia o X-Setup-Token")
 checar(any("setup_token=" in str(t) for t in login), "o token é lido do log do Portainer (setup_token=)")
 
+# Âncora da traefik_public: overlay só existe no nó que tem container nela.
+# O Portainer manda o deploy por `tasks.portainer-agent`, que sorteia entre os
+# agentes; caindo no worker, "network traefik_public ... could not be found"
+# e HTTP 500 (13/10/2026). Um serviço `global` na rede a mantém em todo nó.
+cp = yaml.safe_load((PB.parent.parent.parent.parent / "docker/portainer/swarm/compose.yml").read_text(encoding="utf-8"))
+ancoras = [n for n, sv in (cp.get("services") or {}).items()
+           if ((sv.get("deploy") or {}).get("mode") == "global")
+           and "traefik_public" in (sv.get("networks") or [])]
+checar(len(ancoras) == 1, f"a stack do Portainer tem um serviço global na traefik_public (veio {ancoras})")
+if ancoras:
+    sv = cp["services"][ancoras[0]]
+    checar(not sv.get("ports"), "a âncora não publica porta")
+    checar(not any(str(l).startswith("traefik.enable=true") for l in (sv.get("deploy") or {}).get("labels") or []),
+           "a âncora não é exposta pelo Traefik")
+
 if falhas:
     sys.exit("\n✗ gates-node-bootstrap")
 print("\n✓ gates-node-bootstrap")

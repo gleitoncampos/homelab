@@ -83,6 +83,26 @@ services:
         - "traefik.http.services.portainer.loadbalancer.server.port=9000"
         - "traefik.http.routers.portainer.service=portainer"
         - "traefik.http.routers.portainer.tls.certresolver=cloudflare"
+
+  # Âncora da `traefik_public`: overlay só existe no nó que tem container
+  # nela. O Portainer manda o deploy de stack por `tasks.portainer-agent`, que
+  # sorteia entre os agentes; caindo num worker sem container na rede, o
+  # Docker responde "network traefik_public ... could not be found" e o deploy
+  # dá HTTP 500 (13/10/2026). Global = um container parado por nó, inclusive
+  # nos que entrarem depois. Sem porta, sem volume, sem label do Traefik.
+  # Trava em IaC/ansible/tests/gates_node_bootstrap.py.
+  traefik-public-anchor:
+    image: registry.k8s.io/pause:3.10
+    networks:
+      - traefik_public
+    deploy:
+      mode: global
+      resources:
+        limits:
+          cpus: '0.01'
+          memory: 8M
+      restart_policy:
+        condition: any
 networks:
   traefik_public:
     external: true
