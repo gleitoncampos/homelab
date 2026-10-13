@@ -127,6 +127,9 @@
     status_code: 200
     validate_certs: false
   register: portainer_stack_create
+  # Quem reprova é a conferência abaixo, que mostra status e mensagem do
+  # Portainer — o no_log daqui esconde a resposta inteira, segredo junto.
+  failed_when: false
   when: not stack_id
   no_log: true
 
@@ -165,6 +168,8 @@
     status_code: 200
     validate_certs: false
   register: portainer_stack_redeploy
+  # Ver a task de criação: a conferência abaixo é quem reprova.
+  failed_when: false
   when: stack_id
   no_log: true
 
@@ -173,9 +178,14 @@
     that:
       - (not stack_id and portainer_stack_create is defined and portainer_stack_create.status == 200)
         or (stack_id and portainer_stack_redeploy is defined and portainer_stack_redeploy.status == 200)
+    # Status e mensagem do Portainer, nunca o corpo inteiro: a resposta de
+    # falha do `uri` carrega o body da requisição, com o env da stack (13/10/2026:
+    # redeploy falhou e o no_log não deixava ver por quê).
     fail_msg: >-
-      Deploy da stack '{{ stack_name }}' falhou: nem a criação nem o redeploy
-      confirmaram HTTP 200. Verifique o Portainer e o repositório/branch
-      configurados para esta stack.
+      Deploy da stack '{{ stack_name }}' falhou:
+      HTTP {{ (portainer_stack_redeploy if stack_id else portainer_stack_create).status | default('?') }} —
+      {{ (portainer_stack_redeploy if stack_id else portainer_stack_create).json.message | default('') }}
+      {{ (portainer_stack_redeploy if stack_id else portainer_stack_create).json.details | default('') }}
+      {{ (portainer_stack_redeploy if stack_id else portainer_stack_create).msg | default('') | regex_replace('(?i)(token|password|secret)[^ ]*', '***') | truncate(200) }}
     success_msg: "Stack '{{ stack_name }}' criada/atualizada com sucesso (HTTP 200)."
     quiet: true
