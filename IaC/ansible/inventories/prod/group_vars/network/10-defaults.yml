@@ -83,6 +83,7 @@ openwrt_exporter_packages:
   - prometheus-node-exporter-lua-nat_traffic   # tráfego por conexão NAT
   - prometheus-node-exporter-lua-netstat       # contadores de rede
   - prometheus-node-exporter-lua-openwrt       # versão, modelo, uptime do OpenWrt
+  - prometheus-node-exporter-lua-textfile     # /var/prometheus/*.prom (updates pendentes)
   - prometheus-node-exporter-lua-wifi          # rádios, canal, potência
   - prometheus-node-exporter-lua-wifi_stations # clientes associados e sinal
 

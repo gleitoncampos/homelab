@@ -69,6 +69,30 @@ if grava and reinicia:
     checar(bool(tg) and tg <= tags(reinicia[0]),
            f"o restart do log roda com as tags de quem grava o system ({sorted(tg)})")
 
+# Updates do OpenWrt no dashboard, como o apt_upgrades_pending dos Proxmox
+# (14/10/2026): script -> textfile -> painéis. Uma ponta sem a outra é painel
+# vazio sem erro nenhum.
+import json  # noqa: E402
+import re  # noqa: E402
+import subprocess  # noqa: E402
+
+script = ANSIBLE / "templates/network/openwrt_update_metrics.sh.j2"
+roda = subprocess.run(["sh", "-n", str(script)], capture_output=True, text=True)
+checar(roda.returncode == 0, f"openwrt_update_metrics.sh.j2 passa no `sh -n` {roda.stderr.strip()}")
+metricas_script = set(re.findall(r"^(openwrt_[a-z_]+)", script.read_text(encoding="utf-8"), re.M))
+pacotes = yaml.safe_load((ANSIBLE / "inventories/prod/group_vars/network/10-defaults.yml")
+                         .read_text(encoding="utf-8"))["openwrt_exporter_packages"]
+checar("prometheus-node-exporter-lua-textfile" in pacotes, "o coletor textfile está nos pacotes do exportador")
+checar("openwrt_update_metrics.sh.j2" in exp and "* * * * /usr/bin/openwrt-update-metrics" in exp,
+       "02-openwrt-exporter instala o script e o agenda no cron")
+painel = json.loads((REPO / "docker/monitoring/swarm/dashboards/openwrt.json").read_text(encoding="utf-8"))
+exprs = " ".join(t.get("expr", "") for p in painel["panels"] for t in p.get("targets") or [])
+usadas = set(re.findall(r"\bopenwrt_[a-z_]+", exprs))
+checar({"openwrt_firmware_update_level", "openwrt_packages_upgradable"} <= usadas,
+       "dashboard do OpenWrt mostra firmware e pacotes pendentes")
+checar(usadas <= metricas_script,
+       f"toda métrica openwrt_* do dashboard sai do script ({sorted(usadas - metricas_script)})")
+
 if falhas:
     sys.exit(f"\n✗ gates-monitoring: {len(falhas)} falha(s)")
 print("\n✓ gates-monitoring")

@@ -105,6 +105,34 @@
       changed_when: "'IFACE:TROCADA' in _exporter_iface.stdout"
       failed_when: "'IFACE:' not in _exporter_iface.stdout"
 
+    # Firmware e pacotes pendentes, como o apt_upgrades_pending dos Proxmox:
+    # o script escreve no diretório do coletor `textfile` (pacote
+    # prometheus-node-exporter-lua-textfile, em openwrt_exporter_packages).
+    # ⚠️ Delimitador próprio no heredoc: o script tem um `<<EOF` interno, e um
+    # `EOF` aqui fecharia a gravação no meio dele.
+    - name: Instalar o script de checagem de updates do OpenWrt
+      ansible.builtin.raw: |
+        cat << 'IAC_UPDATE_METRICS' > /usr/bin/openwrt-update-metrics
+        {{ lookup('template', '../../templates/network/openwrt_update_metrics.sh.j2') }}
+        IAC_UPDATE_METRICS
+        chmod +x /usr/bin/openwrt-update-metrics
+      changed_when: true
+
+    # De hora em hora: /var é tmpfs e o arquivo some no boot. A checagem de
+    # pacotes se limita sozinha a uma a cada 24 h (ver o script).
+    - name: Agendar a checagem de updates no cron do OpenWrt
+      ansible.builtin.raw: >-
+        (crontab -l 2>/dev/null | grep -v openwrt-update-metrics;
+        echo "17 * * * * /usr/bin/openwrt-update-metrics") | crontab -
+        && /etc/init.d/cron enable && /etc/init.d/cron restart
+      changed_when: true
+
+    - name: Rodar a checagem uma vez agora
+      ansible.builtin.raw: /usr/bin/openwrt-update-metrics && grep -v '^#' /var/prometheus/openwrt_update.prom
+      register: _update_metrics
+      changed_when: false
+      failed_when: "'openwrt_firmware_update_level' not in _update_metrics.stdout"
+
     # ⚠️ A sonda vai contra o ENDEREÇO DO INVENTÁRIO, e não contra 127.0.0.1.
     # No OpenWrt o exportador é um CGI do `uhttpd`, que escuta no endereço da
     # interface e NÃO no loopback — uma sonda em 127.0.0.1 devolve zero métrica

@@ -1,0 +1,95 @@
+#!/bin/sh
+# =============================================================================
+# openwrt-update-metrics -- diz ao Prometheus se ha firmware ou pacote novo
+# =============================================================================
+# RENDERIZADO POR ANSIBLE (playbooks/network/02-openwrt-exporter.yml). Nao
+# editar no equipamento.
+#
+# Escreve no diretorio do coletor `textfile` do prometheus-node-exporter-lua
+# (/var/prometheus/*.prom), o mesmo papel do apt_upgrades_pending nos Proxmox.
+# Roda de hora em hora pelo cron.
+#
+#   openwrt_firmware_update_level  0 em dia | 1 versao nova na MESMA serie
+#                                  (ex.: 24.10.7 -> 24.10.8) | 2 release
+#                                  estavel mais nova (ex.: 24.10 -> 25.12)
+#   openwrt_packages_upgradable    pacotes com versao nova no feed
+#   openwrt_update_check_success   1/0 por checagem; 0 = o numero acima NAO
+#                                  vale (sem internet, feed travado...)
+#
+# ⚠️ /var e tmpfs: o arquivo some no boot e volta na proxima hora cheia.
+# ⚠️ Pacotes so a cada 24 h: `opkg update`/`apk update` baixa as listas para
+#    a RAM de um equipamento com 241 MB. As listas do opkg sao apagadas logo
+#    depois da contagem.
+# ⚠️ SEM ACENTO NO CORPO: o console do OpenWrt nao e garantidamente UTF-8.
+# =============================================================================
+
+ARQ="${1:-/var/prometheus/openwrt_update.prom}"
+URL="https://downloads.openwrt.org/.versions.json"
+CACHE_PKG="/tmp/openwrt-update-pkgs"
+PKG_INTERVALO=86400
+
+# 0 se $1 > $2, comparando numero a numero (24.10.10 > 24.10.9).
+maior() {
+  [ "$1" != "$2" ] || return 1
+  [ "$(printf '%s\n%s\n' "$1" "$2" | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1)" = "$1" ]
+}
+
+. /etc/openwrt_release
+atual="$DISTRIB_RELEASE"
+serie="${atual%.*}"
+
+fw_ok=0
+nivel=0
+ult_serie=""
+estavel=""
+json=$(uclient-fetch -q -T 20 -O - "$URL" 2>/dev/null)
+if [ -n "$json" ]; then
+  estavel=$(echo "$json" | jsonfilter -e '@.stable_version' 2>/dev/null)
+  # Ultima da serie atual, sem release candidate. A lista vem da mais nova
+  # para a mais velha, mas a ordem e garantida aqui, nao confiada.
+  ult_serie=$(echo "$json" | jsonfilter -e '@.versions_list[*]' 2>/dev/null \
+    | grep -E "^${serie}\.[0-9]+$" | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1)
+  if [ -n "$estavel" ] && [ -n "$ult_serie" ]; then
+    fw_ok=1
+    maior "$ult_serie" "$atual" && nivel=1
+    maior "${estavel%.*}.0" "${serie}.0" && nivel=2
+  fi
+fi
+
+# Pacotes: reaproveita a contagem anterior dentro do intervalo.
+agora=$(date +%s)
+pkg_ok=0
+pkgs=0
+if [ -f "$CACHE_PKG" ] && [ $((agora - $(sed -n 1p "$CACHE_PKG"))) -lt "$PKG_INTERVALO" ]; then
+  pkg_ok=$(sed -n 2p "$CACHE_PKG")
+  pkgs=$(sed -n 3p "$CACHE_PKG")
+else
+  if command -v apk >/dev/null 2>&1; then
+    apk update >/dev/null 2>&1 && pkgs=$(apk list --upgradable 2>/dev/null | wc -l) && pkg_ok=1
+  else
+    opkg update >/dev/null 2>&1 && pkgs=$(opkg list-upgradable 2>/dev/null | wc -l) && pkg_ok=1
+    rm -rf /var/opkg-lists
+  fi
+  printf '%s\n%s\n%s\n' "$agora" "$pkg_ok" "$pkgs" > "$CACHE_PKG"
+fi
+
+mkdir -p "$(dirname "$ARQ")"
+cat > "$ARQ.tmp" <<EOF
+# HELP openwrt_firmware_info Versao instalada e as ultimas publicadas.
+# TYPE openwrt_firmware_info gauge
+openwrt_firmware_info{version="$atual",latest_series="$ult_serie",latest_stable="$estavel"} 1
+# HELP openwrt_firmware_update_level 0 em dia, 1 nova na serie, 2 nova estavel.
+# TYPE openwrt_firmware_update_level gauge
+openwrt_firmware_update_level $nivel
+# HELP openwrt_packages_upgradable Pacotes com versao nova no feed.
+# TYPE openwrt_packages_upgradable gauge
+openwrt_packages_upgradable $pkgs
+# HELP openwrt_update_check_success 1 se a checagem respondeu.
+# TYPE openwrt_update_check_success gauge
+openwrt_update_check_success{check="firmware"} $fw_ok
+openwrt_update_check_success{check="packages"} $pkg_ok
+# HELP openwrt_update_check_timestamp_seconds Quando o script rodou.
+# TYPE openwrt_update_check_timestamp_seconds gauge
+openwrt_update_check_timestamp_seconds $agora
+EOF
+mv "$ARQ.tmp" "$ARQ"

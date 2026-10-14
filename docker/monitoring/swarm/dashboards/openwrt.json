@@ -95,7 +95,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 24,
+        "w": 16,
         "x": 0,
         "y": 1
       },
@@ -173,6 +173,178 @@
         }
       ],
       "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Atualização do OpenWrt (script openwrt-update-metrics no AP, de hora em hora): Em dia; Nova na série = versão nova da mesma série (ex.: 24.10.7 → 24.10.8); Nova estável = release estável mais nova (ex.: 24.10 → 25.12). Versões em openwrt_firmware_info. Sem checagem = falhou ou o dado tem mais de 2 h.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "text": "Em dia",
+                  "color": "green",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Nova na série",
+                  "color": "orange",
+                  "index": 1
+                },
+                "2": {
+                  "text": "Nova estável",
+                  "color": "yellow",
+                  "index": 2
+                }
+              },
+              "type": "value"
+            },
+            {
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "Sem checagem",
+                  "color": "text"
+                }
+              },
+              "type": "special"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      },
+      "id": 319,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max(openwrt_firmware_update_level{instance=~\"$node:$port\",job=~\"$job\"}) and on() (max(openwrt_update_check_success{instance=~\"$node:$port\",job=~\"$job\",check=\"firmware\"}) == 1) and on() (time() - max(openwrt_update_check_timestamp_seconds{instance=~\"$node:$port\",job=~\"$job\"}) < 7200)",
+          "instant": true,
+          "range": false,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Firmware",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Pacotes com versão nova no feed (opkg/apk), checados a cada 24 h. Sem checagem = falhou ou o dado tem mais de 2 h.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "Sem checagem",
+                  "color": "text"
+                }
+              },
+              "type": "special"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "id": 320,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max(openwrt_packages_upgradable{instance=~\"$node:$port\",job=~\"$job\"}) and on() (max(openwrt_update_check_success{instance=~\"$node:$port\",job=~\"$job\",check=\"packages\"}) == 1) and on() (time() - max(openwrt_update_check_timestamp_seconds{instance=~\"$node:$port\",job=~\"$job\"}) < 7200)",
+          "instant": true,
+          "range": false,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Pacotes pendentes",
+      "type": "stat"
     },
     {
       "datasource": {
