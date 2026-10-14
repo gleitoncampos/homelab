@@ -47,7 +47,7 @@ firewall e do NAS, então a primeira passada os adia e avisa; a segunda aplica.
 | 8 | demais convidados | `terraform apply` |
 | 9 | NAS | `make omv-fs` → `00-omv-setup.yml` |
 | 10 | hipervisor, 2ª passada | `00-proxmox-setup.yml` |
-| 11 | access point | `network/02-openwrt-setup.yml` |
+| 11 | access point | `network/02-openwrt-setup.yml` → `02-openwrt-exporter` → `make xinfc` + `02-openwrt-nfc` |
 | 12 | nós Swarm | `00-node-bootstrap` → `01` → `02` |
 | 13 | stacks | `03`, `04`, `05` |
 | 14 | backup | `06-backup.yml` |
@@ -381,7 +381,20 @@ firewall).
 ```bash
 ansible-playbook playbooks/network/02-openwrt-setup.yml --check --diff
 ansible-playbook playbooks/network/02-openwrt-setup.yml
+ansible-playbook playbooks/network/02-openwrt-exporter.yml   # métricas, updates pendentes
 ```
+
+NFC com a rede de visitantes (opcional; só Android — o iOS ignora a etiqueta
+Wi-Fi). O binário é compilado do fonte, no SDK oficial do OpenWrt, e não é
+versionado: precisa de Docker e baixa a imagem do SDK (~3 GB) na primeira vez.
+
+```bash
+make xinfc                                                    # da raiz do repositório
+ansible-playbook playbooks/network/02-openwrt-nfc.yml
+```
+
+⚠️ A senha gravada no chip é legível por qualquer celular que encoste no AP —
+por isso o playbook só grava a rede de visitantes.
 
 ## 12. Nós do Swarm
 
@@ -465,6 +478,8 @@ isso restringe o **passo**. `--limit` restringe **hosts**, nunca playbooks:
 | backup dos convidados | `ansible-playbook playbooks/06-backup.yml` | `proxmox` |
 | firewall | `ansible-playbook playbooks/network/01-opnsense-setup.yml` | `opnsense` |
 | access point | `ansible-playbook playbooks/network/02-openwrt-setup.yml` | `openwrt` |
+| exportador do AP | `ansible-playbook playbooks/network/02-openwrt-exporter.yml` | `openwrt` |
+| NFC do AP | `make xinfc` + `ansible-playbook playbooks/network/02-openwrt-nfc.yml` | `openwrt` |
 
 O inventário default é o de produção (`ansible.cfg`); para dev, passe
 `-i inventories/dev/hosts.ini`.
