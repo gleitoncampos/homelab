@@ -37,6 +37,19 @@ conf = [i for i, t in enumerate(tarefas) if t.get("name", "").startswith("Config
 checar(len(sobe) == 1 and len(conf) == 1, "uma task sobe o nut.target e uma grava o upsmon.conf")
 checar(bool(sobe and conf) and sobe[0] > conf[0], "nut.target só sobe depois do upsmon.conf gravado")
 
+# Sem diretório explícito, o configure grava nas units um tmpfiles em
+# `/nut-common-tmpfiles.conf` (14/10/2026). E o stamp precisa mudar quando
+# os argumentos mudam, senão a flag nova nunca chega ao binário.
+args = play.get("vars", {}).get("nut_configure_args", [])
+checar(any(a.startswith("--with-systemdtmpfilesdir=/") for a in args),
+       "configure com --with-systemdtmpfilesdir absoluto")
+checar("nut_configure_args" in str(play.get("vars", {}).get("nut_build_id", "")),
+       "nut_build_id deriva dos argumentos do configure")
+texto = str(tarefas)
+checar("nut_configure_args" in texto and "nut_build_id" in texto,
+       "configure usa nut_configure_args e o stamp grava nut_build_id")
+checar("tmpfiles-nut.conf.j2" not in texto, "sem tmpfiles próprio duplicando o do NUT")
+
 if falhas:
     sys.exit(f"\n✗ gates-nut: {len(falhas)} falha(s)")
 print("\n✓ gates-nut")

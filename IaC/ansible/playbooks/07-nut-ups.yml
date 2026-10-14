@@ -28,6 +28,41 @@
       - automake
       - libtool
       - pkg-config
+    # Só o driver `ragtech`, e sem USB/SNMP/CGI: o alvo é um binário pequeno
+    # num hipervisor, não a distribuição completa do NUT.
+    #
+    # O `configure` avisa que `--sysconfdir` está obsoleto em favor de
+    # `--with-confdir`. Mantido: é o que foi executado e verificado contra o
+    # hardware, e trocar a flag move o diretório de configuração. Migrar é
+    # mudança deliberada, com novo teste.
+    #
+    # ⚠️ `--with-systemdtmpfilesdir` explícito: em `auto` o configure pergunta
+    # ao pkg-config pelo `systemd.pc`, que vem do `systemd-dev` (não
+    # instalado), recebe vazio e grava nas units
+    # `ExecStartPre=-systemd-tmpfiles --create /nut-common-tmpfiles.conf` —
+    # caminho que não existe, erro a cada partida (14/10/2026). Com o
+    # diretório, o NUT instala o próprio tmpfiles (`/run/nut` incluso).
+    nut_configure_args:
+      - --prefix={{ nut_prefix }}
+      - --sysconfdir={{ nut_sysconfdir }}
+      - --with-statepath=/run/nut
+      - --with-altpidpath=/run/nut
+      - --with-drivers=ragtech
+      - --with-serial
+      - --without-usb
+      - --without-snmp
+      - --without-neon
+      - --without-nss
+      - --without-openssl
+      - --without-cgi
+      - --without-dev
+      - --with-user=nut
+      - --with-group=nut
+      - --with-systemdsystemunitdir=/etc/systemd/system
+      - --with-systemdtmpfilesdir=/usr/lib/tmpfiles.d
+    # O stamp guarda commit E argumentos do configure: só o commit fazia uma
+    # flag nova passar sem recompilar.
+    nut_build_id: "{{ nut_git_ref }} {{ nut_configure_args | join(' ') | hash('sha1') }}"
 
   pre_tasks:
     - name: Validar segredos do Vault exigidos por este play
@@ -124,7 +159,7 @@
           ansible.builtin.set_fact:
             nut_build_needed: >-
               {{ (nut_stamp_raw.content is not defined)
-                 or ((nut_stamp_raw.content | b64decode | trim) != nut_git_ref) }}
+                 or ((nut_stamp_raw.content | b64decode | trim) != nut_build_id) }}
 
         # ⚠️ `--check` não pode entrar aqui. O módulo `git` não clona em check
         # mode, os `command` de autogen/configure são pulados, e o
@@ -170,33 +205,10 @@
                 chdir: "{{ nut_build_dir }}"
               changed_when: true
 
-            # Só o driver `ragtech`, e sem USB/SNMP/CGI: o alvo é um binário
-            # pequeno num hipervisor, não a distribuição completa do NUT.
-            #
-            # O `configure` avisa que `--sysconfdir` está obsoleto em favor de
-            # `--with-confdir`. Mantido: é o que foi executado e verificado
-            # contra o hardware, e trocar a flag move o diretório de
-            # configuração. Migrar é mudança deliberada, com novo teste.
+            # Argumentos em `nut_configure_args` (vars do play).
             - name: Configurar o build
               ansible.builtin.command:
-                cmd: >-
-                  ./configure
-                  --prefix={{ nut_prefix }}
-                  --sysconfdir={{ nut_sysconfdir }}
-                  --with-statepath=/run/nut
-                  --with-altpidpath=/run/nut
-                  --with-drivers=ragtech
-                  --with-serial
-                  --without-usb
-                  --without-snmp
-                  --without-neon
-                  --without-nss
-                  --without-openssl
-                  --without-cgi
-                  --without-dev
-                  --with-user=nut
-                  --with-group=nut
-                  --with-systemdsystemunitdir=/etc/systemd/system
+                cmd: "./configure {{ nut_configure_args | join(' ') }}"
                 chdir: "{{ nut_build_dir }}"
               changed_when: true
 
@@ -223,7 +235,7 @@
 
             - name: Registrar o commit compilado
               ansible.builtin.copy:
-                content: "{{ nut_git_ref }}\n"
+                content: "{{ nut_build_id }}\n"
                 dest: "{{ nut_build_stamp }}"
                 owner: root
                 group: root
@@ -232,13 +244,13 @@
         # Os `noqa: no-relative-paths` deste play seguem a convenção de
         # 00-proxmox-setup.yml: a regra pede estrutura de role, e estes
         # playbooks são de host, não de role.
-        - name: Garantir o diretório de estado a cada boot  # noqa: no-relative-paths
-          ansible.builtin.template:
-            src: "{{ playbook_dir }}/../templates/nut/tmpfiles-nut.conf.j2"
-            dest: /etc/tmpfiles.d/nut.conf
-            owner: root
-            group: root
-            mode: '0644'
+        # O `/run/nut` de cada boot vem do tmpfiles que o próprio NUT instala
+        # (`--with-systemdtmpfilesdir`). O nosso, de antes, duplicaria a linha
+        # e o systemd-tmpfiles reclamaria a cada boot.
+        - name: Remover o tmpfiles antigo do NUT
+          ansible.builtin.file:
+            path: /etc/tmpfiles.d/nut.conf
+            state: absent
           notify: Recriar o diretório de estado do NUT
 
         - name: Instalar a regra de udev do nobreak  # noqa: no-relative-paths
@@ -397,7 +409,7 @@
 
     - name: Recriar o diretório de estado do NUT
       ansible.builtin.command:
-        cmd: systemd-tmpfiles --create /etc/tmpfiles.d/nut.conf
+        cmd: systemd-tmpfiles --create /usr/lib/tmpfiles.d/nut-common-tmpfiles.conf
       changed_when: true
 
     - name: Reiniciar o driver do NUT
