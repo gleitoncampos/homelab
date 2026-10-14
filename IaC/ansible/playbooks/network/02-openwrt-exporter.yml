@@ -133,6 +133,24 @@
       changed_when: false
       failed_when: "'openwrt_firmware_update_level' not in _update_metrics.stdout"
 
+    # ⚠️ O exportador lista os coletores UMA VEZ, na partida
+    # (`ls .../prometheus-collectors/*.lua`): coletor instalado depois do
+    # start não aparece até reiniciar — o textfile ficou no disco e fora do
+    # /metrics (14/10/2026). Conferir pelo que é servido, e não pela
+    # instalação, também cura um AP que já estava nesse estado.
+    - name: Garantir que o exportador publica as métricas de update
+      ansible.builtin.raw: |
+        url="http://{{ ansible_host }}:{{ node_exporter_port | default(9100) }}/metrics"
+        if wget -qO- "$url" | grep -q '^openwrt_firmware_update_level'; then
+          echo TEXTFILE:OK
+        else
+          /etc/init.d/prometheus-node-exporter-lua restart && sleep 2 &&
+          wget -qO- "$url" | grep -q '^openwrt_firmware_update_level' && echo TEXTFILE:REINICIADO
+        fi
+      register: _textfile
+      changed_when: "'TEXTFILE:REINICIADO' in _textfile.stdout"
+      failed_when: "'TEXTFILE:' not in _textfile.stdout"
+
     # ⚠️ A sonda vai contra o ENDEREÇO DO INVENTÁRIO, e não contra 127.0.0.1.
     # No OpenWrt o exportador é um CGI do `uhttpd`, que escuta no endereço da
     # interface e NÃO no loopback — uma sonda em 127.0.0.1 devolve zero métrica

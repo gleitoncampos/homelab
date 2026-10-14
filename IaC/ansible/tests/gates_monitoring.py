@@ -85,6 +85,11 @@ pacotes = yaml.safe_load((ANSIBLE / "inventories/prod/group_vars/network/10-defa
 checar("prometheus-node-exporter-lua-textfile" in pacotes, "o coletor textfile está nos pacotes do exportador")
 checar("openwrt_update_metrics.sh.j2" in exp and "* * * * /usr/bin/openwrt-update-metrics" in exp,
        "02-openwrt-exporter instala o script e o agenda no cron")
+# O exportador só enxerga coletor instalado antes da partida (14/10/2026).
+_cura = [t for t in yaml.safe_load(exp)[0]["tasks"]
+         if "^openwrt_firmware_update_level" in str(t.get("ansible.builtin.raw", ""))
+         and "prometheus-node-exporter-lua restart" in str(t.get("ansible.builtin.raw", ""))]
+checar(len(_cura) == 1, "02-openwrt-exporter reinicia o exportador se o /metrics não traz o textfile")
 painel = json.loads((REPO / "docker/monitoring/swarm/dashboards/openwrt.json").read_text(encoding="utf-8"))
 exprs = " ".join(t.get("expr", "") for p in painel["panels"] for t in p.get("targets") or [])
 usadas = set(re.findall(r"\bopenwrt_[a-z_]+", exprs))
