@@ -294,11 +294,6 @@
             - nut-driver-enumerator.service
             - nut-server.service
 
-        - name: Subir a árvore de serviços do NUT
-          ansible.builtin.systemd:
-            name: nut.target
-            state: started
-
     # ------------------------------------------------------------------
     # Nós secundários: só o cliente, do pacote do Debian
     # ------------------------------------------------------------------
@@ -331,6 +326,15 @@
         mode: '0640'
       no_log: true
       notify: Reiniciar o upsmon
+
+    # ⚠️ Só depois do upsmon.conf: o target puxa o `nut-monitor`, que sem o
+    # arquivo morre 5 vezes em 1 s e trava no limite de partidas do systemd
+    # (13/10/2026). Trava em tests/gates_nut.py.
+    - name: Subir a árvore de serviços do NUT
+      ansible.builtin.systemd:
+        name: nut.target
+        state: started
+      when: nut_is_primary
 
     - name: Habilitar e iniciar o upsmon
       ansible.builtin.systemd:
