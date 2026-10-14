@@ -295,17 +295,20 @@
       changed_when: true
       when: _trocar_rede | bool
 
+    # ⚠️ A CONFIRMAÇÃO TEM DE VIR DE CONEXÃO NOVA. Uma sessão SSH já
+    # estabelecida continua fluindo mesmo depois de a interface mudar de
+    # VLAN — confirmar por ela provaria que o socket antigo sobreviveu,
+    # não que o endereço novo funciona. Fora do bloco: ver
+    # tasks/reset_connection.yml.
+    - name: Encerrar a conexão antiga com o AP
+      tags: rede
+      ansible.builtin.include_tasks: ../../tasks/reset_connection.yml
+      when: _trocar_rede | bool
+
     - name: Reconectar o AP no endereço e porta novos
       tags: rede
       when: _trocar_rede | bool
       block:
-        # ⚠️ A CONFIRMAÇÃO TEM DE VIR DE CONEXÃO NOVA. Uma sessão SSH já
-        # estabelecida continua fluindo mesmo depois de a interface mudar de
-        # VLAN — confirmar por ela provaria que o socket antigo sobreviveu,
-        # não que o endereço novo funciona.
-        - name: Encerrar a conexão antiga com o AP
-          ansible.builtin.meta: reset_connection
-
         - name: Apontar o inventário em memória para o endereço novo
           ansible.builtin.set_fact:
             ansible_host: "{{ openwrt_mgmt_ip }}"
@@ -374,24 +377,28 @@
     # `guest` seguiu no nft com a config já sem ela). Recarregado antes da
     # conexão nova, um firewall que tranque a gerência impede a confirmação e
     # o failsafe desfaz.
+    # Três tasks soltas, e não um bloco: o reset de conexão no meio não pode
+    # herdar condição (ver tasks/reset_connection.yml).
     # Trava em tests/render_openwrt_network.py, invariante 6b.
-    - name: Cancelar o failsafe quando a rede não troca
+    - name: Recarregar o firewall com a configuração nova
       tags: rede
+      ansible.builtin.raw: /etc/init.d/firewall reload
+      changed_when: true
       when: not (_trocar_rede | bool)
-      block:
-        - name: Recarregar o firewall com a configuração nova
-          ansible.builtin.raw: /etc/init.d/firewall reload
-          changed_when: true
 
-        - name: Encerrar a conexão usada até aqui
-          ansible.builtin.meta: reset_connection
+    - name: Encerrar a conexão usada até aqui
+      tags: rede
+      ansible.builtin.include_tasks: ../../tasks/reset_connection.yml
+      when: not (_trocar_rede | bool)
 
-        - name: Confirmar o acesso por conexão nova e cancelar o failsafe
-          ansible.builtin.raw: |
-            touch {{ openwrt_failsafe_confirm_file }}
-            start-stop-daemon -K -p /tmp/iac-net-failsafe.pid 2>/dev/null
-            logger -t net-failsafe "cancelado: rede sem troca nesta execucao"
-          changed_when: true
+    - name: Confirmar o acesso por conexão nova e cancelar o failsafe
+      tags: rede
+      ansible.builtin.raw: |
+        touch {{ openwrt_failsafe_confirm_file }}
+        start-stop-daemon -K -p /tmp/iac-net-failsafe.pid 2>/dev/null
+        logger -t net-failsafe "cancelado: rede sem troca nesta execucao"
+      changed_when: true
+      when: not (_trocar_rede | bool)
 
     # =====================================================================
     # ETAPA `wifi` — move os CLIENTES, e é a segunda metade da fase do AP

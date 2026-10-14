@@ -127,7 +127,7 @@ if -1 not in (pos_armar, pos_rede, pos_backup):
 
 print("\nInvariante 5 — a confirmação não usa a conexão antiga:")
 checar(
-    "meta: reset_connection" in texto,
+    "tasks/reset_connection.yml" in texto,
     "o playbook encerra a conexão antiga antes de confirmar",
 )
 checar(
@@ -169,23 +169,35 @@ print("\nInvariante 6b — o failsafe é cancelado também quando a rede não tr
 # `--tags rede` era desfeita 120 s depois, com reboot (14/10/2026).
 _arma = [i for i, t in enumerate(tarefas) if "iac-net-failsafe" in str(t.get("ansible.builtin.raw", ""))
          and "start-stop-daemon -S" in str(t.get("ansible.builtin.raw", ""))]
-_cancela = [(i, t) for i, t in enumerate(tarefas)
-            if "_trocar_rede" in str(t.get("when", "")) and "not" in str(t.get("when", ""))
-            and "openwrt_failsafe_confirm_file" in str(t.get("block", ""))]
+# Três tasks soltas com `when: not _trocar_rede` (o reset não pode herdar
+# condição de bloco — tasks/reset_connection.yml).
+_sem_troca = [(i, t) for i, t in enumerate(tarefas)
+              if "_trocar_rede" in str(t.get("when", "")) and "not" in str(t.get("when", ""))]
+_cancela = [(i, t) for i, t in _sem_troca if "openwrt_failsafe_confirm_file" in str(t)]
 checar(len(_arma) == 1 and "when" not in tarefas[_arma[0]], "o failsafe é armado em toda etapa `rede`")
 checar(len(_cancela) == 1, "existe cancelamento para `not _trocar_rede`")
 if _arma and _cancela:
     i, t = _cancela[0]
     checar(i > _arma[0], "o cancelamento vem depois do arme")
-    _passos = [str(x) for x in t["block"]]
-    _fw = next((k for k, x in enumerate(_passos) if "/etc/init.d/firewall reload" in x), None)
-    _rc = next((k for k, x in enumerate(_passos) if "reset_connection" in x), None)
-    _ok = next((k for k, x in enumerate(_passos) if "openwrt_failsafe_confirm_file" in x), None)
-    checar(None not in (_fw, _rc, _ok) and _fw < _rc < _ok,
+    _fw = next((k for k, x in _sem_troca if "/etc/init.d/firewall reload" in str(x)), None)
+    _rc = next((k for k, x in _sem_troca if "reset_connection" in str(x.get("ansible.builtin.include_tasks", ""))), None)
+    checar(None not in (_fw, _rc) and _fw < _rc < i,
            "recarrega o firewall, abre conexão nova e só então confirma")
     _wifi = next((j for j, x in enumerate(tarefas) if "wifi" in (x.get("tags") or [])), None)
     checar(_wifi is None or i < _wifi, "o cancelamento vem antes da etapa `wifi` (janela de 120 s)")
 
+
+print("\nInvariante 6c — `meta: reset_connection` nunca dentro de bloco condicional:")
+# O meta não aceita `when`: dentro de bloco com condição ele rodava assim mesmo
+# (WARNING do Ansible). Só por include_tasks com `when` próprio (14/10/2026).
+def _metas_em_bloco(lista, cond=False):
+    for t in lista or []:
+        c = cond or ("when" in t and "block" in t)
+        if t.get("ansible.builtin.meta") == "reset_connection" and (c or "when" in t):
+            yield t.get("name")
+        for chave in ("block", "rescue", "always"):
+            yield from _metas_em_bloco(t.get(chave), c)
+checar(list(_metas_em_bloco(tarefas)) == [], "nenhum reset_connection herda ou recebe `when`")
 
 print("\nInvariante 7 — tarefa delegada ao nó de controle não pede sudo:")
 # `ansible.cfg` liga `become = True`; delegada ao localhost sem

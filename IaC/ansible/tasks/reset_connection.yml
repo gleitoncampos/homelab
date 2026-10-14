@@ -1,0 +1,10 @@
+---
+# Encerra a conexão com o host para que a próxima task abra uma NOVA.
+#
+# ⚠️ Incluir SEMPRE por `include_tasks` com `when` próprio, fora de bloco
+# condicional. `meta: reset_connection` não aceita `when`: dentro de um bloco
+# com condição ele rodava assim mesmo (o Ansible só avisava
+# "reset_connection task does not support when conditional"). O include é
+# dinâmico — o `when` dele decide se o meta chega a existir (14/10/2026).
+- name: Encerrar a conexão para que a próxima task abra uma nova
+  ansible.builtin.meta: reset_connection
