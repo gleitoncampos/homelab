@@ -166,10 +166,17 @@
 
     # Pacotes de conveniência: se o feed não tiver algum, o play segue — mas o
     # `rc` aparece na saída em vez de ser engolido por `ignore_errors`.
-    - name: Garantir instalação dos pacotes de QoL no OpenWrt (Tema Argon, NLBWmon, Schedule)
-      ansible.builtin.raw: "opkg update && opkg install luci-theme-argon luci-app-nlbwmon luci-app-access-control"
+    #
+    # ⚠️ O `rc` é IMPRESSO, nunca devolvido. O opkg sai com 255 quando não acha
+    # um pacote, e o Ansible lê 255 de um `raw` como queda de SSH: a task vira
+    # UNREACHABLE, o `failed_when: false` não vale, e o play para ali com
+    # `failed=0` no recap. Foi o que aconteceu com o `luci-app-access-control`
+    # (existia no build de terceiro, não no feed oficial da 24.10) — o setup
+    # inteiro deixou de rodar depois do upgrade (14/10/2026).
+    - name: Garantir instalação dos pacotes de QoL no OpenWrt (Tema Argon, NLBWmon)
+      ansible.builtin.raw: "opkg update >/dev/null 2>&1; opkg install luci-theme-argon luci-app-nlbwmon; echo \"QOL:rc=$?\""
       register: opkg_qol
-      failed_when: false
+      failed_when: "'QOL:rc=' not in opkg_qol.stdout"
       changed_when: "'Installing' in opkg_qol.stdout"
 
     # =========================================================================

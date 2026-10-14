@@ -243,6 +243,16 @@ if _dns:
         "ela religa /tmp/resolv.conf ao resolv.conf.auto depois do stop",
     )
 
+print("\nInvariante 10c — instalação de pacote não devolve o rc do opkg:")
+# opkg sai com 255 quando não acha pacote; o Ansible lê 255 de `raw` como
+# queda de SSH e o play para com `failed=0` (14/10/2026, luci-app-access-control).
+_qol = [t for t in tarefas if "luci-theme-argon" in str(t.get("ansible.builtin.raw", ""))]
+checar(len(_qol) == 1, "uma task instala os pacotes de QoL")
+if _qol:
+    _c = str(_qol[0]["ansible.builtin.raw"]).strip()
+    checar(_c.endswith('echo "QOL:rc=$?"'), "a task imprime o rc do opkg em vez de devolvê-lo")
+    checar("luci-app-access-control" not in _c, "sem pacote que não existe no feed oficial")
+
 print("\nInvariante 11 — todo rádio declara o `path` do hardware:")
 # Sem `option path`, o netifd não associa o wifi-device a um phy, os rádios
 # ficam em `retry_setup_failed` e nenhum SSID sobe (13/10/2026).
