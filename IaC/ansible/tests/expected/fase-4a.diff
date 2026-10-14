@@ -1,4 +1,4 @@
-@@ -1449,6 +1587,62 @@
+@@ -1449,6 +1554,62 @@
              <shaper2/>
              <description>Default allow LAN IPv6 to any rule</description>
            </rule>
@@ -61,7 +61,7 @@
            <rule uuid="cd96ee46-46bf-429f-ba88-7cc0c3d66e4d">
              <enabled>1</enabled>
              <statetype>keep</statetype>
-@@ -1457,13 +1651,13 @@
+@@ -1457,13 +1618,13 @@
              <action>block</action>
              <quick>1</quick>
              <interfacenot>0</interfacenot>
@@ -78,7 +78,7 @@
              <source_not>0</source_not>
              <source_port/>
              <destination_net>any</destination_net>
-@@ -1505,6 +1699,566 @@
+@@ -1505,6 +1666,566 @@
              <shaper2/>
              <description/>
            </rule>

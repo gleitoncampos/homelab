@@ -726,38 +726,14 @@ opnsense_rules:
     nopfsync: '0'
     statetimeout: ''
     description: Bloqueio Outbound SMTP Anti-Spam em IoT e Visitantes (Portas 25, 465)
-  - uuid: d9e8f7a6-b5c4-3210-9876-112233445566
-    enabled: '1'
-    statetype: keep
-    state-policy: ''
-    sequence: '0'
-    action: block
-    quick: '1'
-    interfacenot: '0'
-    interface: vlan40,vlan50
-    direction: in
-    ipprotocol: inet
-    protocol: tcp
-    icmptype: ''
-    icmp6type: ''
-    source_net: any
-    source_not: '0'
-    source_port: ''
-    destination_net: any
-    destination_not: '0'
-    destination_port: ''
-    divert-to: ''
-    gateway: ''
-    replyto: ''
-    disablereplyto: '0'
-    log: '1'
-    allowopts: '0'
-    nosync: '0'
-    nopfsync: '0'
-    statetimeout: ''
-    max-src-conn-rate: 50/10
-    overload: virusprot
-    description: Bloqueio Anti-PortScan de IoT e Visitantes (Tabela virusprot)
+  # ⚠️ REMOVIDA em 14/10/2026: `Bloqueio Anti-PortScan de IoT e Visitantes` (uuid
+  # d9e8f7a6). Era `block` em TCP de qualquer origem a qualquer destino, com
+  # `max-src-conn-rate`/`overload` — mas limite de taxa só existe em regra de
+  # PASSAGEM com estado: no `block` o pf descarta essas opções e sobra
+  # `block drop in quick on vlan40/vlan50 proto tcp all`. IoT e visitantes
+  # ficaram sem TCP nenhum (visto no pflog: rule 244, SYN para 443 descartado).
+  # O anti-portscan de verdade agora é gerado em _filter.xml.j2 a partir de
+  # `opnsense_limite_conexoes` (abaixo de opnsense_rules).
   - uuid: c1d2e3f4-a5b6-7890-1234-555566667777
     enabled: '1'
     statetype: keep
@@ -1562,6 +1538,18 @@ opnsense_rules:
 #
 # ⚠️ A chave de autenticação NÃO mora aqui: é segredo, e o partial a lê de
 # `opnsense_tailscale_preauth_key`, no vault — mesmo caminho da senha do admin.
+# Anti-portscan: passagem TCP para a internet COM limite de taxa, gerada em
+# _filter.xml.j2 (sequence 55 — depois dos bloqueios ao lab, antes da saída
+# geral). Quem abrir mais de `conexoes` em `segundos` cai na tabela
+# `virusprot`, que a regra nativa do OPNsense bloqueia. São DOIS inteiros no
+# modelo (max-src-conn-rate / max-src-conn-rates): o "50/10" num campo só da
+# regra antiga não era valor válido. Substitui a regra d9e8f7a6, que bloqueava
+# todo o TCP (14/10/2026). Trava em tests/render_opnsense_antiportscan.py.
+opnsense_limite_conexoes:
+  conexoes: 50
+  segundos: 10
+  vlans: [40, 50]
+
 opnsense_tailscale:
   enabled: '1'
   login_server: https://controlplane.tailscale.com

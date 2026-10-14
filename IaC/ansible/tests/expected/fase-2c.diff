@@ -1,128 +1,57 @@
-@@ -1203,7 +1173,7 @@
-             <interface>lan,vlan10,vlan20,vlan30,vlan40,vlan50</interface>
-             <direction>in</direction>
-             <ipprotocol>inet</ipprotocol>
--            <protocol>tcp,udp</protocol>
-+            <protocol>TCP/UDP</protocol>
-             <icmptype/>
-             <icmp6type/>
-             <source_net>any</source_net>
-@@ -1225,6 +1195,118 @@
+@@ -1222,20 +1304,43 @@
+             <nopfsync>0</nopfsync>
+             <statetimeout/>
+             <udp-first/>
++            <udp-multiple/>
++            <udp-single/>
++            <max-src-nodes/>
++            <max-src-states/>
++            <max-src-conn/>
++            <max/>
++            <max-src-conn-rate/>
++            <max-src-conn-rates/>
++            <overload/>
++            <adaptivestart/>
++            <adaptiveend/>
++            <prio/>
++            <set-prio/>
++            <set-prio-low/>
++            <tag/>
++            <tagged/>
++            <tcpflags1/>
++            <tcpflags2/>
++            <tcpflags_any>0</tcpflags_any>
++            <categories/>
              <sched/>
-             <description>Bloquear trafego de Cryptomining e Stratum Pools</description>
+-            <description>Bloquear trafego de Cryptomining e Stratum Pools</description>
++            <tos/>
++            <shaper1/>
++            <shaper2/>
++            <description>Bloqueio Global de Conexao para IPs de Servidores DoH Conhecidos</description>
            </rule>
-+          <rule uuid="a1000000-0000-4000-8000-00000000d053">
-+            <enabled>1</enabled>
-+            <statetype>keep</statetype>
-+            <state-policy/>
-+            <sequence>1</sequence>
-+            <action>pass</action>
-+            <quick>1</quick>
-+            <interfacenot>0</interfacenot>
-+            <interface>lan,vlan10,vlan20,vlan30,vlan40,vlan50</interface>
-+            <direction>in</direction>
-+            <ipprotocol>inet</ipprotocol>
-+            <protocol>TCP/UDP</protocol>
-+            <icmptype/>
-+            <icmp6type/>
-+            <source_net>DNS_REDIRECT_BYPASS</source_net>
-+            <source_not>0</source_not>
-+            <source_port/>
-+            <destination_net>DOH_list</destination_net>
-+            <destination_not>0</destination_not>
-+            <destination_port>53</destination_port>
-+            <divert-to/>
-+            <gateway/>
-+            <replyto/>
-+            <disablereplyto>0</disablereplyto>
-+            <log>1</log>
-+            <allowopts>0</allowopts>
-+            <nosync>0</nosync>
-+            <nopfsync>0</nopfsync>
-+            <statetimeout/>
-+            <udp-first/>
-+            <udp-multiple/>
-+            <udp-single/>
-+            <max-src-nodes/>
-+            <max-src-states/>
-+            <max-src-conn/>
-+            <max/>
-+            <max-src-conn-rate/>
-+            <max-src-conn-rates/>
-+            <overload/>
-+            <adaptivestart/>
-+            <adaptiveend/>
-+            <prio/>
-+            <set-prio/>
-+            <set-prio-low/>
-+            <tag/>
-+            <tagged/>
-+            <tcpflags1/>
-+            <tcpflags2/>
-+            <tcpflags_any>0</tcpflags_any>
-+            <categories/>
-+            <sched/>
-+            <tos/>
-+            <shaper1/>
-+            <shaper2/>
-+            <description>Isentos do DNS forcado (managers do Swarm) consultam DNS publico na 53</description>
-+          </rule>
-+          <rule uuid="a1000000-0000-4000-8000-00000000ec00">
-+            <enabled>1</enabled>
-+            <statetype>keep</statetype>
-+            <state-policy/>
-+            <sequence>1</sequence>
-+            <action>pass</action>
-+            <quick>1</quick>
-+            <interfacenot>0</interfacenot>
-+            <interface>lan,vlan10,vlan20,vlan30,vlan40,vlan50</interface>
-+            <direction>in</direction>
-+            <ipprotocol>inet</ipprotocol>
-+            <protocol>ICMP</protocol>
-+            <icmptype>echoreq</icmptype>
-+            <icmp6type/>
-+            <source_net>any</source_net>
-+            <source_not>0</source_not>
-+            <source_port/>
-+            <destination_net>DOH_list</destination_net>
-+            <destination_not>0</destination_not>
-+            <destination_port/>
-+            <divert-to/>
-+            <gateway/>
-+            <replyto/>
-+            <disablereplyto>0</disablereplyto>
-+            <log>0</log>
-+            <allowopts>0</allowopts>
-+            <nosync>0</nosync>
-+            <nopfsync>0</nopfsync>
-+            <statetimeout/>
-+            <udp-first/>
-+            <udp-multiple/>
-+            <udp-single/>
-+            <max-src-nodes/>
-+            <max-src-states/>
-+            <max-src-conn/>
-+            <max/>
-+            <max-src-conn-rate/>
-+            <max-src-conn-rates/>
-+            <overload/>
-+            <adaptivestart/>
-+            <adaptiveend/>
-+            <prio/>
-+            <set-prio/>
-+            <set-prio-low/>
-+            <tag/>
-+            <tagged/>
-+            <tcpflags1/>
-+            <tcpflags2/>
-+            <tcpflags_any>0</tcpflags_any>
-+            <categories/>
-+            <sched/>
-+            <tos/>
-+            <shaper1/>
-+            <shaper2/>
-+            <description>Ping (echo request) aos IPs da DOH_list, sinal de internet do AP</description>
-+          </rule>
-           <rule uuid="ffec6963-1b39-4078-80a4-c866447be8f7">
+-          <rule uuid="ffec6963-1b39-4078-80a4-c866447be8f7">
++          <rule uuid="b4df393b-96cb-4cd7-b305-8c1c82e2b1da">
              <enabled>1</enabled>
              <statetype>keep</statetype>
+             <state-policy/>
+-            <sequence>1</sequence>
++            <sequence>2</sequence>
+             <action>block</action>
+             <quick>1</quick>
+             <interfacenot>0</interfacenot>
+             <interface>lan,vlan10,vlan20,vlan30,vlan40,vlan50</interface>
+             <direction>in</direction>
+-            <ipprotocol>inet</ipprotocol>
++            <ipprotocol>inet6</ipprotocol>
+             <protocol>any</protocol>
+             <icmptype/>
+             <icmp6type/>
+@@ -1279,7 +1384,7 @@
+             <tos/>
+             <shaper1/>
+             <shaper2/>
+-            <description>Bloqueio Global de Conexao para IPs de Servidores DoH Conhecidos</description>
++            <description>Bloqueio Global de Conexao para IPs de Servidores DoH Conhecidos (IPv6)</description>
+           </rule>
+           <rule uuid="3aacd6cd-3bd9-4498-8419-d3163ee495b1">
+             <enabled>1</enabled>

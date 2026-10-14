@@ -62,7 +62,7 @@
   e NÃO de sorteio: UUID é identidade neste config, e um novo a cada render
   faria o OPNsense ver regra nova toda vez.
 #}
-{% macro regra_politica(chave, seq, acao, iface, destino, porta, descricao, origem=none) %}
+{% macro regra_politica(chave, seq, acao, iface, destino, porta, descricao, origem=none, limite=none) %}
           <rule uuid="{{ ('politica:' ~ chave) | to_uuid }}">
             <enabled>1</enabled>
             <statetype>keep</statetype>
@@ -74,7 +74,7 @@
             <interface>{{ iface }}</interface>
             <direction>in</direction>
             <ipprotocol>inet</ipprotocol>
-            <protocol>{{ 'tcp' if porta else 'any' }}</protocol>
+            <protocol>{{ 'tcp' if (porta or limite) else 'any' }}</protocol>
             <icmptype/>
             <icmp6type/>
             <source_net>{{ origem | default(iface, true) }}</source_net>
@@ -99,8 +99,13 @@
             <max-src-states/>
             <max-src-conn/>
             <max/>
+{% if limite %}
+            <max-src-conn-rate>{{ limite.conexoes }}</max-src-conn-rate>
+            <max-src-conn-rates>{{ limite.segundos }}</max-src-conn-rates>
+{% else %}
             <max-src-conn-rate/>
             <max-src-conn-rates/>
+{% endif %}
             <overload/>
             <adaptivestart/>
             <adaptiveend/>
@@ -183,6 +188,17 @@
                   vlan.name ~ ' > bloqueia ' ~ destino) }}
 {% endfor %}
 {% if pol.internet %}
+{#   Anti-portscan (55): passagem TCP com limite de taxa, ANTES da saída geral
+     e DEPOIS dos bloqueios ao lab (50) — o `quick` desta regra não pode
+     alcançar rede interna. Limite de taxa só existe em PASSAGEM com estado e
+     em TCP; com `overload` vazio o OPNsense usa a tabela `virusprot`, que a
+     regra nativa dele bloqueia. Substitui a d9e8f7a6, que era `block` e
+     derrubava todo o TCP de IoT e visitantes (14/10/2026). #}
+{% if vlan.tag in (opnsense_limite_conexoes.vlans | default([])) %}
+{{ regra_politica(eu ~ ':pass-internet-tcp-limitado', 55, 'pass', eu, 'any', '',
+                  vlan.name ~ ' > internet TCP com limite anti-portscan',
+                  limite=opnsense_limite_conexoes) }}
+{% endif %}
 {{ regra_politica(eu ~ ':pass-internet', 60, 'pass', eu, 'any', '',
                   vlan.name ~ ' > internet') }}
 {% endif %}

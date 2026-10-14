@@ -143,7 +143,7 @@
            <alias uuid="d8c7b6a5-f4e3-2109-8765-443322110099">
              <enabled>1</enabled>
              <name>Management_Ports</name>
-@@ -1031,39 +1032,8 @@
+@@ -1031,9 +1032,9 @@
        <Category version="1.0.0">
          <categories/>
        </Category>
@@ -151,36 +151,291 @@
 +      <Filter description="Firewall rules (new)" version="1.0.4">
          <rules>
 -          <rule uuid="e8d7c6b5-a4f3-2109-8765-554433221188">
--            <enabled>1</enabled>
--            <statetype>keep</statetype>
--            <state-policy/>
--            <sequence>0</sequence>
--            <action>block</action>
--            <quick>1</quick>
--            <interfacenot>0</interfacenot>
--            <interface>vlan40,vlan50</interface>
--            <direction>in</direction>
--            <ipprotocol>inet</ipprotocol>
--            <protocol>tcp</protocol>
--            <icmptype/>
--            <icmp6type/>
--            <source_net>any</source_net>
--            <source_not>0</source_not>
--            <source_port/>
--            <destination_net>any</destination_net>
--            <destination_not>0</destination_not>
--            <destination_port>Management_Ports</destination_port>
--            <divert-to/>
--            <gateway/>
--            <replyto/>
--            <disablereplyto>0</disablereplyto>
--            <log>1</log>
--            <allowopts>0</allowopts>
--            <nosync>0</nosync>
--            <nopfsync>0</nopfsync>
--            <statetimeout/>
--            <description>Bloqueio de Acesso IoT e Visitantes as WebGUIs e SSH dos Gateways</description>
--          </rule>
-           <rule uuid="b9a8c7d6-e5f4-3210-9876-001122334455">
++          <rule uuid="b9a8c7d6-e5f4-3210-9876-001122334455">
              <enabled>1</enabled>
              <statetype>keep</statetype>
+             <state-policy/>
+@@ -1041,10 +1042,10 @@
+             <action>block</action>
+             <quick>1</quick>
+             <interfacenot>0</interfacenot>
+-            <interface>vlan40,vlan50</interface>
++            <interface>lan,vlan10,vlan20,vlan30,vlan40,vlan50</interface>
+             <direction>in</direction>
+             <ipprotocol>inet</ipprotocol>
+-            <protocol>tcp</protocol>
++            <protocol>udp</protocol>
+             <icmptype/>
+             <icmp6type/>
+             <source_net>any</source_net>
+@@ -1052,7 +1053,7 @@
+             <source_port/>
+             <destination_net>any</destination_net>
+             <destination_not>0</destination_not>
+-            <destination_port>Management_Ports</destination_port>
++            <destination_port>DoQ_Ports</destination_port>
+             <divert-to/>
+             <gateway/>
+             <replyto/>
+@@ -1062,9 +1063,9 @@
+             <nosync>0</nosync>
+             <nopfsync>0</nopfsync>
+             <statetimeout/>
+-            <description>Bloqueio de Acesso IoT e Visitantes as WebGUIs e SSH dos Gateways</description>
++            <description>Bloqueio de Evasao DNS-over-QUIC (UDP 853 Externo)</description>
+           </rule>
+-          <rule uuid="b9a8c7d6-e5f4-3210-9876-001122334455">
++          <rule uuid="a9b8c7d6-e5f4-3210-9876-112233445566">
+             <enabled>1</enabled>
+             <statetype>keep</statetype>
+             <state-policy/>
+@@ -1072,10 +1073,10 @@
+             <action>block</action>
+             <quick>1</quick>
+             <interfacenot>0</interfacenot>
+-            <interface>lan,vlan10,vlan20,vlan30,vlan40,vlan50</interface>
++            <interface>vlan40,vlan50</interface>
+             <direction>in</direction>
+             <ipprotocol>inet</ipprotocol>
+-            <protocol>udp</protocol>
++            <protocol>tcp</protocol>
+             <icmptype/>
+             <icmp6type/>
+             <source_net>any</source_net>
+@@ -1083,7 +1084,7 @@
+             <source_port/>
+             <destination_net>any</destination_net>
+             <destination_not>0</destination_not>
+-            <destination_port>DoQ_Ports</destination_port>
++            <destination_port>SMTP_Spam_Ports</destination_port>
+             <divert-to/>
+             <gateway/>
+             <replyto/>
+@@ -1093,9 +1094,9 @@
+             <nosync>0</nosync>
+             <nopfsync>0</nopfsync>
+             <statetimeout/>
+-            <description>Bloqueio de Evasao DNS-over-QUIC (UDP 853 Externo)</description>
++            <description>Bloqueio Outbound SMTP Anti-Spam em IoT e Visitantes (Portas 25, 465)</description>
+           </rule>
+-          <rule uuid="a9b8c7d6-e5f4-3210-9876-112233445566">
++          <rule uuid="c1d2e3f4-a5b6-7890-1234-555566667777">
+             <enabled>1</enabled>
+             <statetype>keep</statetype>
+             <state-policy/>
+@@ -1103,10 +1104,10 @@
+             <action>block</action>
+             <quick>1</quick>
+             <interfacenot>0</interfacenot>
+-            <interface>vlan40,vlan50</interface>
++            <interface>lan,vlan10,vlan20,vlan30,vlan40,vlan50</interface>
+             <direction>in</direction>
+             <ipprotocol>inet</ipprotocol>
+-            <protocol>tcp</protocol>
++            <protocol>udp</protocol>
+             <icmptype/>
+             <icmp6type/>
+             <source_net>any</source_net>
+@@ -1114,19 +1115,21 @@
+             <source_port/>
+             <destination_net>any</destination_net>
+             <destination_not>0</destination_not>
+-            <destination_port>SMTP_Spam_Ports</destination_port>
++            <destination_port>Noise_Ports</destination_port>
+             <divert-to/>
+             <gateway/>
+             <replyto/>
+             <disablereplyto>0</disablereplyto>
+-            <log>1</log>
++            <log>0</log>
+             <allowopts>0</allowopts>
+             <nosync>0</nosync>
+             <nopfsync>0</nopfsync>
+             <statetimeout/>
+-            <description>Bloqueio Outbound SMTP Anti-Spam em IoT e Visitantes (Portas 25, 465)</description>
++            <udp-first/>
++            <sched/>
++            <description>Bloquear trafego ruidoso de Broadcast entre VLANs (NetBIOS, SSDP, LLMNR)</description>
+           </rule>
+-          <rule uuid="d9e8f7a6-b5c4-3210-9876-112233445566">
++          <rule uuid="b0a9c8d7-e6f5-4321-9876-000011112222">
+             <enabled>1</enabled>
+             <statetype>keep</statetype>
+             <state-policy/>
+@@ -1134,10 +1137,10 @@
+             <action>block</action>
+             <quick>1</quick>
+             <interfacenot>0</interfacenot>
+-            <interface>vlan40,vlan50</interface>
++            <interface>lan,vlan10,vlan20,vlan30,vlan40,vlan50</interface>
+             <direction>in</direction>
+             <ipprotocol>inet</ipprotocol>
+-            <protocol>tcp</protocol>
++            <protocol>TCP/UDP</protocol>
+             <icmptype/>
+             <icmp6type/>
+             <source_net>any</source_net>
+@@ -1145,7 +1148,7 @@
+             <source_port/>
+             <destination_net>any</destination_net>
+             <destination_not>0</destination_not>
+-            <destination_port/>
++            <destination_port>Mining_Ports</destination_port>
+             <divert-to/>
+             <gateway/>
+             <replyto/>
+@@ -1155,30 +1158,86 @@
+             <nosync>0</nosync>
+             <nopfsync>0</nopfsync>
+             <statetimeout/>
+-            <max-src-conn-rate>50/10</max-src-conn-rate>
+-            <overload>virusprot</overload>
+-            <description>Bloqueio Anti-PortScan de IoT e Visitantes (Tabela virusprot)</description>
++            <udp-first/>
++            <sched/>
++            <description>Bloquear trafego de Cryptomining e Stratum Pools</description>
+           </rule>
+-          <rule uuid="c1d2e3f4-a5b6-7890-1234-555566667777">
++          <rule uuid="a1000000-0000-4000-8000-00000000d053">
+             <enabled>1</enabled>
+             <statetype>keep</statetype>
+             <state-policy/>
+-            <sequence>0</sequence>
+-            <action>block</action>
++            <sequence>1</sequence>
++            <action>pass</action>
+             <quick>1</quick>
+             <interfacenot>0</interfacenot>
+             <interface>lan,vlan10,vlan20,vlan30,vlan40,vlan50</interface>
+             <direction>in</direction>
+             <ipprotocol>inet</ipprotocol>
+-            <protocol>udp</protocol>
++            <protocol>TCP/UDP</protocol>
+             <icmptype/>
+             <icmp6type/>
++            <source_net>DNS_REDIRECT_BYPASS</source_net>
++            <source_not>0</source_not>
++            <source_port/>
++            <destination_net>DOH_list</destination_net>
++            <destination_not>0</destination_not>
++            <destination_port>53</destination_port>
++            <divert-to/>
++            <gateway/>
++            <replyto/>
++            <disablereplyto>0</disablereplyto>
++            <log>1</log>
++            <allowopts>0</allowopts>
++            <nosync>0</nosync>
++            <nopfsync>0</nopfsync>
++            <statetimeout/>
++            <udp-first/>
++            <udp-multiple/>
++            <udp-single/>
++            <max-src-nodes/>
++            <max-src-states/>
++            <max-src-conn/>
++            <max/>
++            <max-src-conn-rate/>
++            <max-src-conn-rates/>
++            <overload/>
++            <adaptivestart/>
++            <adaptiveend/>
++            <prio/>
++            <set-prio/>
++            <set-prio-low/>
++            <tag/>
++            <tagged/>
++            <tcpflags1/>
++            <tcpflags2/>
++            <tcpflags_any>0</tcpflags_any>
++            <categories/>
++            <sched/>
++            <tos/>
++            <shaper1/>
++            <shaper2/>
++            <description>Isentos do DNS forcado (managers do Swarm) consultam DNS publico na 53</description>
++          </rule>
++          <rule uuid="a1000000-0000-4000-8000-00000000ec00">
++            <enabled>1</enabled>
++            <statetype>keep</statetype>
++            <state-policy/>
++            <sequence>1</sequence>
++            <action>pass</action>
++            <quick>1</quick>
++            <interfacenot>0</interfacenot>
++            <interface>lan,vlan10,vlan20,vlan30,vlan40,vlan50</interface>
++            <direction>in</direction>
++            <ipprotocol>inet</ipprotocol>
++            <protocol>ICMP</protocol>
++            <icmptype>echoreq</icmptype>
++            <icmp6type/>
+             <source_net>any</source_net>
+             <source_not>0</source_not>
+             <source_port/>
+-            <destination_net>any</destination_net>
++            <destination_net>DOH_list</destination_net>
+             <destination_not>0</destination_not>
+-            <destination_port>Noise_Ports</destination_port>
++            <destination_port/>
+             <divert-to/>
+             <gateway/>
+             <replyto/>
+@@ -1189,29 +1248,52 @@
+             <nopfsync>0</nopfsync>
+             <statetimeout/>
+             <udp-first/>
++            <udp-multiple/>
++            <udp-single/>
++            <max-src-nodes/>
++            <max-src-states/>
++            <max-src-conn/>
++            <max/>
++            <max-src-conn-rate/>
++            <max-src-conn-rates/>
++            <overload/>
++            <adaptivestart/>
++            <adaptiveend/>
++            <prio/>
++            <set-prio/>
++            <set-prio-low/>
++            <tag/>
++            <tagged/>
++            <tcpflags1/>
++            <tcpflags2/>
++            <tcpflags_any>0</tcpflags_any>
++            <categories/>
+             <sched/>
+-            <description>Bloquear trafego ruidoso de Broadcast entre VLANs (NetBIOS, SSDP, LLMNR)</description>
++            <tos/>
++            <shaper1/>
++            <shaper2/>
++            <description>Ping (echo request) aos IPs da DOH_list, sinal de internet do AP</description>
+           </rule>
+-          <rule uuid="b0a9c8d7-e6f5-4321-9876-000011112222">
++          <rule uuid="ffec6963-1b39-4078-80a4-c866447be8f7">
+             <enabled>1</enabled>
+             <statetype>keep</statetype>
+             <state-policy/>
+-            <sequence>0</sequence>
++            <sequence>1</sequence>
+             <action>block</action>
+             <quick>1</quick>
+             <interfacenot>0</interfacenot>
+             <interface>lan,vlan10,vlan20,vlan30,vlan40,vlan50</interface>
+             <direction>in</direction>
+             <ipprotocol>inet</ipprotocol>
+-            <protocol>tcp,udp</protocol>
++            <protocol>any</protocol>
+             <icmptype/>
+             <icmp6type/>
+             <source_net>any</source_net>
+             <source_not>0</source_not>
+             <source_port/>
+-            <destination_net>any</destination_net>
++            <destination_net>DOH_list</destination_net>
+             <destination_not>0</destination_not>
+-            <destination_port>Mining_Ports</destination_port>
++            <destination_port/>
+             <divert-to/>
+             <gateway/>
+             <replyto/>
