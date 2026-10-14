@@ -173,10 +173,21 @@
     # `failed=0` no recap. Foi o que aconteceu com o `luci-app-access-control`
     # (existia no build de terceiro, não no feed oficial da 24.10) — o setup
     # inteiro deixou de rodar depois do upgrade (14/10/2026).
+    #
+    # opkg ou apk pelo helper `openwrt_pkg.sh`, um pacote por vez: o
+    # `luci-theme-argon` não existe no feed oficial da 25.12, e o `apk add` é
+    # atômico — pedir os dois juntos derrubaria o nlbwmon também.
     - name: Garantir instalação dos pacotes de QoL no OpenWrt (Tema Argon, NLBWmon)
-      ansible.builtin.raw: "opkg update >/dev/null 2>&1; opkg install luci-theme-argon luci-app-nlbwmon; echo \"QOL:rc=$?\""
+      ansible.builtin.raw: |
+        {{ lookup('file', '../../templates/network/openwrt_pkg.sh') }}
+        pkg_atualiza_listas
+        for p in luci-theme-argon luci-app-nlbwmon; do
+          pkg_tem "$p" && continue
+          pkg_instala "$p"; echo "QOL:$p:rc=$?"
+        done
+        echo QOL:FIM
       register: opkg_qol
-      failed_when: "'QOL:rc=' not in opkg_qol.stdout"
+      failed_when: "'QOL:FIM' not in opkg_qol.stdout"
       changed_when: "'Installing' in opkg_qol.stdout"
 
     # =========================================================================
@@ -484,7 +495,13 @@
     # (rc impresso, ver a task de QoL), arquivo próprio em /etc/sysctl.d/ e
     # aplicação só dele. Trava em tests/render_openwrt_network.py, invariante 10d.
     - name: Instalar o módulo do TCP BBR no OpenWrt
-      ansible.builtin.raw: "opkg list-installed | grep -q '^kmod-tcp-bbr ' && echo BBR:presente || { opkg update >/dev/null 2>&1; opkg install kmod-tcp-bbr; echo \"BBR:rc=$?\"; }"
+      ansible.builtin.raw: |
+        {{ lookup('file', '../../templates/network/openwrt_pkg.sh') }}
+        if pkg_tem kmod-tcp-bbr; then
+          echo BBR:presente
+        else
+          pkg_atualiza_listas; pkg_instala kmod-tcp-bbr; echo "BBR:rc=$?"
+        fi
       register: _bbr
       changed_when: "'BBR:rc=0' in _bbr.stdout"
       failed_when: "'BBR:presente' not in _bbr.stdout and 'BBR:rc=0' not in _bbr.stdout"

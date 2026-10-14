@@ -250,8 +250,19 @@ _qol = [t for t in tarefas if "luci-theme-argon" in str(t.get("ansible.builtin.r
 checar(len(_qol) == 1, "uma task instala os pacotes de QoL")
 if _qol:
     _c = str(_qol[0]["ansible.builtin.raw"]).strip()
-    checar(_c.endswith('echo "QOL:rc=$?"'), "a task imprime o rc do opkg em vez de devolvê-lo")
+    checar('echo "QOL:$p:rc=$?"' in _c and _c.endswith("echo QOL:FIM"),
+           "a task imprime o rc de cada pacote em vez de devolvê-lo")
     checar("luci-app-access-control" not in _c, "sem pacote que não existe no feed oficial")
+
+print("\nInvariante 10e — pacote no AP só pelo helper opkg/apk (25.12 usa apk):")
+_pb = {n: yaml.safe_load((RAIZ / f"IaC/ansible/playbooks/network/{n}").read_text(encoding="utf-8"))[0]["tasks"]
+       for n in ("02-openwrt-setup.yml", "02-openwrt-exporter.yml")}
+for _n, _ts in _pb.items():
+    for _t in _ts:
+        _r = str(_t.get("ansible.builtin.raw", ""))
+        if re.search(r"\b(opkg|apk) (install|add|update|list-installed|info)\b", _r) or "pkg_instala" in _r or "pkg_tem" in _r:
+            checar("openwrt_pkg.sh" in _r and not re.search(r"\b(opkg|apk) (install|add|update|list-installed)\b", _r),
+                   f"{_n} / {_t.get('name')}: usa o helper openwrt_pkg.sh")
 
 print("\nInvariante 10d — sysctl do AP: módulo do BBR, arquivo próprio e persistente:")
 # Na 24.10 oficial o BBR é kmod à parte, o `sysctl -p` puro lia o sysctl.conf

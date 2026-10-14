@@ -54,8 +54,9 @@
     # o playbook passa a DIZER quais pacotes faltam sem instalar nada.
     - name: Levantar quais pacotes do exportador faltam
       ansible.builtin.raw: |
+        {{ lookup('file', '../../templates/network/openwrt_pkg.sh') }}
         for p in {{ openwrt_exporter_packages | join(' ') }}; do
-          opkg list-installed 2>/dev/null | grep -q "^$p " || echo "$p"
+          pkg_tem "$p" || echo "$p"
         done
       register: openwrt_faltam
       changed_when: false
@@ -76,16 +77,24 @@
              else 'Faltam %d: %s' | format(openwrt_exporter_ausentes | length,
                                            openwrt_exporter_ausentes | join(', ')) }}
 
-    # ⚠️ `opkg update` só roda quando falta pacote. Ele baixa as listas para
-    # /var, que é tmpfs: repetir a cada execução gasta RAM de um equipamento com
-    # 241 MB, sem ganho nenhum quando tudo já está instalado.
+    # ⚠️ A atualização das listas só roda quando falta pacote. Ela baixa as
+    # listas para /var, que é tmpfs: repetir a cada execução gasta RAM de um
+    # equipamento com 241 MB, sem ganho nenhum quando tudo já está instalado.
+    # opkg ou apk pelo helper; rc impresso por pacote (ver openwrt_pkg.sh).
     - name: Instalar os pacotes ausentes do exportador
-      ansible.builtin.raw: >-
-        opkg update >/dev/null 2>&1 &&
-        opkg install {{ openwrt_exporter_ausentes | join(' ') }}
+      ansible.builtin.raw: |
+        {{ lookup('file', '../../templates/network/openwrt_pkg.sh') }}
+        pkg_atualiza_listas
+        for p in {{ openwrt_exporter_ausentes | join(' ') }}; do
+          pkg_instala "$p"; echo "EXP:$p:rc=$?"
+        done
+        echo EXP:FIM
       when: openwrt_exporter_ausentes | length > 0
       register: openwrt_instalacao
-      changed_when: openwrt_instalacao.rc == 0
+      changed_when: "'Installing' in openwrt_instalacao.stdout"
+      failed_when: >-
+        'EXP:FIM' not in openwrt_instalacao.stdout
+        or openwrt_instalacao.stdout is search('EXP:[^:]+:rc=[1-9]')
 
     # O exportador escutava na `lan`, que deixou de existir na migração de
     # VLANs: sem interface, não abria porta nenhuma (13/10/2026). Escuta na
