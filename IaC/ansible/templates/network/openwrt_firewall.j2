@@ -128,35 +128,3 @@ config include 'miniupnpd'
 	option type 'script'
 	option path '/usr/share/miniupnpd/firewall.include'
 
-config zone
-	option name 'guest'
-	option input 'REJECT'
-	option output 'ACCEPT'
-	option forward 'REJECT'
-	list network 'guest'
-
-config forwarding
-	option src 'guest'
-	option dest 'lan'
-
-config rule
-	option name 'Guest DHCP'
-	list proto 'udp'
-	option src 'guest'
-	option dest_port '67-68'
-	option target 'ACCEPT'
-
-config rule
-	option name 'Guest DNS'
-	option src 'guest'
-	option dest_port '53'
-	option target 'ACCEPT'
-
-config rule
-	option name 'Guest - Block Lan Access'
-	list proto 'all'
-	option src 'guest'
-	option dest 'lan'
-	list dest_ip '{{ lan_network_cidr }}'
-	option target 'REJECT'
-

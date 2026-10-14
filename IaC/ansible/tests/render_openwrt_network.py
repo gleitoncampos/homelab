@@ -49,7 +49,6 @@ CONTEXTO = {
     "syslog_server_port": "1514",
     "syslog_server_port_rfc3164": "1515",
     "network_timezone": "America/Sao_Paulo",
-    "lan_network_cidr": "192.0.2.0/24",
 }
 
 falhas = []
