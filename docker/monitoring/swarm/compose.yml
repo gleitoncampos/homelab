@@ -68,6 +68,12 @@ services:
       # container substitua o arquivo de socket. A proteção real vem do socket
       # proxy, em fase posterior.
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Com o image store do containerd, a factory `docker` do cAdvisor
+      # também fala com o containerd; sem este socket ela não registra
+      # ("unable to create containerd client") e sobra só a `raw`, sem
+      # `image` (14/10/2026). Mesmo nível de privilégio do docker.sock acima,
+      # mesma ressalva do `:ro`.
+      - /run/containerd/containerd.sock:/run/containerd/containerd.sock:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
     deploy:
