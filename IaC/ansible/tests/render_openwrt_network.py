@@ -164,6 +164,24 @@ def _tarefas(lista):
             yield from _tarefas(t.get(chave))
 
 
+print("\nInvariante 6b — o failsafe é cancelado também quando a rede não troca:")
+# Armado sempre, confirmado só na troca: com o AP já na gerência, toda
+# `--tags rede` era desfeita 120 s depois, com reboot (14/10/2026).
+_arma = [i for i, t in enumerate(tarefas) if "iac-net-failsafe" in str(t.get("ansible.builtin.raw", ""))
+         and "start-stop-daemon -S" in str(t.get("ansible.builtin.raw", ""))]
+_cancela = [(i, t) for i, t in enumerate(tarefas)
+            if "_trocar_rede" in str(t.get("when", "")) and "not" in str(t.get("when", ""))
+            and "openwrt_failsafe_confirm_file" in str(t.get("block", ""))]
+checar(len(_arma) == 1 and "when" not in tarefas[_arma[0]], "o failsafe é armado em toda etapa `rede`")
+checar(len(_cancela) == 1, "existe cancelamento para `not _trocar_rede`")
+if _arma and _cancela:
+    i, t = _cancela[0]
+    checar(i > _arma[0], "o cancelamento vem depois do arme")
+    checar("reset_connection" in str(t["block"][0]), "o cancelamento abre conexão nova antes de confirmar")
+    _wifi = next((j for j, x in enumerate(tarefas) if "wifi" in (x.get("tags") or [])), None)
+    checar(_wifi is None or i < _wifi, "o cancelamento vem antes da etapa `wifi` (janela de 120 s)")
+
+
 print("\nInvariante 7 — tarefa delegada ao nó de controle não pede sudo:")
 # `ansible.cfg` liga `become = True`; delegada ao localhost sem
 # `become: false`, a tarefa pede senha de sudo na estação e falha antes de

@@ -341,6 +341,28 @@
               {{ openwrt_failsafe_backup_dir }} foi restaurado e o equipamento
               reiniciado.
 
+    # ⚠️ O failsafe é armado em TODA execução da etapa `rede`, mas o bloco
+    # acima só confirma quando a rede troca. Com o AP já na VLAN de gerência
+    # (a localização reescreve `ansible_host`), `_trocar_rede` é falso, nada
+    # confirmava, e o AP restaurava o backup e reiniciava 120 s depois — toda
+    # `--tags rede` desde a migração foi desfeita assim, em silêncio
+    # (14/10/2026: 11:11, 12:26 e 13:36, visto no Loki). Aqui nada de rede foi
+    # reaplicado ainda; a confirmação vem, como lá, de conexão nova.
+    # Trava em tests/render_openwrt_network.py, invariante 6b.
+    - name: Cancelar o failsafe quando a rede não troca
+      tags: rede
+      when: not (_trocar_rede | bool)
+      block:
+        - name: Encerrar a conexão usada até aqui
+          ansible.builtin.meta: reset_connection
+
+        - name: Confirmar o acesso por conexão nova e cancelar o failsafe
+          ansible.builtin.raw: |
+            touch {{ openwrt_failsafe_confirm_file }}
+            start-stop-daemon -K -p /tmp/iac-net-failsafe.pid 2>/dev/null
+            logger -t net-failsafe "cancelado: rede sem troca nesta execucao"
+          changed_when: true
+
     # =====================================================================
     # ETAPA `wifi` — move os CLIENTES, e é a segunda metade da fase do AP
     # =====================================================================
