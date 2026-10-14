@@ -41,6 +41,9 @@ ENDERECOS = {
     "fw-um": "192.0.2.1",
     "hv-um": "192.0.2.40", "hv-dois": "192.0.2.41",
 }
+# O AP saiu para a VLAN de gerência e o inventário segue no endereço antigo:
+# o alvo tem de vir de `openwrt_mgmt_ip` (13/10/2026, alvo `down` por timeout).
+GERENCIA_AP = {"ap-um": "192.0.2.130", "ap-dois": "192.0.2.131"}
 CONTEXTO = {
     "groups": GRUPOS,
     "hostvars": {h: {"ansible_host": ip} for h, ip in ENDERECOS.items()},
@@ -49,6 +52,11 @@ CONTEXTO = {
     "loki_retention_period": "720h",
     "loki_chunk_encoding": "gzip",
 }
+
+# Em produção a variável vem do group_vars/network, que inclui o firewall:
+# ele também a enxerga e NÃO pode ser raspado nela.
+for _h in GRUPOS["openwrt"] + GRUPOS["opnsense"]:
+    CONTEXTO["hostvars"][_h]["openwrt_mgmt_ip"] = GERENCIA_AP.get(_h, "192.0.2.199")
 
 falhas = []
 
@@ -91,8 +99,18 @@ if prom:
     alvos = " ".join(
         t for j in prom["scrape_configs"] for t in j["static_configs"][0]["targets"]
     )
-    for host in GRUPOS["omv"] + GRUPOS["openwrt"] + GRUPOS["proxmox"]:
+    for host in GRUPOS["omv"] + GRUPOS["proxmox"]:
         checar(ENDERECOS[host] in alvos, f"{host} virou alvo")
+    ow_job = next(j for j in prom["scrape_configs"] if j["job_name"] == "openwrt")
+    ow_alvos = ow_job["static_configs"][0]["targets"]
+    rel = " ".join(r["regex"] for r in ow_job["relabel_configs"])
+    for host in GRUPOS["openwrt"]:
+        checar(f"{GERENCIA_AP[host]}:9100" in ow_alvos and ENDERECOS[host] not in " ".join(ow_alvos),
+               f"{host} é alvo pelo endereço de gerência")
+        checar(re.escape(GERENCIA_AP[host]) in rel, f"{host}: relabel do instance casa o endereço de gerência")
+    fw_job = next(j for j in prom["scrape_configs"] if j["job_name"] == "opnsense")
+    checar(f"{ENDERECOS['fw-um']}:9100" in fw_job["static_configs"][0]["targets"],
+           "firewall segue raspado no próprio endereço")
     # ⚠️ A checagem acima ("virou alvo") passava mesmo quando os hipervisores
     # NÃO tinham node_exporter: eles já apareciam pelo job `pve`, que fala com a
     # API do PVE e cobre convidado e storage, não o sistema operacional do host.

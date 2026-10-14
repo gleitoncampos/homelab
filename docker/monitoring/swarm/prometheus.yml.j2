@@ -51,14 +51,16 @@ scrape_configs:
         replacement: "{{ host | upper }}"
 {% endfor %}
 
-  # OpenWrt: pacote prometheus-node-exporter-lua, mesma porta 9100.
+  # OpenWrt: pacote prometheus-node-exporter-lua, mesma porta 9100. Escuta só
+  # na VLAN de gerência: o inventário segue no endereço antigo do AP, então o
+  # alvo vem de `openwrt_mgmt_ip`, igual ao 02-openwrt-exporter (13/10/2026).
 {% if groups['openwrt'] | default([]) | length > 0 %}
   - job_name: openwrt
     scrape_interval: 60s
     static_configs:
       - targets:
 {% for host in groups['openwrt'] %}
-          - "{{ hostvars[host].ansible_host }}:9100"
+          - "{{ hostvars[host].openwrt_mgmt_ip | default(hostvars[host].ansible_host) }}:9100"
 {% endfor %}
     relabel_configs:
 {% for host in groups['openwrt'] %}
@@ -78,7 +80,7 @@ A porta sai de um GRUPO DE CAPTURA do endereço, e não de um literal:
 mudar a porta no `targets` acima passa a mudar o `instance` junto, em
 vez de as duas divergirem em silêncio. #}
       - source_labels: [__address__]
-        regex: {{ hostvars[host].ansible_host | regex_escape }}:(\d+)
+        regex: {{ hostvars[host].openwrt_mgmt_ip | default(hostvars[host].ansible_host) | regex_escape }}:(\d+)
         target_label: instance
         replacement: "{{ host | upper }}:$1"
 {% endfor %}
