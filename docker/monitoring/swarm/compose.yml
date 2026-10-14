@@ -28,7 +28,7 @@ services:
           cpus: '1.0'
           memory: 1024M
       restart_policy:
-        condition: on-failure
+        condition: any
     networks:
       - monitoring
 
@@ -46,7 +46,7 @@ services:
           cpus: '0.25'
           memory: 128M
       restart_policy:
-        condition: on-failure
+        condition: any
     networks:
       - monitoring
 
@@ -72,7 +72,7 @@ services:
           cpus: '0.5'
           memory: 256M
       restart_policy:
-        condition: on-failure
+        condition: any
     networks:
       - monitoring
 
@@ -111,7 +111,7 @@ services:
           cpus: '0.5'
           memory: 512M
       restart_policy:
-        condition: on-failure
+        condition: any
       labels:
         - "traefik.enable=true"
         - "traefik.http.routers.grafana.rule=Host(\"${FQDN_GRAFANA}\")" #Define in Portainer
@@ -122,26 +122,6 @@ services:
     networks:
       - monitoring
       - traefik_public
-
-  influxdb:
-    image: influxdb:2.7.12
-    volumes:
-      - /srv/containers/influxdb/config:/etc/influxdb2
-      - /srv/containers/influxdb/db:/var/lib/influxdb2
-    # Sem roteamento publico e sem publicacao de porta: porta publicada em
-    # Swarm passa por DNAT em nat/PREROUTING, antes da chain filter, entao o
-    # UFW nao a fecha. InfluxDB fica acessivel apenas na overlay "monitoring".
-    deploy:
-      placement:
-        constraints: [node.role == manager]
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1024M
-      restart_policy:
-        condition: on-failure
-    networks:
-      - monitoring
 
   prometheus-pve-exporter:
     image: prompve/prometheus-pve-exporter:3.5.5
@@ -163,12 +143,16 @@ services:
       PVE_PASSWORD: "${PVE_PASSWORD}"
       PVE_VERIFY_SSL: "false"
     deploy:
+      # Fixo no manager: a exceção do firewall que deixa a VLAN do homelab
+      # chegar à API do Proxmox (8006) vale só para o IP do manager (13/10/2026).
+      placement:
+        constraints: [node.role == manager]
       resources:
         limits:
           cpus: '0.25'
           memory: 128M
       restart_policy:
-        condition: on-failure
+        condition: any
     # Só a overlay `monitoring`: nada aqui é roteado pelo Traefik.
     networks:
       - monitoring
@@ -202,7 +186,7 @@ services:
           cpus: '0.25'
           memory: 64M
       restart_policy:
-        condition: on-failure
+        condition: any
     networks:
       - monitoring
 
@@ -224,7 +208,7 @@ services:
           cpus: '0.5'
           memory: 512M
       restart_policy:
-        condition: on-failure
+        condition: any
     networks:
       - monitoring
 
@@ -254,7 +238,7 @@ services:
           cpus: '0.5'
           memory: 256M
       restart_policy:
-        condition: on-failure
+        condition: any
     # Só a overlay `monitoring`: nada aqui é roteado pelo Traefik. As portas de
     # syslog são publicadas acima diretamente, porque o log vem de equipamento
     # fora da rede overlay.

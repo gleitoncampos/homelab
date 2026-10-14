@@ -147,11 +147,10 @@ compose_txt = (SWARM / "compose.yml").read_text(encoding="utf-8")
 playbook_txt = (RAIZ / "IaC/ansible/playbooks/03-stack-monitoring.yml").read_text(encoding="utf-8")
 comum_txt = (RAIZ / "IaC/ansible/inventories/_common/all.yml").read_text(encoding="utf-8")
 
-# ⚠️ O playbook implanta MAIS DE UMA stack (`monitoring` e `statping`), cada
-# uma com seu compose e seu `stack_env`. Varrer o arquivo inteiro de uma vez
-# mistura as duas e acusa desacordo que não existe — o `FQDN` do statping
-# aparece como "injetado e não usado" pelo compose do monitoramento. Por isso
-# o pareamento é por bloco de `stack_name:`.
+# ⚠️ O pareamento é por bloco de `stack_name:`: o playbook já implantou MAIS DE
+# UMA stack (`monitoring` e `statping`, este removido em 13/10/2026), cada uma
+# com seu compose e seu `stack_env`. Varrer o arquivo inteiro de uma vez
+# misturava as duas e acusava desacordo que não existia.
 blocos = re.split(r"^\s*stack_name:\s*", playbook_txt, flags=re.M)[1:]
 pares = []
 for bloco in blocos:

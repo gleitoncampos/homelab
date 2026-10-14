@@ -184,19 +184,6 @@
       loop_control:
         label: "{{ item.item }}"
 
-    - name: Deploy da Stack Statping (Status Page)
-      ansible.builtin.include_tasks: "../tasks/portainer_stack.yml"
-      vars:
-        stack_name: "statping"
-        stack_repo_url: "{{ github_repo_url }}"
-        stack_repo_ref: "{{ github_repo_branch }}"
-        stack_compose_path: "docker/_catalog/statping/swarm/compose.yml"
-        stack_env:
-          - name: "FQDN"
-            value: "{{ fqdn_statping }}"
-        portainer_endpoint_id: "{{ endpoint_id }}"
-      no_log: true
-
     - name: Exibir status do Monitoramento
       ansible.builtin.debug:
-        msg: "📊 Stacks de Monitoramento (Grafana/Loki/Prometheus/Alloy/Statping) cadastradas no Portainer!"
+        msg: "📊 Stack de Monitoramento (Grafana/Loki/Prometheus/Alloy) cadastrada no Portainer!"

@@ -276,7 +276,6 @@
         - prometheus
         - grafana
         - loki
-        - influxdb
         - nextcloud
         - paperless-ngx
         - vikunja
@@ -289,7 +288,6 @@
         - linkwarden
         - bytestash
         - it-tools
-        - statping
         - glance
         - organizr
         - cronicle
@@ -347,8 +345,6 @@
         - { path: "grafana/data", owner: "472", group: "docker", mode: "0750" }
         - { path: "loki/data", owner: "10001", group: "docker", mode: "0750" }
         - { path: "alloy/data", owner: "root", group: "docker", mode: "0750" }
-        - { path: "influxdb/config", owner: "1000", group: "docker", mode: "0750" }
-        - { path: "influxdb/db", owner: "1000", group: "docker", mode: "0750" }
       loop_control:
         label: "{{ item.path }}"
 
@@ -358,14 +354,11 @@
     # chain filter onde o UFW aplica `policy: deny` para tráfego de entrada.
     # Ou seja: uma porta publicada por `ports:` em um serviço Swarm chega ao
     # container mesmo com o UFW em "deny incoming" — o DNAT já decidiu o
-    # destino do pacote antes da regra de negação ser avaliada. Hoje isso
-    # deixa efetivamente expostas ao mundo as portas influxdb:8086 e
-    # alloy:12345, publicadas via `ports:` nos respectivos compose.yml, sem
-    # que exista (nem possa existir) uma regra UFW que as cubra. O fechamento
-    # real dessas portas é remover o `ports:` do compose e expor o serviço só
-    # via Traefik/rede overlay interna; dos serviços atuais, apenas o
-    # receptor de syslog do Alloy (porta 1514) realmente precisa manter um
-    # `ports:` publicado no host.
+    # destino do pacote antes da regra de negação ser avaliada. Por isso todo
+    # serviço é exposto só via Traefik/overlay interna, e as portas que
+    # precisam de `ports:` (9000 do Portainer, 1514/1515 do syslog do Alloy)
+    # são fechadas por faixa em DOCKER-USER (tasks/docker_user_rules.yml). O
+    # InfluxDB saiu da stack em 13/10/2026 (sem uso).
     - name: Liberar portas TCP no UFW
       community.general.ufw:
         rule: allow

@@ -23,6 +23,27 @@
   gather_facts: false
 
   tasks:
+    # O AP saiu da rede plana para a VLAN de gerência (porta SSH própria) na
+    # migração de VLANs; o `hosts.ini` segue no endereço antigo. Mesma
+    # localização do 02-openwrt-setup.yml: se a gerência atende, é lá.
+    - name: Localizar o AP — sondar o endereço da VLAN de gerência
+      ansible.builtin.wait_for:
+        host: "{{ openwrt_mgmt_ip }}"
+        port: "{{ openwrt_ssh_port }}"
+        timeout: 5
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      register: _ap_na_vlan
+
+    - name: Apontar o inventário para a VLAN de gerência se o AP já estiver lá
+      ansible.builtin.set_fact:
+        ansible_host: "{{ openwrt_mgmt_ip }}"
+        ansible_port: "{{ openwrt_ssh_port }}"
+      when: (_ap_na_vlan.state | default('')) == 'started'
+
     # ⚠️ LEITURA separada da ESCRITA, e não uma task só que decide por dentro.
     # A primeira versão fazia tudo num `raw`, e em `--check` o módulo é pulado:
     # o registro ficava sem `stdout` e a task seguinte morria com
@@ -65,6 +86,24 @@
       when: openwrt_exporter_ausentes | length > 0
       register: openwrt_instalacao
       changed_when: openwrt_instalacao.rc == 0
+
+    # O exportador escutava na `lan`, que deixou de existir na migração de
+    # VLANs: sem interface, não abria porta nenhuma (13/10/2026). Escuta na
+    # interface de gerência, a mesma do dropbear (openwrt_dropbear.j2).
+    # Trava em tests/gates_monitoring.py.
+    - name: Pôr o exportador na interface de gerência
+      ansible.builtin.raw: |
+        alvo='vlan{{ openwrt_mgmt_vlan }}'
+        if [ "$(uci -q get prometheus-node-exporter-lua.main.listen_interface)" = "$alvo" ]; then
+          echo IFACE:OK
+        else
+          uci set prometheus-node-exporter-lua.main.listen_interface="$alvo" &&
+          uci commit prometheus-node-exporter-lua &&
+          /etc/init.d/prometheus-node-exporter-lua restart && sleep 2 && echo IFACE:TROCADA
+        fi
+      register: _exporter_iface
+      changed_when: "'IFACE:TROCADA' in _exporter_iface.stdout"
+      failed_when: "'IFACE:' not in _exporter_iface.stdout"
 
     # ⚠️ A sonda vai contra o ENDEREÇO DO INVENTÁRIO, e não contra 127.0.0.1.
     # No OpenWrt o exportador é um CGI do `uhttpd`, que escuta no endereço da

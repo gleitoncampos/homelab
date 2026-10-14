@@ -114,7 +114,6 @@ swarm_cluster_ports:
 fqdn_traefik: "proxy.{{ homelab_domain }}"
 fqdn_portainer: "portainer.{{ homelab_domain }}"
 fqdn_grafana: "grafana.{{ homelab_domain }}"
-fqdn_statping: "status.{{ homelab_domain }}"
 fqdn_paperless: "paperless.{{ homelab_domain }}"
 fqdn_actualbudget: "finance.{{ homelab_domain }}"
 fqdn_vikunja: "tasks.{{ homelab_domain }}"
