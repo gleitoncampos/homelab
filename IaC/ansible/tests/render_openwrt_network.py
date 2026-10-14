@@ -177,7 +177,12 @@ checar(len(_cancela) == 1, "existe cancelamento para `not _trocar_rede`")
 if _arma and _cancela:
     i, t = _cancela[0]
     checar(i > _arma[0], "o cancelamento vem depois do arme")
-    checar("reset_connection" in str(t["block"][0]), "o cancelamento abre conexão nova antes de confirmar")
+    _passos = [str(x) for x in t["block"]]
+    _fw = next((k for k, x in enumerate(_passos) if "/etc/init.d/firewall reload" in x), None)
+    _rc = next((k for k, x in enumerate(_passos) if "reset_connection" in x), None)
+    _ok = next((k for k, x in enumerate(_passos) if "openwrt_failsafe_confirm_file" in x), None)
+    checar(None not in (_fw, _rc, _ok) and _fw < _rc < _ok,
+           "recarrega o firewall, abre conexão nova e só então confirma")
     _wifi = next((j for j, x in enumerate(tarefas) if "wifi" in (x.get("tags") or [])), None)
     checar(_wifi is None or i < _wifi, "o cancelamento vem antes da etapa `wifi` (janela de 120 s)")
 
