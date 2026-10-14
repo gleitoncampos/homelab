@@ -54,9 +54,9 @@ for env in ("prod", "dev"):
 # 1b) todo segredo que algum playbook exige no gate do vault (`required_secrets`)
 #     tem de sair do bootstrap. `portainer_agent_secret` não saía e o
 #     02-bootstrap-cluster abortava no gate (13/10/2026).
-#     PENDENTE é dívida com dono, não isenção: pve_exporter_* espera a decisão
-#     token × usuário (tarefa "Exporter do Proxmox" na oficina, roadmap 1.2.16).
-PENDENTE = {"pve_exporter_user", "pve_exporter_password"}
+#     Sem pendência: pve_exporter_* saiu do bootstrap em 13/10/2026 (usuário
+#     prometheus@pve só leitura, senha gerada, igual nos dois hosts).
+PENDENTE = set()
 NAO_VAULT = {"system_user"}  # vem do 99-local.yml, testado em 2b
 def _exigidos(no, acc):
     if isinstance(no, dict):
@@ -71,7 +71,16 @@ for env in ("prod", "dev"):
         acc = set(); _exigidos(yaml.safe_load(pb.read_text(encoding="utf-8")), acc)
         sem = sorted(acc - set(d) - NAO_VAULT - PENDENTE)
         assert not sem, f"vault {env} não gera {sem}, exigido por {pb.relative_to(_raiz_pb)}"
-print("  OK vault: gera todo segredo que os playbooks exigem (fora a pendência com dono)")
+print("  OK vault: gera todo segredo que os playbooks exigem")
+
+# Exporter do Proxmox: usuário DEDICADO só leitura, nunca root@pam; senha (e não
+# token) porque os dois hipervisores não são cluster — token tem valor diferente por
+# host, e o exporter usa UMA credencial para os dois (13/10/2026).
+d = yaml.safe_load(bs.render_vault("prod", resp, seg, pub))
+assert d.get("pve_exporter_user") == "prometheus@pve", f"pve_exporter_user: {d.get('pve_exporter_user')!r}"
+assert len(d.get("pve_exporter_password") or "") >= 16, "pve_exporter_password não gerada"
+assert not any(k.startswith("pve_exporter_token") for k, *_ in bs.EXTERNAL), "bootstrap ainda pergunta token do exporter"
+print("  OK exporter do Proxmox: prometheus@pve com senha gerada, sem token")
 
 # prod e dev precisam ter senha de banco DIFERENTE (isolamento)
 p = yaml.safe_load(bs.render_vault("prod", resp, seg, pub))

@@ -153,17 +153,12 @@ services:
       # morre com `FileNotFoundError`, mensagem que não menciona credencial.
       # Vale para os dois modos de autenticação, senha ou token.
       #
-      # ⚠️ AUTENTICAÇÃO POR SENHA É TEMPORÁRIA, E O ALVO É O TOKEN.
-      # O `config_from_env` aceita `PVE_PASSWORD` ou o par
-      # `PVE_TOKEN_NAME`/`PVE_TOKEN_VALUE`. O repositório declarava o token, mas
-      # a credencial nunca foi criada em hipervisor nenhum: os dois só têm
-      # `root@pam`. Com as variáveis de token apontando para um usuário
-      # inexistente, o exportador sobe `1/1` e responde 401 em toda coleta — o
-      # painel fica vazio sem nada gritar. Senha destrava hoje ao custo de usar
-      # credencial de privilégio total onde o próprio playbook de tokens escreve
-      # que isso "derrota o propósito de ter um usuário dedicado".
-      # A reversão está descrita em `1.2.16` do roadmap, e depende de o cofre
-      # ser cifrado antes: o Proxmox exibe o valor do token uma única vez.
+      # Senha de um usuário DEDICADO só leitura (`prometheus@pve`, role
+      # PVEAuditor), criado nos dois hosts pelo 00-proxmox-api-token.yml com a
+      # senha que o `make bootstrap` gera. Senha e não token, por decisão de
+      # 13/10/2026: os dois hipervisores não são cluster, cada um tem o próprio
+      # cadastro, e token teria valor diferente por host — este exporter usa
+      # uma credencial só para os dois.
       PVE_USER: "${PVE_USER}"
       PVE_PASSWORD: "${PVE_PASSWORD}"
       PVE_VERIFY_SSL: "false"

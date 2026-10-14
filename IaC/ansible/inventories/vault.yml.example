@@ -182,15 +182,12 @@ proxmox_backup_share_password: "TROCAR-senha-do-usuario-smb"
 # aparece na UI e nunca monta, e quem acusa é o `06-backup.yml`, dois passos
 # adiante. Cadastre a MESMA senha no usuário SMB do OMV.
 
-# ⚠️ Estado TEMPORÁRIO: autenticação por senha. O alvo é o token
-# `prometheus@pve!exporter` com role somente-leitura, que nenhum playbook cria
-# hoje — ver 1.2.16 do roadmap. Enquanto for senha, use uma conta que exista de
-# fato no hipervisor; o exportador só lê, mas a conta carrega o privilégio dela.
-pve_exporter_user: "TROCAR-usuario@realm"
-pve_exporter_password: "TROCAR-senha-da-conta-do-exportador"
-# TOKEN de API do Proxmox para o prometheus-pve-exporter, não senha. Gerar com:
-#   pveum user token add prometheus@pve exporter --privsep 1
-#   pveum acl modify / --tokens 'prometheus@pve!exporter' --roles PVEAuditor
+# Exporter do Proxmox: usuário DEDICADO só leitura (role PVEAuditor), criado nos
+# dois hosts pelo playbooks/00-proxmox-api-token.yml com esta senha. O
+# `make bootstrap` gera os dois. Senha e não token: os hosts não são cluster, e
+# token teria valor diferente em cada um (13/10/2026).
+pve_exporter_user: "prometheus@pve"
+pve_exporter_password: "TROCAR-senha-gerada-pelo-bootstrap"
 
 # --- Monitoramento (Grafana) ------------------------------------------------
 grafana_admin_password: "TROCAR-openssl-rand-base64-32"

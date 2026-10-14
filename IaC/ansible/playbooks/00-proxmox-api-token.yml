@@ -68,6 +68,16 @@
       - {name: opnsense-wan2, path: "{{ opnsense_wan2_pci_id | default('') }}"}
       - {name: omv-hba, path: "{{ omv_hba_pci_id | default('') }}"}
 
+  pre_tasks:
+    # As tasks do exporter têm no_log: sem este gate, variável ausente no vault
+    # vira erro censurado, que não diz qual chave falta.
+    - name: Validar segredos do Vault exigidos por este playbook
+      ansible.builtin.include_tasks: "../tasks/validate_vault.yml"
+      vars:
+        required_secrets:
+          - pve_exporter_user
+          - pve_exporter_password
+
   tasks:
     # Listar-e-condicionar em vez de criar-e-engolir-o-erro. `ignore_errors`
     # aqui esconderia falha real de permissão junto com o "já existe", e o
@@ -112,6 +122,30 @@
       ansible.builtin.command: >-
         pveum user add {{ tf_user }} --comment 'Terraform IaC - menor privilégio'
       when: tf_user not in (pve_users.stdout | from_json | map(attribute='userid') | list)
+      changed_when: true
+
+    # Exporter do Prometheus (prompve/prometheus-pve-exporter): só LÊ a API —
+    # role PVEAuditor, só *.Audit, nunca root@pam. Senha e não token: os dois
+    # hipervisores não são cluster, cada host tem o próprio cadastro, e o exporter
+    # usa UMA credencial para os dois; token teria valor diferente por host.
+    # A senha vem do vault (`make bootstrap` a gera) e é reconciliada a cada
+    # execução: o vault manda (13/10/2026). Trava em tests/gates_pve_exporter.py.
+    - name: "Criar o usuário só leitura do exporter: {{ pve_exporter_user }}"
+      ansible.builtin.command: >-
+        pveum user add {{ pve_exporter_user }} --password '{{ pve_exporter_password }}'
+        --comment 'Exporter do Prometheus - somente leitura'
+      when: pve_exporter_user not in (pve_users.stdout | from_json | map(attribute='userid') | list)
+      changed_when: true
+      no_log: true
+
+    - name: "Reconciliar a senha do vault em {{ pve_exporter_user }}"
+      ansible.builtin.command: >-
+        pvesh set /access/password --userid {{ pve_exporter_user }} --password '{{ pve_exporter_password }}'
+      changed_when: true
+      no_log: true
+
+    - name: "Aplicar a PVEAuditor na raiz a {{ pve_exporter_user }}"
+      ansible.builtin.command: "pveum aclmod / -user {{ pve_exporter_user }} -role PVEAuditor"
       changed_when: true
 
     - name: Aplicar a role ao usuário nos escopos necessários

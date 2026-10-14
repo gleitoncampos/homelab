@@ -130,6 +130,11 @@ GENERATED = [
     # o upsd não pede credencial para ler variável.
     ("nut_monitor_password", "senha", False, ""),
     ("nut_secondary_password", "senha", False, ""),
+    # Exporter do Proxmox: usuário prometheus@pve, só PVEAuditor, criado nos
+    # dois hosts pelo 00-proxmox-api-token.yml com ESTA senha. Senha e não
+    # token: os dois hipervisores não são cluster, e token tem valor diferente por
+    # host — o exporter usa uma credencial só para os dois (13/10/2026).
+    ("pve_exporter_password", "senha", False, ""),
 ]
 
 # Impossíveis de gerar: vêm do console de um terceiro. O valor está em imprimir
@@ -146,18 +151,6 @@ EXTERNAL = [
         "Token de API da Cloudflare",
         "https://dash.cloudflare.com/profile/api-tokens",
         "Escopo: Zone:DNS:Edit + Zone:Zone:Read, restrito à sua zona",
-    ),
-    (
-        "pve_exporter_token_name",
-        "Nome do token do Proxmox para o exporter",
-        "",
-        "pveum user token add prometheus@pve exporter --privsep 1",
-    ),
-    (
-        "pve_exporter_token_value",
-        "Valor do token do Proxmox",
-        "",
-        "Exibido uma única vez, na saída do comando acima",
     ),
     (
         "opnsense_pppoe_username",
@@ -759,6 +752,9 @@ def render_vault(env: str, resp: dict, seg: dict, ssh_pub: str) -> str:
         "",
         f"homelab_domain: {d}",
         f"ssh_public_key: {ssh_pub!r}",
+        "",
+        "# Usuário só leitura (PVEAuditor) do exporter do Proxmox; a senha vem abaixo.",
+        "pve_exporter_user: 'prometheus@pve'",
         "",
     ]
     for chave, _t, _h, _d in GENERATED:

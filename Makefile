@@ -25,7 +25,7 @@ PLAYBOOKS   := $(wildcard $(ANSIBLE_DIR)/playbooks/*.yml $(ANSIBLE_DIR)/playbook
 .PHONY: help hooks check lint lint-yaml lint-ansible lint-shell lint-tf ssh-keys \
         validate-compose validate-ansible validate-patterns check-common-copies \
         secrets links snapshot omv-fs discover clean render-opnsense render-monitoring \
-        render-proxmox-ifaces render-openwrt-led render-openwrt-network render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass gates-node-bootstrap gates-swarm-ct \
+        render-proxmox-ifaces render-openwrt-led render-openwrt-network render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass gates-node-bootstrap gates-swarm-ct gates-pve-exporter \
         gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade \
         gates-tailscale gates-cpu-pinning validate-alloy render-traefik \
         gates-repositorios
@@ -57,7 +57,7 @@ ssh-keys: ## Instala a chave gerada pelo bootstrap em todo host do inventário (
 test-bootstrap: ## Testa os renderizadores do bootstrap contra os consumidores reais
 	@python3 IaC/bootstrap/test_render.py
 
-check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass gates-node-bootstrap gates-swarm-ct gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade gates-tailscale gates-cpu-pinning validate-alloy render-traefik gates-repositorios ## Tudo que a CI roda
+check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass gates-node-bootstrap gates-swarm-ct gates-pve-exporter gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade gates-tailscale gates-cpu-pinning validate-alloy render-traefik gates-repositorios ## Tudo que a CI roda
 	@echo
 	@echo "✓ check completo"
 
@@ -213,6 +213,9 @@ gates-node-bootstrap: ## Confere que o 00-node-bootstrap entra como root apesar 
 
 gates-swarm-ct: ## Confere CTs do Swarm privilegiados (IPVS) e keyctl só em CT não privilegiado
 	@python3 $(ANSIBLE_DIR)/tests/gates_swarm_ct.py
+
+gates-pve-exporter: ## Confere o usuário só leitura do exporter do Proxmox no playbook de tokens
+	@python3 $(ANSIBLE_DIR)/tests/gates_pve_exporter.py
 
 gates-ordem-vlan: ## Confere os gates da ordem de aplicação da migração de VLANs
 	@python3 $(ANSIBLE_DIR)/tests/gates_ordem_vlan.py
