@@ -253,6 +253,20 @@ if _qol:
     checar(_c.endswith('echo "QOL:rc=$?"'), "a task imprime o rc do opkg em vez de devolvê-lo")
     checar("luci-app-access-control" not in _c, "sem pacote que não existe no feed oficial")
 
+print("\nInvariante 10d — sysctl do AP: módulo do BBR, arquivo próprio e persistente:")
+# Na 24.10 oficial o BBR é kmod à parte, o `sysctl -p` puro lia o sysctl.conf
+# herdado (chave inexistente no kernel 6.x) e o `-w` sumia no reboot (14/10/2026).
+_sys = [t for t in tarefas if "net.ipv4.tcp_congestion_control=bbr" in str(t.get("ansible.builtin.raw", ""))]
+_bbr = [i for i, t in enumerate(tarefas) if "kmod-tcp-bbr" in str(t.get("ansible.builtin.raw", ""))]
+checar(len(_sys) == 1 and len(_bbr) == 1, "uma task instala o kmod-tcp-bbr e uma aplica o sysctl")
+if _sys and _bbr:
+    _c = str(_sys[0]["ansible.builtin.raw"])
+    checar(_bbr[0] < tarefas.index(_sys[0]), "o módulo é instalado antes do sysctl")
+    checar("/etc/sysctl.d/" in _c and "sysctl -p /etc/sysctl.d/" in _c and "sysctl -w" not in _c,
+           "o sysctl vai para /etc/sysctl.d/ e só esse arquivo é aplicado")
+    checar('echo "BBR:rc=$?"' in str(tarefas[_bbr[0]]["ansible.builtin.raw"]),
+           "a instalação do módulo imprime o rc do opkg")
+
 print("\nInvariante 11 — todo rádio declara o `path` do hardware:")
 # Sem `option path`, o netifd não associa o wifi-device a um phy, os rádios
 # ficam em `retry_setup_failed` e nenhum SSID sobe (13/10/2026).

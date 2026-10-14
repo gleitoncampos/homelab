@@ -459,10 +459,28 @@
         && /etc/init.d/cron enable && /etc/init.d/cron restart
       changed_when: true
 
+    # ⚠️ Três armadilhas, todas vistas no upgrade para a 24.10 oficial
+    # (14/10/2026): o BBR é módulo à parte (`kmod-tcp-bbr`; sem ele o sysctl
+    # dá "No such file or directory"); o `sysctl -p` sem argumento lê o
+    # /etc/sysctl.conf herdado do build de terceiro, com chave que o kernel 6.x
+    # não tem; e `sysctl -w` não sobrevive ao reboot. Daí: módulo instalado
+    # (rc impresso, ver a task de QoL), arquivo próprio em /etc/sysctl.d/ e
+    # aplicação só dele. Trava em tests/render_openwrt_network.py, invariante 10d.
+    - name: Instalar o módulo do TCP BBR no OpenWrt
+      ansible.builtin.raw: "opkg list-installed | grep -q '^kmod-tcp-bbr ' && echo BBR:presente || { opkg update >/dev/null 2>&1; opkg install kmod-tcp-bbr; echo \"BBR:rc=$?\"; }"
+      register: _bbr
+      changed_when: "'BBR:rc=0' in _bbr.stdout"
+      failed_when: "'BBR:presente' not in _bbr.stdout and 'BBR:rc=0' not in _bbr.stdout"
+
     - name: Aplicar otimizações de Kernel sysctl (TCP BBR, Sockets 16MB, txqueuelen)
-      ansible.builtin.raw: >-
-        sysctl -w net.ipv4.tcp_congestion_control=bbr net.core.rmem_max=16777216
-        net.core.wmem_max=16777216 net.core.netdev_max_backlog=10000 && sysctl -p
+      ansible.builtin.raw: |
+        cat << 'EOF' > /etc/sysctl.d/99-iac-tuning.conf
+        net.ipv4.tcp_congestion_control=bbr
+        net.core.rmem_max=16777216
+        net.core.wmem_max=16777216
+        net.core.netdev_max_backlog=10000
+        EOF
+        sysctl -p /etc/sysctl.d/99-iac-tuning.conf
       changed_when: true
 
     # -------------------------------------------------------------------------
