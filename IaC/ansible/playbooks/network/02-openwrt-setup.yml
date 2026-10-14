@@ -399,8 +399,17 @@
       ansible.builtin.raw: "wifi reload"
       changed_when: true
 
+    # ⚠️ Tag `rede`, a mesma de quem grava o /etc/config/dhcp: o passo 11
+    # rodou só `--tags rede`/`wifi`, esta task ficou de fora e o dnsmasq de
+    # fábrica seguiu habilitado (14/10/2026).
+    # ⚠️ O `ln -sf` no fim NÃO é redundante. O dnsmasq em execução troca o
+    # /tmp/resolv.conf por `nameserver 127.0.0.1`, e o `stop` do init não
+    # devolve o link (ele lê `noresolv` com config_get, vazio != 0). Parado o
+    # dnsmasq, o AP ficava sem resolver nome nenhum, NTP incluso, até o boot
+    # seguinte. Trava em tests/render_openwrt_network.py.
     - name: Desativar daemons dnsmasq e odhcpd no inicialização do OpenWrt
-      ansible.builtin.raw: "/etc/init.d/dnsmasq disable && /etc/init.d/odhcpd disable && /etc/init.d/dnsmasq stop && /etc/init.d/odhcpd stop"
+      tags: rede
+      ansible.builtin.raw: "/etc/init.d/dnsmasq disable && /etc/init.d/odhcpd disable && /etc/init.d/dnsmasq stop && /etc/init.d/odhcpd stop && ln -sf /tmp/resolv.conf.d/resolv.conf.auto /tmp/resolv.conf"
       changed_when: true
 
     - name: Agendar reboot semanal automático nos domingos às 04:00 AM via Crontab

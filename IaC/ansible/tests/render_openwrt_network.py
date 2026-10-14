@@ -205,6 +205,22 @@ print("\nInvariante 10 — a troca recarrega o firewall do AP:")
 # interfaces antigas: a gerência nova cai no reject (13/10/2026).
 checar("/etc/init.d/firewall restart" in texto, "o script da troca reinicia o firewall")
 
+print("\nInvariante 10b — desligar o dnsmasq roda no --tags rede e devolve o resolvedor:")
+# O passo 11 rodou só `--tags rede`/`wifi`; sem tag, o disable do dnsmasq
+# ficou de fora. E o `stop` dele deixa /tmp/resolv.conf em 127.0.0.1: o AP
+# ficou sem resolver nome nenhum (14/10/2026).
+_dns = [t for t in tarefas if "/etc/init.d/dnsmasq disable" in str(t.get("ansible.builtin.raw", ""))]
+checar(len(_dns) == 1, "uma task desliga o dnsmasq")
+if _dns:
+    _tg = _dns[0].get("tags") or []
+    checar("rede" in ([_tg] if isinstance(_tg, str) else _tg), "ela tem a tag `rede`")
+    _cmd = str(_dns[0]["ansible.builtin.raw"])
+    checar(
+        "ln -sf /tmp/resolv.conf.d/resolv.conf.auto /tmp/resolv.conf" in _cmd
+        and _cmd.find("ln -sf") > _cmd.find("dnsmasq stop"),
+        "ela religa /tmp/resolv.conf ao resolv.conf.auto depois do stop",
+    )
+
 print("\nInvariante 11 — todo rádio declara o `path` do hardware:")
 # Sem `option path`, o netifd não associa o wifi-device a um phy, os rádios
 # ficam em `retry_setup_failed` e nenhum SSID sobe (13/10/2026).
