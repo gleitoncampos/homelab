@@ -77,6 +77,13 @@ if None not in ordem.values():
     checar(seq == sorted(seq), "ordem: check → preservação → backup → download → install → cai → volta → confere")
     inst = str(up[ordem["install"]]["ansible.builtin.raw"])
     checar("start-stop-daemon -S -b" in inst, "o install roda destacado da sessão SSH")
+    checar(" -m -p " in inst, "o install usa pidfile (sem ele o start-stop-daemon acha o led-health e não dispara)")
+    checar("INSTALL:DISPARADO" in str(up[ordem["install"]].get("failed_when", "")),
+           "o disparo do install é conferido, não ignorado")
+    play = yaml.safe_load((ANSIBLE / "playbooks/network/02-openwrt-upgrade.yml").read_text(encoding="utf-8"))[0]
+    checar(str(play["vars"]["_bkp_dir"]).startswith("{{ playbook_dir }}/../../../../.local/"),
+           "o backup vai para .local/ da raiz do repositório (4 níveis acima)")
+    checar(any("chmod" in str(t) and "0600" in str(t) for t in up), "o backup local fica 0600")
     checar("'OWUT:rc=0' not in" in str(up[ordem["download"]].get("failed_when", "")),
            "o download falha se o owut não sair com 0")
     conf = str(up[ordem["confere"]].get("failed_when", ""))

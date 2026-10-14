@@ -28,7 +28,9 @@
     openwrt_upgrade_versao: ""
     _owut_opts: "{{ ('-V ' ~ openwrt_upgrade_versao) if openwrt_upgrade_versao else '' }}"
     _imagem: /tmp/firmware.bin
-    _bkp_dir: "{{ playbook_dir }}/../../../.local/backups/openwrt"
+    # playbooks/network -> playbooks -> ansible -> IaC -> raiz: QUATRO níveis.
+    # Com três, o backup caía em IaC/.local/ (14/10/2026).
+    _bkp_dir: "{{ playbook_dir }}/../../../../.local/backups/openwrt"
 
   tasks:
     - name: Localizar o AP — sondar o endereço da VLAN de gerência
@@ -112,6 +114,13 @@
       become: false
       changed_when: true
 
+    - name: Restringir o backup a 0600 (contém senha de Wi-Fi)
+      ansible.builtin.command:
+        argv: [find, "{{ _bkp_dir }}", -type, f, -name, "config-*.tar.gz", -exec, chmod, "0600", "{}", +]
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
     # Síncrono: o build no servidor pode levar minutos. O owut confere a
     # imagem baixada (hash/assinatura) antes de devolver sucesso.
     - name: Montar, baixar e verificar a imagem (owut download)
@@ -122,11 +131,19 @@
 
     # DESTACADO da sessão: o install reinicia o AP e derruba a conexão que o
     # dispara — um `raw` síncrono ficaria pendurado e reportaria falha.
+    # ⚠️ COM pidfile (-m -p). Sem ele, o start-stop-daemon procura QUALQUER
+    # /bin/sh vivo, acha o led-health (`/bin/sh /usr/bin/led-health`), diz
+    # "/bin/sh is already running" e não dispara nada — o primeiro upgrade
+    # ficou parado assim, com a imagem baixada (14/10/2026). E o rc é
+    # conferido: era ignorado.
     - name: Instalar a imagem (owut install) e reiniciar
       ansible.builtin.raw: >-
-        start-stop-daemon -S -b -x /bin/sh -- -c
+        start-stop-daemon -S -b -m -p /tmp/owut-install.pid -x /bin/sh -- -c
         'sleep 3; owut install -i {{ _imagem }} >/tmp/owut-install.log 2>&1'
+        && echo INSTALL:DISPARADO
+      register: _install
       changed_when: true
+      failed_when: "'INSTALL:DISPARADO' not in _install.stdout"
 
     - name: Esperar o AP cair
       ansible.builtin.wait_for:
