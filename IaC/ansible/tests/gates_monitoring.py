@@ -49,6 +49,26 @@ checar("listen_interface" in exp and "openwrt_mgmt_vlan" in exp,
        "02-openwrt-exporter põe o exportador na interface de gerência")
 checar("openwrt_mgmt_ip" in exp, "02-openwrt-exporter acha o AP no endereço de gerência")
 
+# O AP rodou só com --tags rede/wifi: o /etc/config/system novo foi gravado,
+# mas o restart do `log` (sem tag) ficou de fora e o logread seguiu mandando
+# syslog para o servidor antigo (13/10/2026).
+setup = yaml.safe_load((ANSIBLE / "playbooks/network/02-openwrt-setup.yml").read_text(encoding="utf-8"))[0]
+ap = setup.get("tasks") or []
+grava = [t for t in ap if "/etc/config/system" in str(t.get("ansible.builtin.raw", "")) and "cat <<" in str(t.get("ansible.builtin.raw", ""))]
+reinicia = [t for t in ap if "/etc/init.d/log restart" in str(t.get("ansible.builtin.raw", ""))]
+checar(len(grava) == 1 and len(reinicia) == 1, "02-openwrt-setup: uma task grava o system e uma reinicia o log")
+
+
+def tags(t):
+    v = t.get("tags") or []
+    return {v} if isinstance(v, str) else set(v)
+
+
+if grava and reinicia:
+    tg = tags(grava[0])
+    checar(bool(tg) and tg <= tags(reinicia[0]),
+           f"o restart do log roda com as tags de quem grava o system ({sorted(tg)})")
+
 if falhas:
     sys.exit(f"\n✗ gates-monitoring: {len(falhas)} falha(s)")
 print("\n✓ gates-monitoring")

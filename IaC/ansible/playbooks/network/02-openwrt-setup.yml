@@ -463,7 +463,13 @@
     # O `wifi reload` saiu daqui: ele pertence à etapa `wifi`, que é quem
     # escreve o wireless. Mantê-lo nos dois lugares fazia o rádio recarregar
     # duas vezes numa execução completa, sem ganho.
+    #
+    # ⚠️ Tag `rede`, a mesma de quem grava o /etc/config/system: sem ela, um
+    # `--tags rede` trocava o destino do syslog no arquivo e o logread seguia
+    # mandando para o servidor antigo (13/10/2026). Trava em
+    # tests/gates_monitoring.py.
     - name: Recarregar serviços de Log e Firewall do OpenWrt
+      tags: rede
       ansible.builtin.raw: "/etc/init.d/log restart && reload_config"
       changed_when: true
 
