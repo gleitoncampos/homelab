@@ -107,3 +107,7 @@ __pycache__/
 # ⚠️  Guarde backup do seu 99-local.yml junto do backup do vault e do
 #     hosts.ini: sem ele o inventário sobe, mas com endereço de documentação.
 **/group_vars/**/99-local.yml
+
+# Binário do NFC do AP: compilado do fonte por `make xinfc`, nunca versionado.
+IaC/ansible/files/xinfc/xinfc-wsc
+IaC/ansible/files/xinfc/xinfc-wsc.sha256

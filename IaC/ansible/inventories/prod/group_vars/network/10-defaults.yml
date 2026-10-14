@@ -353,6 +353,20 @@ openwrt_uplink_port: "wan"
 openwrt_radio0_path: "platform/soc/18000000.wifi"
 openwrt_radio1_path: "platform/soc/18000000.wifi+1"
 
+# NFC do AP (chip `nt082c`, I²C 0x57 no barramento 0 do AX3000T). Grava a rede
+# de visitantes como etiqueta Wi-Fi (WSC) — só Android; iOS ignora o registro.
+# O binário sai do FONTE, deste commit, por `make xinfc` (playbook
+# network/02-openwrt-nfc.yml). ⚠️ Commit completo: build.sh recusa ref curto.
+openwrt_nfc_i2c_bus: "0"
+openwrt_nfc_i2c_addr: "0x57"
+# Teto do NDEF gravado. O xinfc aceita 160, mas em chips da família NTAG213 os
+# bytes de trava e configuração começam logo depois de 144 (endereço 0xA0), e
+# não há datasheet público do nt082c para descartar isso (14/10/2026).
+openwrt_nfc_max_ndef: 144
+xinfc_git_url: "https://github.com/gokutou/xinfc.git"
+xinfc_git_ref: "e25cd120c171b0e0bddfaed6fbcebc7dd360e845"
+xinfc_sdk_image: "openwrt/sdk:mediatek-filogic-25.12.5"
+
 # Portas deixadas FORA do bridge. Porta física dentro de um bridge que carrega
 # a VLAN de gerência é acesso privilegiado para quem alcançar o aparelho
 # fisicamente.

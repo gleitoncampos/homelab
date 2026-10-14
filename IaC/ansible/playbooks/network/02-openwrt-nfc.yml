@@ -1,0 +1,164 @@
+---
+# ==============================================================================
+# NFC do ponto de acesso: a rede de visitantes como etiqueta Wi-Fi
+# ==============================================================================
+# O AX3000T tem um chip NFC (`nt082c`, I²C) que o firmware original usava para
+# "encoste o celular e conecte". Este play grava nele a rede de VISITANTES no
+# formato Wi-Fi Simple Configuration (WSC): no Android, encostar abre o convite
+# nativo para conectar. O iOS ignora esse registro (ver backlog da Frente).
+#
+# ⚠️ A senha gravada é legível por QUALQUER celular que encoste no AP. Por isso
+#    só a rede de visitantes, nunca a principal.
+#
+# Pré-requisito: `make xinfc` — compila o xinfc-wsc do fonte, no commit fixado
+# em `xinfc_git_ref`, com o SDK oficial; o binário não é versionado.
+#
+#   ansible-playbook playbooks/network/02-openwrt-nfc.yml
+#
+# Grava só quando rede, senha ou binário mudaram (carimbo no AP): a memória do
+# chip tem ciclos de escrita finitos, e regravar a cada execução não ganha nada.
+# Trava em tests/gates_openwrt_nfc.py.
+# ==============================================================================
+- name: "OpenWrt - NFC com a rede de visitantes"
+  hosts: openwrt
+  gather_facts: false
+
+  vars:
+    _xinfc_local: "{{ playbook_dir }}/../../files/xinfc/xinfc-wsc"
+    _xinfc_dir: /root/xinfc
+    # O mesmo modo dos SSIDs de visitante em templates/network/openwrt_wireless.j2.
+    _nfc_modo: psk2
+
+  pre_tasks:
+    - name: Validar segredos do Vault exigidos por este play
+      ansible.builtin.include_tasks: "../../tasks/validate_vault.yml"
+      vars:
+        required_secrets:
+          - wifi_guest_ssid
+          - wifi_guest_password
+
+  tasks:
+    - name: Localizar o AP — sondar o endereço da VLAN de gerência
+      ansible.builtin.wait_for:
+        host: "{{ openwrt_mgmt_ip }}"
+        port: "{{ openwrt_ssh_port }}"
+        timeout: 5
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      register: _ap_na_vlan
+
+    - name: Apontar o inventário para a VLAN de gerência se o AP já estiver lá
+      ansible.builtin.set_fact:
+        ansible_host: "{{ openwrt_mgmt_ip }}"
+        ansible_port: "{{ openwrt_ssh_port }}"
+      when: (_ap_na_vlan.state | default('')) == 'started'
+
+    - name: Conferir que o binário foi compilado (make xinfc)
+      ansible.builtin.stat:
+        path: "{{ _xinfc_local }}"
+      delegate_to: localhost
+      become: false
+      register: _xinfc_bin
+
+    - name: Abortar sem o binário do xinfc
+      ansible.builtin.assert:
+        that: _xinfc_bin.stat.exists
+        fail_msg: "Rode `make xinfc` na raiz do repositório antes deste play."
+        quiet: true
+
+    # ⚠️ O xinfc NÃO acusa NDEF grande demais: `make_wsc_ndef` devolve 0, o laço
+    # de escrita não grava nada, a verificação lê 0 bytes e ele imprime
+    # "Success." (lido no fonte, 14/10/2026). O teto é conferido AQUI.
+    # 69 = cabeçalhos do registro WSC; + SSID + senha.
+    - name: Calcular o tamanho do NDEF e o carimbo da gravação
+      ansible.builtin.set_fact:
+        _ndef_bytes: "{{ 69 + (wifi_guest_ssid | length) + (wifi_guest_password | length) }}"
+        _nfc_carimbo: >-
+          {{ (wifi_guest_ssid ~ '|' ~ wifi_guest_password ~ '|' ~ _nfc_modo ~ '|'
+              ~ lookup('file', _xinfc_local ~ '.sha256')) | hash('sha256') }}
+      no_log: true
+
+    - name: Recusar NDEF acima do teto seguro ou com caractere fora de ASCII
+      ansible.builtin.assert:
+        that:
+          - _ndef_bytes | int <= openwrt_nfc_max_ndef | int
+          - wifi_guest_ssid | length >= 2 and wifi_guest_ssid | length <= 28
+          - wifi_guest_password | length >= 8 and wifi_guest_password | length <= 63
+          - (wifi_guest_ssid ~ wifi_guest_password) is match('^[ -~]*$')
+        fail_msg: >-
+          NDEF de {{ _ndef_bytes }} bytes (teto {{ openwrt_nfc_max_ndef }}), ou SSID/senha
+          fora dos limites do xinfc (SSID 2–28, senha 8–63, só ASCII imprimível).
+          Encurte a senha de visitantes ou não grave o NFC.
+        quiet: true
+
+    - name: Ler o carimbo da última gravação
+      ansible.builtin.raw: "cat {{ _xinfc_dir }}/carimbo 2>/dev/null; echo CARIMBO:FIM"
+      register: _carimbo_ap
+      changed_when: false
+      check_mode: false
+
+    - name: Decidir se o chip precisa ser regravado
+      ansible.builtin.set_fact:
+        _nfc_gravar: "{{ _nfc_carimbo not in _carimbo_ap.stdout }}"
+
+    # Sem python no AP: `copy` não serve; vai por scp, do nó de controle.
+    - name: Copiar o xinfc-wsc para o AP
+      ansible.builtin.command:
+        argv:
+          - scp
+          - -O
+          - -q
+          - -o
+          - IdentitiesOnly=yes
+          - -i
+          - "{{ ansible_ssh_private_key_file }}"
+          - -P
+          - "{{ ansible_port | default(22) }}"
+          - "{{ _xinfc_local }}"
+          - "root@{{ ansible_host }}:/usr/bin/xinfc-wsc"
+      delegate_to: localhost
+      become: false
+      changed_when: true
+      when: _nfc_gravar | bool
+
+    # no_log: a linha de comando leva SSID e senha. A SAÍDA do xinfc não ecoa
+    # nenhum dos dois, e é mostrada na task seguinte para diagnóstico.
+    # O xinfc guarda o conteúdo de fábrica em nfc_ndef_backup.bin na primeira
+    # execução (diretório corrente) — por isso o `cd`.
+    - name: Gravar a rede de visitantes no chip NFC
+      ansible.builtin.raw: |
+        mkdir -p {{ _xinfc_dir }} && cd {{ _xinfc_dir }} && chmod 0755 /usr/bin/xinfc-wsc
+        /usr/bin/xinfc-wsc {{ openwrt_nfc_i2c_bus }} {{ openwrt_nfc_i2c_addr }} {{ wifi_guest_ssid | quote }} {{ wifi_guest_password | quote }} {{ _nfc_modo }} 2>&1
+        echo "XINFC:rc=$?"
+      register: _xinfc
+      no_log: true
+      changed_when: true
+      failed_when: false
+      when: _nfc_gravar | bool
+
+    - name: Conferir a gravação
+      ansible.builtin.assert:
+        that:
+          - "'XINFC:rc=0' in _xinfc.stdout"
+          - "'Success.' in _xinfc.stdout"
+          - "'New NDEF is 0 bytes' not in _xinfc.stdout"
+        fail_msg: "{{ _xinfc.stdout_lines | default([]) | reject('search', '^\\.') | list }}"
+        success_msg: "{{ _xinfc.stdout_lines | default([]) | select('search', 'NDEF is|Success') | list }}"
+      when:
+        - _nfc_gravar | bool
+        - not ansible_check_mode
+
+    - name: Registrar o carimbo da gravação
+      ansible.builtin.raw: "echo '{{ _nfc_carimbo }}' > {{ _xinfc_dir }}/carimbo"
+      changed_when: true
+      when: _nfc_gravar | bool
+
+    - name: Dizer o que aconteceu
+      ansible.builtin.debug:
+        msg: >-
+          {{ ('--check: o NFC SERIA regravado' if ansible_check_mode else 'NFC regravado')
+             ~ ' com a rede de visitantes (' ~ _ndef_bytes ~ ' bytes).'
+             if _nfc_gravar | bool else 'NFC já estava com a rede de visitantes atual; nada gravado.' }}

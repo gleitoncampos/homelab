@@ -25,7 +25,7 @@ PLAYBOOKS   := $(wildcard $(ANSIBLE_DIR)/playbooks/*.yml $(ANSIBLE_DIR)/playbook
 .PHONY: help hooks check lint lint-yaml lint-ansible lint-shell lint-tf ssh-keys \
         validate-compose validate-ansible validate-patterns check-common-copies \
         secrets links snapshot omv-fs discover clean render-opnsense render-monitoring \
-        render-proxmox-ifaces render-openwrt-led render-openwrt-network render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass gates-node-bootstrap gates-swarm-ct gates-pve-exporter gates-monitoring gates-nut \
+        render-proxmox-ifaces render-openwrt-led render-openwrt-network render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass gates-node-bootstrap gates-swarm-ct gates-pve-exporter gates-monitoring gates-nut gates-openwrt-nfc \
         gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade \
         gates-tailscale gates-cpu-pinning validate-alloy render-traefik \
         gates-repositorios
@@ -36,6 +36,11 @@ help: ## Lista os alvos
 	  | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo
 	@echo "Comece por:  make hooks && make check"
+
+xinfc: ## Compila do fonte o xinfc-wsc (NFC do AP) no SDK oficial; saída gitignorada
+	@set -euo pipefail; \
+	eval "$$(python3 -c 'import yaml; d=yaml.safe_load(open("$(ANSIBLE_DIR)/inventories/prod/group_vars/network/10-defaults.yml")); print("url=%s ref=%s img=%s" % (d["xinfc_git_url"], d["xinfc_git_ref"], d["xinfc_sdk_image"]))')"; \
+	$(ANSIBLE_DIR)/files/xinfc/build.sh "$$url" "$$ref" "$$img"
 
 hooks: ## Ativa o gate de pre-commit neste clone (obrigatório, uma vez)
 	@git config core.hooksPath .githooks
@@ -57,7 +62,7 @@ ssh-keys: ## Instala a chave gerada pelo bootstrap em todo host do inventário (
 test-bootstrap: ## Testa os renderizadores do bootstrap contra os consumidores reais
 	@python3 IaC/bootstrap/test_render.py
 
-check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass gates-node-bootstrap gates-swarm-ct gates-pve-exporter gates-monitoring gates-nut gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade gates-tailscale gates-cpu-pinning validate-alloy render-traefik gates-repositorios ## Tudo que a CI roda
+check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass gates-node-bootstrap gates-swarm-ct gates-pve-exporter gates-monitoring gates-nut gates-openwrt-nfc gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade gates-tailscale gates-cpu-pinning validate-alloy render-traefik gates-repositorios ## Tudo que a CI roda
 	@echo
 	@echo "✓ check completo"
 
@@ -219,6 +224,9 @@ gates-pve-exporter: ## Confere o usuário só leitura do exporter do Proxmox no 
 
 gates-monitoring: ## Confere a stack de monitoramento (sem InfluxDB/Statping, pve-exporter no manager, exportador do AP)
 	@python3 $(ANSIBLE_DIR)/tests/gates_monitoring.py
+
+gates-openwrt-nfc: ## Confere o NFC do AP (teto do NDEF, no_log, modo de visitantes, binário fora do git)
+	@python3 $(ANSIBLE_DIR)/tests/gates_openwrt_nfc.py
 
 gates-nut: ## Confere que o 07-nut-ups só sobe o nut.target depois do upsmon.conf
 	@python3 $(ANSIBLE_DIR)/tests/gates_nut.py
