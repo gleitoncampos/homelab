@@ -402,6 +402,15 @@ traefik_porta_proxmox: 8006
 traefik_porta_omv: 80
 traefik_porta_openwrt: 80
 
+# Hostname do NAS. O Samba do OMV recusa ligar com hostname acima de 15
+# caracteres (limite de nome NetBIOS), e o que a VM recebe do cloud-init é o
+# nome dela no Terraform (`openmediavault-nas`, 18). O nome da VM fica:
+# trocá-lo muda o instance-id do cloud-init, que roda de novo e regera as
+# chaves SSH do host. Aqui, e não nos vars do 00-omv-setup.yml, porque a rota
+# do Traefik (rotas.yml.j2, renderizada no manager) também precisa dele: no
+# play, ela não o via e publicava o NAS como `omv` (14/10/2026).
+omv_hostname: kamartaj
+
 # Mesma forma do `monitoring_sidecar_files`: uma fonte para o playbook saber
 # o que renderizar, para onde e com que permissão.
 traefik_sidecar_files:

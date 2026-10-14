@@ -120,12 +120,8 @@
     # administrador humano, e administrar um NAS eventualmente exige console.
     omv_admin_shell: /usr/bin/bash
 
-    # Hostname do NAS. O Samba do OMV recusa ligar com hostname acima de 15
-    # caracteres (limite de nome NetBIOS), e o que a VM recebe do cloud-init é
-    # o nome dela no Terraform (`openmediavault-nas`, 18). O nome da VM fica:
-    # trocá-lo muda o instance-id do cloud-init, que roda de novo e regera as
-    # chaves SSH do host.
-    omv_hostname: kamartaj
+    # `omv_hostname` vem do inventário (_common/all.yml): a rota do Traefik
+    # também o lê.
 
   pre_tasks:
     - name: Validar segredos do Vault exigidos por este play

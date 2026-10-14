@@ -38,22 +38,26 @@ GRUPOS = {
     "omv": ["nas-um"],
 }
 # ⚠️ O nome de inventário e o `*_hostname` são DE PROPÓSITO diferentes.
-IDENTIDADE = {"fw-um": "firewall-renomeado", "ap-um": "ponto-de-acesso"}
+IDENTIDADE = {"fw-um": "firewall-renomeado", "ap-um": "ponto-de-acesso", "nas-um": "nas-renomeado"}
 ENDERECOS = {
     "fw-um": "192.0.2.1", "ap-um": "192.0.2.2",
     "hv-um": "192.0.2.40", "hv-dois": "192.0.2.41",
     "nas-um": "192.0.2.20",
 }
+# O AP é alcançado pela gerência, não pelo `ansible_host` (endereço antigo).
+GERENCIA_AP = "192.0.2.3"
 CONTEXTO = {
     "groups": GRUPOS,
     "hostvars": {
         "fw-um": {"ansible_host": ENDERECOS["fw-um"],
                   "opnsense_hostname": IDENTIDADE["fw-um"]},
         "ap-um": {"ansible_host": ENDERECOS["ap-um"],
+                  "openwrt_mgmt_ip": GERENCIA_AP,
                   "openwrt_hostname": IDENTIDADE["ap-um"]},
         "hv-um": {"ansible_host": ENDERECOS["hv-um"]},
         "hv-dois": {"ansible_host": ENDERECOS["hv-dois"]},
-        "nas-um": {"ansible_host": ENDERECOS["nas-um"]},
+        "nas-um": {"ansible_host": ENDERECOS["nas-um"],
+                   "omv_hostname": IDENTIDADE["nas-um"]},
     },
     "homelab_domain": "casa.example",
     "traefik_certresolver": "cloudflare",
@@ -107,7 +111,7 @@ checar("serversTransports" not in doc,
        "serversTransports está DENTRO de http:, não na raiz")
 
 esperados = {
-    IDENTIDADE["fw-um"], IDENTIDADE["ap-um"], "hv-um", "hv-dois", "nas-um",
+    IDENTIDADE["fw-um"], IDENTIDADE["ap-um"], "hv-um", "hv-dois", IDENTIDADE["nas-um"],
 }
 checar(set(routers) == esperados,
        f"uma rota por equipamento dos quatro grupos ({len(esperados)})")
@@ -116,12 +120,12 @@ if set(routers) != esperados:
 
 # O CONTROLE NEGATIVO. Se o template voltar a usar o nome de inventário, estes
 # dois nomes aparecem no render e o gate fica vermelho.
-for inventario in ("fw-um", "ap-um"):
+for inventario in ("fw-um", "ap-um", "nas-um"):
     checar(inventario not in texto,
            f"o nome de inventário '{inventario}' NÃO aparece no render "
            f"(a rota segue *_hostname, não o inventário)")
 
-for nome, ident in (("fw-um", IDENTIDADE["fw-um"]), ("ap-um", IDENTIDADE["ap-um"])):
+for nome, ident in IDENTIDADE.items():
     regra = (routers.get(ident) or {}).get("rule", "")
     checar(regra == f"Host(`{ident}.casa.example`)",
            f"Host() de {nome} usa a identidade '{ident}'")
@@ -133,6 +137,12 @@ for nome, roteador in routers.items():
            f"router {nome} publica só em websecure")
     checar((roteador.get("tls") or {}).get("certResolver") == "cloudflare",
            f"router {nome} usa o certresolver da variável")
+
+# A rota do AP vai à gerência; com o `ansible_host` antigo dava timeout
+# (14/10/2026).
+_ap = ((services.get(IDENTIDADE["ap-um"]) or {}).get("loadBalancer") or {}).get("servers") or [{}]
+checar(_ap[0].get("url") == f"http://{GERENCIA_AP}:80",
+       "a rota do AP aponta para openwrt_mgmt_ip")
 
 # ⚠️ Hipervisor e firewall apresentam certificado autoassinado; NAS e AP são
 # HTTP puro. Um `insecureSkipVerify` sobrando é confiança concedida sem

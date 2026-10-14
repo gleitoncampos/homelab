@@ -17,9 +17,17 @@
   playbooks 01/02 de rede escrevem no equipamento; se a rota repetisse o nome
   em literal, renomear o firewall pelo IaC trocaria o hostname e deixaria a
   rota apontando para um Host() que ninguém mais atende — sem erro, porque
-  uma regra que não casa nada é uma regra válida. Hipervisor e NAS não têm
-  variável de identidade (nada no IaC escreve /etc/hostname neles), então
-  para eles a autoridade é o nome do host no inventário.
+  uma regra que não casa nada é uma regra válida. O NAS também tem:
+  `omv_hostname`, que o 00-omv-setup.yml grava nele (sem ela a rota saía
+  com o nome do inventário, `omv`, e `kamartaj` dava 404 — 14/10/2026).
+  Hipervisor não tem variável de identidade (nada no IaC escreve
+  /etc/hostname neles), então para ele a autoridade é o nome do host no
+  inventário.
+
+  ⚠️ O AP é alcançado pela VLAN de gerência (`openwrt_mgmt_ip`), não pelo
+  `ansible_host` do inventário, que segue no endereço antigo — mesmo caso do
+  exportador dele no prometheus.yml (13/10/2026). Na rota antiga o `falcon`
+  dava timeout.
 
   ⚠️ As duas variáveis de identidade vivem em group_vars/network/, que só é
   visível para os hosts dos grupos opnsense/openwrt. Este template renderiza
@@ -43,7 +51,7 @@
 {% for h in groups['openwrt'] | default([]) %}
 {%   set _ = rotas.append({
         'nome': hostvars[h].openwrt_hostname,
-        'url': 'http://' ~ hostvars[h].ansible_host ~ ':' ~ traefik_porta_openwrt,
+        'url': 'http://' ~ (hostvars[h].openwrt_mgmt_ip | default(hostvars[h].ansible_host)) ~ ':' ~ traefik_porta_openwrt,
         'inseguro': false}) %}
 {% endfor %}
 {% for h in groups['proxmox'] | default([]) %}
@@ -54,7 +62,7 @@
 {% endfor %}
 {% for h in groups['omv'] | default([]) %}
 {%   set _ = rotas.append({
-        'nome': h,
+        'nome': hostvars[h].omv_hostname | default(h),
         'url': 'http://' ~ hostvars[h].ansible_host ~ ':' ~ traefik_porta_omv,
         'inseguro': false}) %}
 {% endfor %}
