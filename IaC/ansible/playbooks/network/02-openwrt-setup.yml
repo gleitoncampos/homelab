@@ -425,6 +425,23 @@
           (`--tags rede`). Ver .local/docs/TODO-E-ROADMAP.md, item 1.1.8.
         success_msg: "A rede do AP declara todas as VLANs dos SSIDs."
 
+    # ⚠️ O `path` do rádio muda com o kernel (23.05 → 24.10 foi para baixo de
+    # `soc/`). Gravado errado, o netifd fica em `retry_setup_failed` e a casa
+    # perde o Wi-Fi — aconteceu no setup pós-upgrade (14/10/2026). Conferir no
+    # equipamento ANTES de escrever. Trava em tests/render_openwrt_network.py,
+    # invariante 11b.
+    - name: Conferir no AP o path de hardware de cada rádio
+      tags: wifi
+      ansible.builtin.raw: |
+        for p in {{ openwrt_radio0_path }} {{ openwrt_radio1_path }}; do
+          [ -e "/sys/devices/${p%+*}" ] || echo "PATH-AUSENTE:$p"
+        done
+        echo PATH:FIM
+      register: _radio_path
+      changed_when: false
+      check_mode: false
+      failed_when: "'PATH:FIM' not in _radio_path.stdout or 'PATH-AUSENTE' in _radio_path.stdout"
+
     # no_log: o template renderizado contém as 4 PSKs de Wi-Fi em texto puro.
     - name: Aplicar configuração de Wi-Fi e SSIDs Segregados em /etc/config/wireless
       tags: wifi

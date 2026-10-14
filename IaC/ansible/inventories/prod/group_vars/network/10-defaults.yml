@@ -345,8 +345,13 @@ openwrt_uplink_port: "wan"
 # wifi-device a um phy e nenhum SSID sobe (13/10/2026). Valores do Xiaomi
 # AX3000T (mediatek/filogic); outro modelo: `cat /etc/config/wireless` de
 # fábrica, ou `wifi config`.
-openwrt_radio0_path: "platform/18000000.wifi"
-openwrt_radio1_path: "platform/18000000.wifi+1"
+#
+# ⚠️ O caminho MUDA com o kernel: na 23.05 era `platform/18000000.wifi`; na
+# 24.10 o nó foi para baixo de `soc/`. Com o valor antigo, o setup pós-upgrade
+# derrubou os dois rádios (14/10/2026). O playbook confere o caminho no AP
+# antes de gravar o wireless (`/sys/devices/<path sem o +N>`) e aborta.
+openwrt_radio0_path: "platform/soc/18000000.wifi"
+openwrt_radio1_path: "platform/soc/18000000.wifi+1"
 
 # Portas deixadas FORA do bridge. Porta física dentro de um bridge que carrega
 # a VLAN de gerência é acesso privilegiado para quem alcançar o aparelho

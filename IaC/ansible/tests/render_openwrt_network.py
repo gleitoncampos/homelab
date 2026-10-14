@@ -267,6 +267,18 @@ if _sys and _bbr:
     checar('echo "BBR:rc=$?"' in str(tarefas[_bbr[0]]["ansible.builtin.raw"]),
            "a instalação do módulo imprime o rc do opkg")
 
+print("\nInvariante 11b — o path de cada rádio é conferido no AP antes de gravar o wireless:")
+# O path muda com o kernel; gravado errado, a casa perde o Wi-Fi (14/10/2026).
+_conf = next((i for i, t in enumerate(tarefas) if "/sys/devices/" in str(t.get("ansible.builtin.raw", ""))
+              and "openwrt_radio0_path" in str(t.get("ansible.builtin.raw", ""))), None)
+_grava = next((i for i, t in enumerate(tarefas) if "/etc/config/wireless" in str(t.get("ansible.builtin.raw", ""))
+               and "cat <<" in str(t.get("ansible.builtin.raw", ""))), None)
+checar(_conf is not None and _grava is not None and _conf < _grava,
+       "a conferência do path vem antes de gravar o /etc/config/wireless")
+if _conf is not None:
+    checar("wifi" in (tarefas[_conf].get("tags") or []), "a conferência roda com a tag `wifi`")
+    checar("PATH-AUSENTE" in str(tarefas[_conf].get("failed_when", "")), "path ausente faz a task falhar")
+
 print("\nInvariante 11 — todo rádio declara o `path` do hardware:")
 # Sem `option path`, o netifd não associa o wifi-device a um phy, os rádios
 # ficam em `retry_setup_failed` e nenhum SSID sobe (13/10/2026).
