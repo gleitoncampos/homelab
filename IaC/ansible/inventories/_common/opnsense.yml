@@ -887,6 +887,68 @@ opnsense_rules:
     shaper1: ''
     shaper2: ''
     description: Isentos do DNS forcado (managers do Swarm) consultam DNS publico na 53
+  # Passagem SÓ de ICMP echo request para a DOH_list, ANTES do bloqueio
+  # anti-DoH abaixo. ICMP não transporta DNS: liberar o ping não reabre
+  # DoH. Sem isto, 1.1.1.1 e 8.8.8.8 (alvos do led-health do AP e de
+  # qualquer teste de "tem internet?") não respondem ping, e o AP pisca
+  # laranja de "sem internet" com a internet no ar (14/10/2026). Sem log:
+  # o led-health pinga a cada 3 s. Trava em
+  # tests/render_opnsense_dns_bypass.py.
+  - uuid: a1000000-0000-4000-8000-00000000ec00
+    enabled: '1'
+    statetype: keep
+    state-policy: ''
+    sequence: '1'
+    action: pass
+    quick: '1'
+    interfacenot: '0'
+    interface: lan,vlan10,vlan20,vlan30,vlan40,vlan50
+    direction: in
+    ipprotocol: inet
+    protocol: ICMP
+    icmptype: echoreq
+    icmp6type: ''
+    source_net: any
+    source_not: '0'
+    source_port: ''
+    destination_net: DOH_list
+    destination_not: '0'
+    destination_port: ''
+    divert-to: ''
+    gateway: ''
+    replyto: ''
+    disablereplyto: '0'
+    log: '0'
+    allowopts: '0'
+    nosync: '0'
+    nopfsync: '0'
+    statetimeout: ''
+    udp-first: ''
+    udp-multiple: ''
+    udp-single: ''
+    max-src-nodes: ''
+    max-src-states: ''
+    max-src-conn: ''
+    max: ''
+    max-src-conn-rate: ''
+    max-src-conn-rates: ''
+    overload: ''
+    adaptivestart: ''
+    adaptiveend: ''
+    prio: ''
+    set-prio: ''
+    set-prio-low: ''
+    tag: ''
+    tagged: ''
+    tcpflags1: ''
+    tcpflags2: ''
+    tcpflags_any: '0'
+    categories: ''
+    sched: ''
+    tos: ''
+    shaper1: ''
+    shaper2: ''
+    description: Ping (echo request) aos IPs da DOH_list, sinal de internet do AP
   - uuid: ffec6963-1b39-4078-80a4-c866447be8f7
     enabled: '1'
     statetype: keep

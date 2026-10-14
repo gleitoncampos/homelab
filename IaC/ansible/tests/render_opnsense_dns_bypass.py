@@ -84,6 +84,22 @@ checar("_dns_bypass_managers" in pb and "homelab_managers" in pb,
 checar(pb.find("_dns_bypass_managers") < pb.find("Aplicar novo arquivo /conf/config.xml"),
        "a lista é montada antes de aplicar o config.xml")
 
+# O mesmo bloqueio mata o ping para 1.1.1.1/8.8.8.8, que é o sinal de
+# internet do led-health do AP: com a internet no ar, o AP piscava "sem
+# internet" (14/10/2026). Passagem só de ICMP echo request, antes do bloqueio.
+ping = next((i for i, r in enumerate(regras)
+             if _campo(r, "action", "type") == "pass"
+             and _campo(r, "protocol").lower() == "icmp"
+             and "DOH_list" in _campo(r, "destination_net", "destination/network", "destination/address")), None)
+checar(ping is not None, "existe passagem ICMP -> DOH_list")
+if ping is not None:
+    r = regras[ping]
+    checar(_campo(r, "icmptype") == "echoreq", "a passagem ICMP é só echo request")
+    checar(bloq is not None and ping < bloq, "a passagem ICMP vem antes do bloqueio anti-DoH")
+    if bloq is not None:
+        checar(int(_campo(r, "sequence") or 0) <= int(_campo(regras[bloq], "sequence") or 0),
+               "sequence da passagem ICMP <= sequence do bloqueio")
+
 if falhas:
     sys.exit(f"\n✗ render-opnsense-dns-bypass: {len(falhas)} falha(s)")
 print("\n✓ render-opnsense-dns-bypass")
