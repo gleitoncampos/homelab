@@ -1,0 +1,173 @@
+---
+# ==============================================================================
+# Upgrade do ponto de acesso pelo owut (OpenWrt Upgrade Tool)
+# ==============================================================================
+# O owut pede ao servidor oficial (sysupgrade.openwrt.org) uma imagem da versão
+# alvo com os pacotes ATUAIS e os pacotes que nós instalamos já embutidos, e
+# grava como um sysupgrade normal, mantendo a configuração. É o caminho que o
+# OpenWrt recomenda — `apk upgrade` de pacote da imagem base grava cópias no
+# overlay e foge dele. O servidor recebe só a lista de pacotes, nada de config.
+#
+#   ansible-playbook playbooks/network/02-openwrt-upgrade.yml            # mesma versão, pacotes novos
+#   ansible-playbook playbooks/network/02-openwrt-upgrade.yml -e openwrt_upgrade_versao=25.12.6
+#
+# ⚠️ O AP reinicia: ~1 min sem Wi-Fi. Rollback: o backup da config fica em
+#    .local/backups/openwrt/ (gitignorado, contém senha); imagem anterior pelo
+#    sysupgrade ou, sem boot, failsafe/TFTP (ver a Frente do homelab).
+#
+# Pré-requisito: o 02-openwrt-setup.yml já rodou nesta versão do IaC — é ele
+# que põe no /etc/sysupgrade.conf o que precisa sobreviver (led-health, cron,
+# scripts, xinfc). Este play confere isso antes de gravar.
+# Trava em tests/gates_openwrt_upgrade.py.
+# ==============================================================================
+- name: "OpenWrt - upgrade pelo owut"
+  hosts: openwrt
+  gather_facts: false
+
+  vars:
+    openwrt_upgrade_versao: ""
+    _owut_opts: "{{ ('-V ' ~ openwrt_upgrade_versao) if openwrt_upgrade_versao else '' }}"
+    _imagem: /tmp/firmware.bin
+    _bkp_dir: "{{ playbook_dir }}/../../../.local/backups/openwrt"
+
+  tasks:
+    - name: Localizar o AP — sondar o endereço da VLAN de gerência
+      ansible.builtin.wait_for:
+        host: "{{ openwrt_mgmt_ip }}"
+        port: "{{ openwrt_ssh_port }}"
+        timeout: 5
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      register: _ap_na_vlan
+
+    - name: Apontar o inventário para a VLAN de gerência se o AP já estiver lá
+      ansible.builtin.set_fact:
+        ansible_host: "{{ openwrt_mgmt_ip }}"
+        ansible_port: "{{ openwrt_ssh_port }}"
+      when: (_ap_na_vlan.state | default('')) == 'started'
+
+    - name: Verificar se há atualização (owut check)
+      ansible.builtin.raw: "owut check {{ _owut_opts }} 2>&1; echo \"OWUT:rc=$?\""
+      register: _check
+      changed_when: false
+      check_mode: false
+      failed_when: "'OWUT:rc=0' not in _check.stdout"
+
+    # "N packages are out-of-date" (pacotes) ou Version-from != Version-to
+    # (versão nova pedida por -e). Sem nenhum dos dois, não há o que fazer.
+    - name: Decidir se o upgrade roda
+      ansible.builtin.set_fact:
+        _de: "{{ (_check.stdout | regex_search('Version-from\\s+(\\S+ \\S+)', '\\1') or ['?']) | first }}"
+        _para: "{{ (_check.stdout | regex_search('Version-to\\s+(\\S+ \\S+)', '\\1') or ['?']) | first }}"
+        _desatualizados: "{{ ((_check.stdout | regex_search('(\\d+) packages are out-of-date', '\\1') or ['0']) | first) | int }}"
+
+    - name: Dizer o que será feito
+      ansible.builtin.debug:
+        msg: "{{ _de }} -> {{ _para }}; {{ _desatualizados }} pacote(s) desatualizado(s)."
+
+    - name: Encerrar quando já está em dia
+      ansible.builtin.meta: end_host
+      when: _desatualizados | int == 0 and _de == _para
+
+    - name: Conferir que o sysupgrade preserva os arquivos do IaC
+      ansible.builtin.raw: "sysupgrade -l | grep -c -E '^(/usr/bin/led-health|/etc/crontabs/root)$'"
+      register: _preserva
+      changed_when: false
+      check_mode: false
+      failed_when: (_preserva.stdout | trim | int) < 2
+
+    - name: Gerar o backup da configuração no AP
+      ansible.builtin.raw: "sysupgrade -b /tmp/iac-config-backup.tar.gz && echo BACKUP:OK"
+      register: _bkp
+      changed_when: false
+      failed_when: "'BACKUP:OK' not in _bkp.stdout"
+
+    - name: Criar o diretório local do backup
+      ansible.builtin.file:
+        path: "{{ _bkp_dir }}"
+        state: directory
+        mode: '0700'
+      delegate_to: localhost
+      become: false
+
+    # Sem python no AP: vai por scp, do nó de controle. Contém senha de Wi-Fi.
+    - name: Trazer o backup da configuração para o nó de controle
+      ansible.builtin.command:
+        argv:
+          - scp
+          - -O
+          - -q
+          - -o
+          - IdentitiesOnly=yes
+          - -i
+          - "{{ ansible_ssh_private_key_file }}"
+          - -P
+          - "{{ ansible_port | default(22) }}"
+          - "root@{{ ansible_host }}:/tmp/iac-config-backup.tar.gz"
+          - "{{ _bkp_dir }}/config-{{ _de | regex_replace('[^0-9A-Za-z.-]+', '_') }}-{{ now(utc=true, fmt='%Y%m%dT%H%M%SZ') }}.tar.gz"
+      delegate_to: localhost
+      become: false
+      changed_when: true
+
+    # Síncrono: o build no servidor pode levar minutos. O owut confere a
+    # imagem baixada (hash/assinatura) antes de devolver sucesso.
+    - name: Montar, baixar e verificar a imagem (owut download)
+      ansible.builtin.raw: "owut download {{ _owut_opts }} -i {{ _imagem }} 2>&1; echo \"OWUT:rc=$?\""
+      register: _download
+      changed_when: true
+      failed_when: "'OWUT:rc=0' not in _download.stdout"
+
+    # DESTACADO da sessão: o install reinicia o AP e derruba a conexão que o
+    # dispara — um `raw` síncrono ficaria pendurado e reportaria falha.
+    - name: Instalar a imagem (owut install) e reiniciar
+      ansible.builtin.raw: >-
+        start-stop-daemon -S -b -x /bin/sh -- -c
+        'sleep 3; owut install -i {{ _imagem }} >/tmp/owut-install.log 2>&1'
+      changed_when: true
+
+    - name: Esperar o AP cair
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: "{{ ansible_port }}"
+        state: stopped
+        timeout: 300
+      delegate_to: localhost
+      become: false
+      when: not ansible_check_mode
+
+    - name: Esperar o AP voltar
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: "{{ ansible_port }}"
+        state: started
+        delay: 20
+        timeout: 600
+      delegate_to: localhost
+      become: false
+      when: not ansible_check_mode
+
+    - name: Encerrar a conexão de antes do reboot
+      ansible.builtin.meta: reset_connection
+
+    - name: Conferir o AP depois do upgrade
+      ansible.builtin.raw: |
+        . /etc/openwrt_release; echo "VERSAO:$DISTRIB_RELEASE $DISTRIB_REVISION"
+        echo "RADIOS:$(ubus call network.wireless status | jsonfilter -e '@.radio0.up' -e '@.radio1.up' | tr '\n' ' ')"
+        ps w | grep -q '[/]usr/bin/led-health' && echo LED:OK
+        grep -q openwrt-update-metrics /etc/crontabs/root && echo CRON:OK
+        owut check {{ _owut_opts }} 2>&1 | grep -E 'out-of-date|up-to-date' || echo "PACOTES:em dia"
+      register: _depois
+      changed_when: false
+      when: not ansible_check_mode
+      failed_when: >-
+        'RADIOS:true true' not in _depois.stdout
+        or 'LED:OK' not in _depois.stdout
+        or 'CRON:OK' not in _depois.stdout
+
+    - name: Dizer o resultado
+      ansible.builtin.debug:
+        msg: "{{ _depois.stdout_lines | default([]) | select('search', '^(VERSAO|RADIOS|LED|CRON|PACOTES)|out-of-date') | list }}"
+      when: not ansible_check_mode

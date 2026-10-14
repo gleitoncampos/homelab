@@ -129,6 +129,26 @@ xinfc_git_url: "https://github.com/gokutou/xinfc.git"
 xinfc_git_ref: "e25cd120c171b0e0bddfaed6fbcebc7dd360e845"
 xinfc_sdk_image: "openwrt/sdk:mediatek-filogic-25.12.5"
 
+# Arquivos do IaC que um sysupgrade (inclusive o `owut upgrade` do
+# 02-openwrt-upgrade.yml) apagaria: fora de /etc/config e dos conffiles dos
+# pacotes, só sobrevive o que estiver no /etc/sysupgrade.conf. Sem isto, todo
+# upgrade exigia rodar setup, exportador e NFC de novo (14/10/2026: crontab,
+# led-health e scripts sumiram nos dois saltos). O setup grava esta lista num
+# bloco marcado do arquivo; os rc.d do led-health vão junto para ele voltar
+# HABILITADO. Pacotes (BBR, textfile, nlbwmon) não entram aqui: o owut os
+# embute na imagem.
+openwrt_sysupgrade_keep:
+  - /usr/bin/led-health
+  - /etc/init.d/led-health
+  - /etc/rc.d/S97led-health
+  - /etc/rc.d/K10led-health
+  - /usr/bin/iac-net-failsafe
+  - /usr/bin/openwrt-update-metrics
+  - /etc/crontabs/root
+  - /etc/sysctl.d/99-iac-tuning.conf
+  - /usr/bin/xinfc-wsc
+  - /root/xinfc/
+
 # Portas deixadas FORA do bridge. Porta física dentro de um bridge que carrega
 # a VLAN de gerência é acesso privilegiado para quem alcançar o aparelho
 # fisicamente.

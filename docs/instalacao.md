@@ -480,6 +480,7 @@ isso restringe o **passo**. `--limit` restringe **hosts**, nunca playbooks:
 | access point | `ansible-playbook playbooks/network/02-openwrt-setup.yml` | `openwrt` |
 | exportador do AP | `ansible-playbook playbooks/network/02-openwrt-exporter.yml` | `openwrt` |
 | NFC do AP | `make xinfc` + `ansible-playbook playbooks/network/02-openwrt-nfc.yml` | `openwrt` |
+| upgrade do AP (owut) | `ansible-playbook playbooks/network/02-openwrt-upgrade.yml` (`-e openwrt_upgrade_versao=X` para trocar de versão) | `openwrt` |
 
 O inventário default é o de produção (`ansible.cfg`); para dev, passe
 `-i inventories/dev/hosts.ini`.

@@ -25,7 +25,7 @@ PLAYBOOKS   := $(wildcard $(ANSIBLE_DIR)/playbooks/*.yml $(ANSIBLE_DIR)/playbook
 .PHONY: help hooks check lint lint-yaml lint-ansible lint-shell lint-tf ssh-keys \
         validate-compose validate-ansible validate-patterns check-common-copies \
         secrets links snapshot omv-fs discover clean render-opnsense render-monitoring \
-        render-proxmox-ifaces render-openwrt-led render-openwrt-network render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass render-opnsense-antiportscan gates-node-bootstrap gates-swarm-ct gates-pve-exporter gates-monitoring gates-nut gates-openwrt-nfc \
+        render-proxmox-ifaces render-openwrt-led render-openwrt-network render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass render-opnsense-antiportscan gates-node-bootstrap gates-swarm-ct gates-pve-exporter gates-monitoring gates-nut gates-openwrt-nfc gates-openwrt-upgrade \
         gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade \
         gates-tailscale gates-cpu-pinning validate-alloy render-traefik \
         gates-repositorios
@@ -62,7 +62,7 @@ ssh-keys: ## Instala a chave gerada pelo bootstrap em todo host do inventário (
 test-bootstrap: ## Testa os renderizadores do bootstrap contra os consumidores reais
 	@python3 IaC/bootstrap/test_render.py
 
-check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass render-opnsense-antiportscan gates-node-bootstrap gates-swarm-ct gates-pve-exporter gates-monitoring gates-nut gates-openwrt-nfc gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade gates-tailscale gates-cpu-pinning validate-alloy render-traefik gates-repositorios ## Tudo que a CI roda
+check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass render-opnsense-antiportscan gates-node-bootstrap gates-swarm-ct gates-pve-exporter gates-monitoring gates-nut gates-openwrt-nfc gates-openwrt-upgrade gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade gates-tailscale gates-cpu-pinning validate-alloy render-traefik gates-repositorios ## Tudo que a CI roda
 	@echo
 	@echo "✓ check completo"
 
@@ -227,6 +227,9 @@ gates-pve-exporter: ## Confere o usuário só leitura do exporter do Proxmox no 
 
 gates-monitoring: ## Confere a stack de monitoramento (sem InfluxDB/Statping, pve-exporter no manager, exportador do AP)
 	@python3 $(ANSIBLE_DIR)/tests/gates_monitoring.py
+
+gates-openwrt-upgrade: ## Confere o upgrade do AP pelo owut e a preservação dos arquivos do IaC no sysupgrade
+	@python3 $(ANSIBLE_DIR)/tests/gates_openwrt_upgrade.py
 
 gates-openwrt-nfc: ## Confere o NFC do AP (teto do NDEF, no_log, modo de visitantes, binário fora do git)
 	@python3 $(ANSIBLE_DIR)/tests/gates_openwrt_nfc.py
