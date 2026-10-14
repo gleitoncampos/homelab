@@ -28,7 +28,6 @@ SWARM = RAIZ / "docker" / "monitoring" / "swarm"
 
 # Faixas de documentação da RFC 5737 e domínios .example — nunca dado real.
 GRUPOS = {
-    "homelab_managers": ["mgr-um", "mgr-dois"],
     "omv": ["nas-um", "nas-dois"],
     "openwrt": ["ap-um", "ap-dois"],
     "opnsense": ["fw-um"],
@@ -101,11 +100,13 @@ if prom:
     )
     # Serviço global do Swarm vira alvo por DNS SD: o `tasks.<serviço>` devolve
     # um A por nó e o alvo estático usaria só o primeiro (14/10/2026).
-    cad = next(j for j in prom["scrape_configs"] if j["job_name"] == "cadvisor")
-    checar("static_configs" not in cad
-           and cad.get("dns_sd_configs", [{}])[0].get("names") == ["tasks.monitoring_cadvisor"]
-           and cad["dns_sd_configs"][0].get("type") == "A",
-           "cadvisor descoberto por dns_sd_configs (todas as tasks)")
+    for job, svc in (("cadvisor", "monitoring_cadvisor"), ("node_exporter", "monitoring_node_exporter")):
+        j = next(x for x in prom["scrape_configs"] if x["job_name"] == job)
+        estaticos = " ".join(t for sc in j.get("static_configs") or [] for t in sc["targets"])
+        checar(f"tasks.{svc}" not in estaticos
+               and j.get("dns_sd_configs", [{}])[0].get("names") == [f"tasks.{svc}"]
+               and j["dns_sd_configs"][0].get("type") == "A",
+               f"{job} do Swarm descoberto por dns_sd_configs (todas as tasks)")
     for host in GRUPOS["omv"] + GRUPOS["proxmox"]:
         checar(ENDERECOS[host] in alvos, f"{host} virou alvo")
     ow_job = next(j for j in prom["scrape_configs"] if j["job_name"] == "openwrt")

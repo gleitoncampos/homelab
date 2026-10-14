@@ -26,11 +26,22 @@ scrape_configs:
 
   # node_exporter: o do Swarm (serviço global, um por nó) e o do NAS, que roda
   # fora do cluster.
+  #
+  # ⚠️ O do Swarm vem por `dns_sd_configs`, não `static_configs`: o
+  # `tasks.<serviço>` devolve um A por nó, e o alvo estático usava só o
+  # primeiro — o outro nó nunca era raspado, e o que era levava o rótulo do
+  # manager fosse quem fosse (14/10/2026). O `instance` dele é o IP do
+  # overlay; o nó real está em `node_uname_info{nodename}` (o compose põe o
+  # hostname do nó no container).
   - job_name: node_exporter
     scrape_interval: 60s
+    dns_sd_configs:
+      - names:
+          - tasks.monitoring_node_exporter
+        type: A
+        port: 9100
     static_configs:
       - targets:
-          - tasks.monitoring_node_exporter:9100
 {# Um laço só para NAS e hipervisores: os dois publicam o mesmo exporter na
    mesma porta, e separá-los duplicaria o bloco de relabel sem ganho nenhum.
    Os hipervisores entraram em 26/08/2026 — antes disso o job cobria só o NAS,
@@ -40,10 +51,6 @@ scrape_configs:
           - "{{ hostvars[host].ansible_host }}:9100"
 {% endfor %}
     relabel_configs:
-      - source_labels: [__address__]
-        regex: tasks\.monitoring_node_exporter:9100
-        target_label: instance
-        replacement: "{{ (groups['homelab_managers'] | default(['swarm']))[0] | upper }}"
 {% for host in (groups['omv'] | default([])) + (groups['proxmox'] | default([])) %}
       - source_labels: [__address__]
         regex: {{ hostvars[host].ansible_host | regex_escape }}:9100

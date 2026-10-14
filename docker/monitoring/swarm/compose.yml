@@ -34,6 +34,9 @@ services:
 
   node_exporter:
     image: quay.io/prometheus/node-exporter:v1.9.1
+    # O `instance` deste alvo é o IP do overlay (dns_sd no prometheus.yml);
+    # é o hostname que diz de qual nó a série veio, em `node_uname_info`.
+    hostname: "{{.Node.Hostname}}"
     command:
       - '--path.rootfs=/host'
       - --collector.processes
