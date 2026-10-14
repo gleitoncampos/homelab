@@ -97,8 +97,15 @@ if prom:
     checar(len(jobs) == len(set(jobs)), f"job_name sem duplicata: {jobs}")
     checar("nut" in jobs, "job do nobreak presente")
     alvos = " ".join(
-        t for j in prom["scrape_configs"] for t in j["static_configs"][0]["targets"]
+        t for j in prom["scrape_configs"] for t in (j.get("static_configs") or [{"targets": []}])[0]["targets"]
     )
+    # Serviço global do Swarm vira alvo por DNS SD: o `tasks.<serviço>` devolve
+    # um A por nó e o alvo estático usaria só o primeiro (14/10/2026).
+    cad = next(j for j in prom["scrape_configs"] if j["job_name"] == "cadvisor")
+    checar("static_configs" not in cad
+           and cad.get("dns_sd_configs", [{}])[0].get("names") == ["tasks.monitoring_cadvisor"]
+           and cad["dns_sd_configs"][0].get("type") == "A",
+           "cadvisor descoberto por dns_sd_configs (todas as tasks)")
     for host in GRUPOS["omv"] + GRUPOS["proxmox"]:
         checar(ENDERECOS[host] in alvos, f"{host} virou alvo")
     ow_job = next(j for j in prom["scrape_configs"] if j["job_name"] == "openwrt")

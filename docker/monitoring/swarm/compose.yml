@@ -51,7 +51,12 @@ services:
       - monitoring
 
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    # ⚠️ >= v0.54.0, e do ghcr.io (o gcr.io parou na v0.52.1). O Docker 29
+    # usa o image store do containerd (`docker info` → Driver `overlayfs`); o
+    # cAdvisor antigo não acha a camada RW ("failed to identify the
+    # read-write layer ID"), descarta todo container e exporta só cgroup
+    # sem `image` — o dashboard Docker fica vazio (14/10/2026).
+    image: ghcr.io/google/cadvisor:v0.60.6
     volumes:
       - /:/rootfs:ro
       # Só o socket, somente-leitura — não `/var/run` inteiro em rw, que era o

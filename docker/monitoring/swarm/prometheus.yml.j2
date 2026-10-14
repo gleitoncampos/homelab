@@ -89,13 +89,19 @@ vez de as duas divergirem em silêncio. #}
   # cAdvisor. O `fallback_scrape_protocol` é necessário porque a imagem não
   # negocia o formato por `Content-Type`; o Prometheus 3.x exige que o
   # fallback seja declarado em vez de assumido.
+  #
+  # ⚠️ `dns_sd_configs`, não `static_configs`: o `tasks.<serviço>` devolve um
+  # A por task (um por nó, serviço global), e o alvo estático usa só o
+  # primeiro — metade dos nós ficava sem métrica de container (14/10/2026).
   - job_name: cadvisor
     scrape_interval: 60s
     scrape_timeout: 10s
     fallback_scrape_protocol: PrometheusText1.0.0
-    static_configs:
-      - targets:
-          - tasks.monitoring_cadvisor:8080
+    dns_sd_configs:
+      - names:
+          - tasks.monitoring_cadvisor
+        type: A
+        port: 8080
 
   # OPNsense: node_exporter do plugin os-node_exporter.
 {% if groups['opnsense'] | default([]) | length > 0 %}
