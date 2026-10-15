@@ -55,6 +55,22 @@
 # no_log: true em toda task que carrega o JWT (header Authorization) ou stack_env
 # (pode conter senhas/tokens do Vault). Nenhum ignore_errors: uma falha real de API
 # deve interromper o play, nunca ser mascarada.
+#
+# ⚠️ `no_log` protege a SAÍDA do Ansible, não a stack. O stack_env vira
+# `environment:` do serviço Swarm e fica em claro para quem tem o socket do
+# Docker: `docker service inspect` mostra o valor, e todo container com o
+# socket montado (Portainer, Traefik, cAdvisor, Alloy) consegue lê-lo. O
+# segredo mais caro aqui é o CLOUDFLARE_TOKEN do Traefik (CF_DNS_API_TOKEN no
+# serviço, conferido em 15/10/2026) — quem o tem altera o
+# DNS da zona e emite certificado ACME. Por isso o token precisa ter só
+# Zone:DNS:Edit, numa zona (nunca a Global API Key). Tirar do env de vez é
+# trocar por `docker secret` + CF_DNS_API_TOKEN_FILE (backlog).
+#
+# `validate_certs: false` nas chamadas abaixo é inócuo HOJE porque todo
+# chamador passa `portainer_url: http://localhost:9000` — sem TLS, não há
+# certificado a validar. Se um dia apontar para https (a 9443 ou o FQDN pelo
+# Traefik), a flag passa a desligar a validação em silêncio: troque para true
+# junto.
 
 - name: "Listar stacks existentes no Portainer :: {{ stack_name }}"
   ansible.builtin.uri:
