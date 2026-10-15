@@ -153,6 +153,13 @@ checar(inseguros == {IDENTIDADE["fw-um"], "hv-um", "hv-dois"},
 if inseguros != {IDENTIDADE["fw-um"], "hv-um", "hv-dois"}:
     print(f"     obtido: {sorted(inseguros)}")
 
+# O transporte nomeado só restringe a confiança se não houver um GLOBAL por
+# cima: `--serverstransport.insecureSkipVerify=true` no compose valia para
+# todo back-end e anulava a asserção acima (15/10/2026).
+_compose = (RAIZ / "docker/traefik/swarm/compose.yml").read_text()
+checar(not re.search(r"^\s*-\s*--serverstransport\.insecureskipverify=true", _compose, re.I | re.M),
+       "compose do Traefik sem insecureSkipVerify global")
+
 for nome, servico in services.items():
     lb = servico.get("loadBalancer") or {}
     st = lb.get("serversTransport")

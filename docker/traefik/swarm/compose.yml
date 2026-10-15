@@ -6,9 +6,14 @@ services:
     command:
       - --api.insecure=false  #Enable the API dashboard access
       - --log.level=INFO
-      - --global.checkNewVersion=true
-      - --global.sendAnonymousUsage=true
-      - --serverstransport.insecureSkipVerify=true
+      # Versão nova chega pelo Renovate; a checagem e o uso anônimo só mandavam
+      # versão e IP de saída para fora (e consultas DNS à DNSBL) a troco de nada.
+      - --global.checkNewVersion=false
+      - --global.sendAnonymousUsage=false
+      # SEM insecureSkipVerify global (15/10/2026): ele desligava a verificação
+      # de certificado para TODO back-end HTTPS. Quem precisa (firewall e
+      # hipervisores, autoassinados) tem serversTransport próprio em rotas.yml.j2;
+      # back-end HTTPS novo publicado por label declara o seu.
       - --providers.swarm=true
       - --providers.swarm.endpoint=unix:///var/run/docker.sock
       - --providers.swarm.exposedbydefault=false
