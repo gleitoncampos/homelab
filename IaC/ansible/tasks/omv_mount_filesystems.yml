@@ -84,24 +84,66 @@
   changed_when: true
   when: not ansible_check_mode
 
-# `setMountPoint` grava a entrada no banco de configuração e para por aí; quem
-# escreve o /etc/fstab e monta de fato é o deploy. Sem isto o playbook segue
-# para os pools com a configuração correta e o disco ainda desmontado.
+# ⚠️ `noatime` mora no banco do OMV, e não no /etc/fstab. Era um `replace` no
+# fstab até 15/10/2026: o banco guardava `defaults,nofail,...` sem a opção, e
+# qualquer deploy do `fstab` — o "Aplicar" da GUI, mexer num disco — reescrevia
+# o arquivo e a tirava. Só `noatime`: ele já cobre diretórios, e `nodiratime`
+# nem aparece em /proc/mounts.
+- name: Ler as opções de montagem gravadas no OMV
+  ansible.builtin.command: omv-confdbadm read conf.system.filesystem.mountpoint
+  register: omv_mntents
+  changed_when: false
+  check_mode: false
+
+- name: "Gravar noatime nas montagens dos filesystems declarados"
+  ansible.builtin.command:
+    argv:
+      - omv-confdbadm
+      - update
+      - conf.system.filesystem.mountpoint
+      - >-
+        {{ item | combine({'opts': ('defaults,noatime' ~ item.opts[8:])
+           if item.opts.startswith('defaults') else ('noatime,' ~ item.opts)})
+           | to_json }}
+  loop: >-
+    {{ omv_mntents.stdout | from_json
+       | selectattr('fsname', 'in', omv_fs_declared | map('regex_replace', '^', '/dev/disk/by-uuid/') | list)
+       | rejectattr('opts', 'search', 'noatime')
+       | list }}
+  loop_control:
+    label: "{{ item.dir }}"
+  changed_when: true
+  when: not ansible_check_mode
+
+# O gatilho do deploy é o estado VIVO, e não o que as tasks acima mudaram: se o
+# play cair entre o `update` e o deploy, a execução seguinte acha o banco já
+# certo e, olhando só para ele, nunca remontaria.
+- name: Ler as montagens vivas que já têm noatime
+  ansible.builtin.command: findmnt --real --raw --noheadings --output UUID,OPTIONS
+  register: omv_fs_vivo
+  changed_when: false
+  check_mode: false
+
+# `setMountPoint` e o `update` acima gravam no banco de configuração e param
+# por aí; quem escreve o /etc/fstab e monta (ou remonta com a opção nova) é o
+# deploy. Sem isto o playbook segue para os pools com a configuração correta e
+# o disco ainda desmontado.
 - name: Aplicar o fstab e montar
   ansible.builtin.command: omv-salt deploy run fstab
   when:
     - not ansible_check_mode
-    - (omv_fs_declared | intersect(omv_fs_mountable)) | length > 0
+    - omv_fs_declared | difference(omv_fs_vivo.stdout_lines | select('search', 'noatime')
+      | map('split', ' ') | map('first') | list) | length > 0
   changed_when: true
 
 # A verificação é contra o sistema de arquivos vivo, e não contra o retorno do
 # RPC. O `mergerfs_pools.yml` elege as branches lendo os pontos de montagem
 # reais; se algum não subiu, é melhor parar aqui do que criar um pool com uma
 # branch a menos e descobrir quando o dado já estiver no lugar errado.
-- name: Conferir que cada filesystem declarado está montado sob o prefixo do OMV
-  ansible.builtin.command: findmnt --noheadings --output TARGET --source "UUID={{ item }}"
+- name: Conferir que cada filesystem declarado está montado sob o prefixo do OMV, com noatime
+  ansible.builtin.command: findmnt --noheadings --output TARGET,OPTIONS --source "UUID={{ item }}"
   loop: "{{ omv_fs_declared }}"
   register: omv_fs_check
   changed_when: false
-  failed_when: omv_fs_check.rc != 0
+  failed_when: omv_fs_check.rc != 0 or 'noatime' not in omv_fs_check.stdout
   when: not ansible_check_mode

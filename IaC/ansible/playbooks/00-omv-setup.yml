@@ -785,6 +785,42 @@
       when: omv_bin.stat.exists
       changed_when: true
 
+    # O que este play muda pelo `omv-rpc` fica marcado como pendente no OMV e
+    # só chega aos arquivos no deploy. Sem este passo a lista cresce em
+    # silêncio: em 15/10/2026 eram 24 módulos pendentes desde a atualização
+    # 8.1.1 → 8.5.11, e o "Aplicar" da GUI teria desfeito o noatime e
+    # reiniciado meia máquina de uma vez. `Config applyChanges` é o caminho da
+    # própria GUI: ordena os módulos e descarta os que não têm estado de
+    # deploy (`task`, `sharedfolders`), onde o `omv-salt --append-dirty` aborta.
+    #
+    # ⚠️ AQUI, e não no fim do play: o salt do OMV regenera /etc/hdparm.conf
+    # (smartmontools), /etc/chrony/chrony.conf, /etc/nfs.conf e o rsyslog, que
+    # as tasks abaixo escrevem direto. Aplicado depois delas, desfaria o que o
+    # próprio play acabou de escrever.
+    - name: Ler se o OMV tem módulos pendentes
+      ansible.builtin.command: omv-rpc -u admin Config isDirty '{}'
+      register: omv_dirty
+      changed_when: false
+      check_mode: false
+      when: omv_bin.stat.exists
+
+    - name: Aplicar os módulos pendentes do OMV
+      ansible.builtin.command: omv-rpc -u admin Config applyChanges '{"modules":[],"force":false}'
+      changed_when: true
+      when:
+        - omv_bin.stat.exists
+        - not ansible_check_mode
+        - omv_dirty.stdout | trim == 'true'
+
+    - name: Conferir que não sobrou módulo pendente no OMV
+      ansible.builtin.command: omv-rpc -u admin Config isDirty '{}'
+      register: omv_dirty_depois
+      changed_when: false
+      failed_when: omv_dirty_depois.stdout | trim != 'false'
+      when:
+        - omv_bin.stat.exists
+        - not ansible_check_mode
+
     # Ver a nota em 00-proxmox-setup.yml: servidor interno opcional seguido das
     # públicas, para que o host não fique sem fonte de tempo se o firewall
     # ainda não servir NTP.
@@ -1031,15 +1067,6 @@
         owner: root
         group: root
         mode: '0644'
-
-    # O `sed` anterior não era idempotente: cada execução acrescentava outro par
-    # de opções, produzindo `defaults,noatime,nodiratime,noatime,nodiratime`. O
-    # lookahead negativo garante que só as entradas ainda sem a opção são tocadas.
-    - name: Forçar opções noatime e nodiratime nas partições montadas em /etc/fstab
-      ansible.builtin.replace:
-        path: /etc/fstab
-        regexp: '\bdefaults(?!,noatime)'
-        replace: 'defaults,noatime,nodiratime'
 
     # No usuário do Ansible, e não no root: o login de root por SSH é desligado
     # mais acima, e a chave no root não teria efeito.

@@ -518,6 +518,13 @@
       ansible.builtin.shell: configctl template reload OPNsense/Kea && configctl kea restart
       changed_when: true
 
+    # Mesmo caso do Kea: o enable e as interfaces do repetidor de mDNS saem do
+    # template `OPNsense/MDNSRepeater` (/etc/rc.conf.d/mdns_repeater), que o
+    # `rc.reload_all` não regenera — o serviço ficaria parado até um reboot.
+    - name: Gerar a configuração do repetidor de mDNS e reiniciá-lo
+      ansible.builtin.shell: configctl template reload OPNsense/MDNSRepeater && configctl mdnsrepeater restart
+      changed_when: true
+
     # O config.xml declara a DNSBL, mas o Unbound consulta
     # /var/unbound/data/dnsbl.json, que só esta ação gera (baixa e compila as
     # listas; a GUI a dispara no "Apply"). Sem ela o firewall reinstalado

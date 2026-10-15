@@ -139,7 +139,8 @@
          <fargw>0</fargw>
 -        <monitor_disable>1</monitor_disable>
 +        <monitor_disable>0</monitor_disable>
-+        <monitor_noroute>0</monitor_noroute>
+         <monitor_noroute>0</monitor_noroute>
+-        <monitor_killstates>0</monitor_killstates>
 +        <monitor_killstates>1</monitor_killstates>
 +        <monitor_killstates_priority>0</monitor_killstates_priority>
 +        <monitor>192.0.2.9</monitor>
@@ -191,15 +192,18 @@
 +        <defaultgw>1</defaultgw>
 +        <fargw>0</fargw>
 +        <monitor_disable>0</monitor_disable>
-         <monitor_noroute>0</monitor_noroute>
--        <monitor_killstates>0</monitor_killstates>
++        <monitor_noroute>0</monitor_noroute>
 +        <monitor_killstates>1</monitor_killstates>
          <monitor_killstates_priority>0</monitor_killstates_priority>
          <monitor/>
          <force_down>0</force_down>
 -        <priority>255</priority>
 +        <priority>1</priority>
-+        <weight>1</weight>
+         <weight>1</weight>
+-        <latencylow/>
+-        <latencyhigh/>
+-        <losslow/>
+-        <losshigh/>
 +        <latencylow>200</latencylow>
 +        <latencyhigh>1000</latencyhigh>
 +        <losslow>10</losslow>
@@ -225,11 +229,7 @@
 +        <monitor>2001:4860:4860::8888</monitor>
 +        <force_down>0</force_down>
 +        <priority>2</priority>
-         <weight>1</weight>
--        <latencylow/>
--        <latencyhigh/>
--        <losslow/>
--        <losshigh/>
++        <weight>1</weight>
 +        <latencylow>200</latencylow>
 +        <latencyhigh>1000</latencyhigh>
 +        <losslow>10</losslow>
@@ -391,11 +391,17 @@
        <general>
          <enabled>1</enabled>
          <promisc>0</promisc>
-@@ -2345,7 +3198,30 @@
+@@ -2345,7 +3198,36 @@
          <interface/>
        </general>
      </Hostwatch>
 -    <radvd description="Radvd configuration" persisted_at="1780800097.02" version="1.0.1"/>
++    <MDNSRepeater version="1.0.1">
++      <enabled>1</enabled>
++      <enablecarp>0</enablecarp>
++      <interfaces>vlan20,vlan30</interfaces>
++      <blocklist/>
++    </MDNSRepeater>
 +    <radvd description="Radvd configuration" version="1.0.1"/>
 +    <tailscale>
 +      <settings description="Tailscale general settings" version="1.0.0">
@@ -423,7 +429,7 @@
    </OPNsense>
    <hasync version="1.0.2">
      <disablepreempt>0</disablepreempt>
-@@ -2359,8 +3235,6 @@
+@@ -2359,8 +3241,6 @@
      <password/>
      <syncitems/>
    </hasync>
@@ -432,7 +438,7 @@
    <gifs version="1.0.0">
      <gif/>
    </gifs>
-@@ -2375,20 +3249,36 @@
+@@ -2375,20 +3255,36 @@
    </virtualip>
    <vlans version="1.0.0">
      <vlan>
@@ -475,7 +481,7 @@
    <staticroutes version="1.0.0">
      <route/>
    </staticroutes>
-@@ -2414,7 +3304,6 @@
+@@ -2414,7 +3310,6 @@
    <wireless>
      <clone/>
    </wireless>
@@ -483,7 +489,7 @@
    <dhcpdv6>
      <lan>
        <enable>-1</enable>
-@@ -2428,8 +3317,7 @@
+@@ -2428,8 +3323,7 @@
      <csr/>
      <prv>RklYVFVSRS1LRVkK</prv>
    </cert>
@@ -493,6 +499,19 @@
      <enable/>
      <regdhcp/>
      <regdhcpstatic/>
+@@ -2468,12 +3362,6 @@
+     </dhcp>
+     <no_ident>1</no_ident>
+   </dnsmasq>
+-  <mdnsrepeater version="1.0.0">
+-    <general>
+-      <enabled>1</enabled>
+-      <listen_interfaces>lan,vlan30,vlan40</listen_interfaces>
+-    </general>
+-  </mdnsrepeater>
+   <upnpd>
+     <enable>1</enable>
+     <enable_natpmp>1</enable_natpmp>
 @@ -2487,10 +3375,4 @@
        <enabled>1</enabled>
      </general>

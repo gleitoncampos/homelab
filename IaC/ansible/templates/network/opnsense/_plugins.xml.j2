@@ -5,10 +5,10 @@
    Um único arquivo, mas com CINCO pontos de include na skeleton — cada um
    selecionando sua fatia via `_plugins_section` (set logo antes do include,
    visto aqui porque Jinja `include` compartilha contexto por padrão). Islands
-   em vez de include único: os 10 elementos que vivem dentro de <OPNsense> não
+   em vez de include único: os 11 elementos que vivem dentro de <OPNsense> não
    são vizinhos no documento original (Firewall, Interfaces, Kea,
    TrafficShaper, trust e o DNS/unboundplus ficam intercalados entre eles), e
-   upnpd/mdnsrepeater/igmpproxy são irmãos de <OPNsense>, não filhos — não dá
+   upnpd/igmpproxy são irmãos de <OPNsense>, não filhos — não dá
    para colocar os dois grupos num só ponto de include sem violar o
    aninhamento real do config.xml do OPNsense (cada seção só é lida de onde o
    módulo espera) ou reordenar o documento inteiro. Islands preserva a ordem
@@ -770,13 +770,19 @@
         <interface/>
       </general>
     </Hostwatch>
-{% elif _plugins_section == 'network' %}
-  <mdnsrepeater version="1.0.0">
-    <general>
+    {# Repetidor de mDNS só entre HOMELAB (20) e MAIN (30): o NAS aparece na
+       pasta de rede dos clientes da MAIN. O os-mdns-repeater da 26.7 lê
+       `//OPNsense/MDNSRepeater`; o bloco antigo, `<mdnsrepeater><general>`
+       irmão de <OPNsense>, era ignorado e o serviço ficava desligado
+       (15/10/2026). Repassa nos dois sentidos: a MAIN também anuncia para
+       o homelab. #}
+    <MDNSRepeater version="1.0.1">
       <enabled>1</enabled>
-      <listen_interfaces>lan,vlan30,vlan40</listen_interfaces>
-    </general>
-  </mdnsrepeater>
+      <enablecarp>0</enablecarp>
+      <interfaces>vlan20,vlan30</interfaces>
+      <blocklist/>
+    </MDNSRepeater>
+{% elif _plugins_section == 'network' %}
   <upnpd>
     <enable>1</enable>
     <enable_natpmp>1</enable_natpmp>
