@@ -195,9 +195,8 @@
         mode: '0644'
       notify: Recarregar o sshd
 
-    # Aqui, e não no fim do play: o reload (não restart, a sessão do Ansible
-    # sobrevive) tem de valer antes de qualquer task seguinte. Com o
-    # ssh.socket ativo (Debian 13), conexão nova já lê a configuração nova.
+    # Aqui, e não no fim do play: a configuração nova tem de valer antes de
+    # qualquer task seguinte (o handler explica por que é restart).
     - name: Recarregar o sshd agora
       ansible.builtin.meta: flush_handlers
 
@@ -458,10 +457,18 @@
       # repositório não usa roles — mesma convenção de tasks/portainer_stack.yml.
 
   handlers:
+    # RESTART, não reload (15/10/2026). Nos nós o SSH sobe pelo ssh.socket
+    # (Accept=no, imagem Debian 13 do CT): o systemd segura a porta 22 e
+    # entrega o descritor ao sshd. No reload (HUP) o sshd se reexecuta, tenta
+    # abrir a porta sozinho e morre com "Cannot bind any address"; o systemd
+    # então apaga o /run/sshd e o `sshd -T` da conferência quebra — foi o que
+    # aconteceu no node2. O restart para só o processo principal
+    # (KillMode=process: as sessões abertas, inclusive a do Ansible, ficam) e o
+    # serviço volta recebendo o descritor do socket.
     - name: Recarregar o sshd
       ansible.builtin.systemd:
         name: ssh
-        state: reloaded
+        state: restarted
 
     # Reiniciar o journald não derruba serviço nenhum: ele reabre os arquivos e
     # aplica o teto novo. Diferente do daemon do Docker, que é por isso que o
