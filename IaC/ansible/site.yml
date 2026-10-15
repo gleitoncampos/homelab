@@ -16,8 +16,10 @@
 - name: 03 - Deploy da Stack de Monitoramento & Observabilidade
   ansible.builtin.import_playbook: playbooks/03-stack-monitoring.yml
 
-- name: 04 - Deploy do Bloco de Gestão, Finanças & Produtividade
-  ansible.builtin.import_playbook: playbooks/04-stack-management.yml
-
-- name: 05 - Deploy do Bloco de Utilitários & Ferramentas
-  ansible.builtin.import_playbook: playbooks/05-stack-utilities.yml
+# ⚠️ 04 e 05 ficam FORA de propósito (15/10/2026): estão fora do
+# provisionamento, e o catálogo deles ainda sobe serviço sem autenticação —
+# ByteStash com DISABLE_ACCOUNTS e Cronicle com o admin padrão do próprio app.
+# Um site.yml completo os punha no ar sem ninguém pedir. Rodar à mão, só
+# depois de revisar o catálogo:
+#   ansible-playbook playbooks/04-stack-management.yml
+#   ansible-playbook playbooks/05-stack-utilities.yml

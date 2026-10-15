@@ -462,7 +462,7 @@ ssh <manager> docker service ls     # nenhuma réplica 0/1
 
 `site.yml` é o caminho do zero ao fim. No dia a dia, chame o playbook direto —
 isso restringe o **passo**. `--limit` restringe **hosts**, nunca playbooks:
-`site.yml --limit proxmox` continua importando os sete, e seis rodam vazios.
+`site.yml --limit proxmox` continua importando os cinco, e quatro rodam vazios.
 
 | o que mexer | comando, a partir de `IaC/ansible/` | grupo |
 |---|---|---|
@@ -497,8 +497,8 @@ descobre que um equipamento divergiu do repositório.
 
 ## O que `site.yml` faz, e o que fica de fora
 
-Importa sete playbooks nesta ordem: host Proxmox, host OpenMediaVault, sistema
-operacional, cluster Swarm e as três de stacks (`03`, `04`, `05`).
+Importa cinco playbooks nesta ordem: host Proxmox, host OpenMediaVault, sistema
+operacional, cluster Swarm e a stack de monitoramento (`03`).
 
 ⚠️ **Os dois primeiros reconfiguram o hipervisor e o NAS.** O
 `00-proxmox-setup.yml` reescreve `/etc/apt/sources.list`, `/etc/hosts`,
@@ -509,8 +509,10 @@ Enterprise, desativa o `systemd-resolved` e desliga os serviços de HA.
 storage pendentes (as duas passadas, acima), e o único aviso é o resumo final.
 
 Ficam **fora** de `site.yml`, disparados à mão: `00-node-bootstrap.yml`,
-`00-proxmox-api-token.yml`, `06-backup.yml`, `07-nut-ups.yml` e os de
-`playbooks/network/`.
+`00-proxmox-api-token.yml`, `04-stack-management.yml`, `05-stack-utilities.yml`,
+`06-backup.yml`, `07-nut-ups.yml` e os de `playbooks/network/`. O `04` e o `05`
+estão fora porque o catálogo deles ainda sobe serviço sem autenticação: rodar só
+depois de revisá-lo.
 
 Não rode `docker swarm init` nem `docker network create traefik_public` à mão: o
 `02-bootstrap-cluster.yml` faz os dois, e configuração manual não parametrizada
