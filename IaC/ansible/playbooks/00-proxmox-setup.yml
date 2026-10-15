@@ -1150,6 +1150,38 @@
         or 'permitrootlogin without-password' not in _sshd_efetivo.stdout_lines
         or 'authorizedkeysfile .ssh/authorized_keys /etc/ssh/authorized_keys.d/%u' not in _sshd_efetivo.stdout_lines
 
+    # GUI e API do PVE (8006) só a partir das redes de gerência (15/10/2026).
+    # Sem isto, qualquer VLAN que roteia até o hipervisor chegava ao login do
+    # root@pam — a MAIN inclusive. A lista é a mesma `mgmt_allowed_cidrs` que o
+    # bootstrap gera e o Traefik usa: LAN, VLAN 10 e VLAN 20. Ela cobre a
+    # estação (LAN), o Traefik e o prometheus@pve no manager (VLAN 20) e o
+    # Tailscale, porque o firewall faz SNAT dos peers para o IP dele na LAN.
+    # O SSH fica de fora disto: é a rota de volta se a lista sair errada.
+    - name: Exigir mgmt_allowed_cidrs para restringir a GUI do PVE
+      ansible.builtin.assert:
+        that:
+          - mgmt_allowed_cidrs is defined
+          - mgmt_allowed_cidrs is not string
+          - mgmt_allowed_cidrs | length > 0
+        fail_msg: >-
+          mgmt_allowed_cidrs não definida (ou não é lista). Sem ela a GUI do PVE
+          ficaria fechada para todos. Gere com o `make bootstrap`
+          (group_vars/all/99-local.yml).
+        quiet: true
+
+    - name: Restringir a GUI e a API do PVE às redes de gerência
+      ansible.builtin.copy:
+        dest: /etc/default/pveproxy
+        content: |
+          # Gerado pelo 00-proxmox-setup.yml — não editar à mão.
+          ALLOW_FROM="{{ mgmt_allowed_cidrs | join(',') }}"
+          DENY_FROM="all"
+          POLICY="allow"
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Reiniciar o pveproxy
+
     - name: Criar diretório local de exportação de backup das configurações do Proxmox
       ansible.builtin.file:
         path: /var/backups/proxmox_config_exports
@@ -1199,6 +1231,11 @@
       when: not (firewall_disponivel and nas_disponivel)
 
   handlers:
+    - name: Reiniciar o pveproxy
+      ansible.builtin.systemd:
+        name: pveproxy
+        state: restarted
+
     - name: Recarregar o sshd
       ansible.builtin.systemd:
         name: ssh
