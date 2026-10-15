@@ -43,8 +43,8 @@ rede_atual:
   # Quem roteia hoje. Registrado por ser topologia útil; nenhum playbook o
   # consome diretamente.
   gateway: @@ATUAL_GATEWAY@@
-  # Quem serve NTP hoje. Papel diferente do gateway, ainda que costume ser o
-  # mesmo host. Vazio = só as fontes públicas do ntp.br, que entram como
+  # NTP interno ligado (não vazio) ou não. A fonte de cada host é o gateway
+  # da rede dele. Vazio = só as fontes públicas do ntp.br, que entram como
   # fallback de qualquer forma.
   ntp_interno: @@ATUAL_NTP@@
   manager: @@ATUAL_MANAGER@@

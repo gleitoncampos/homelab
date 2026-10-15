@@ -93,7 +93,7 @@ ini = bs.render_hosts("prod", resp)
 cp = configparser.ConfigParser(allow_no_value=True, delimiters=("=",))
 cp.read_string(ini)
 assert "all:vars" in cp, "sem [all:vars]"
-assert cp["all:vars"]["ntp_server_internal"] == "192.0.2.1"
+assert cp["all:vars"]["ntp_interno"] == "true"
 assert "\n# node2 ansible_host" in ini, "worker vazio deveria sair comentado"
 print(f"  OK hosts.ini: INI valido, secoes={len(cp.sections())}, worker ausente comentado")
 
@@ -329,19 +329,19 @@ if shutil.which("ansible-inventory"):
         inv = json.loads(r.stdout)
         assert "homelab" in inv, "grupo homelab ausente"
         gv = inv["_meta"]["hostvars"]["node1"]
-        assert gv.get("ntp_server_internal") == "192.0.2.1", f"ntp nao chegou ao host: {gv}"
+        assert gv.get("ntp_interno") == "true", f"ntp nao chegou ao host: {gv}"
         print(f"  OK ansible-inventory: aceito, grupos={sorted(k for k in inv if k!='_meta')}")
-        print(f"     ntp_server_internal resolve em node1 = {gv['ntp_server_internal']}")
+        print(f"     ntp_interno resolve em node1 = {gv['ntp_interno']}")
 
 # 7) sem NTP interno, a linha sai COMENTADA -> so as publicas valem
         resp_sem = {**resp, "rede_atual": {**resp["rede_atual"], "ntp_interno": ""}}
         ini2 = bs.render_hosts("prod", resp_sem)
-        assert "\n# ntp_server_internal=" in ini2, "sem NTP interno deveria sair comentado"
-        assert "\nntp_server_internal=" not in ini2, "nao deveria definir a variavel"
+        assert "\n# ntp_interno=" in ini2, "sem NTP interno deveria sair comentado"
+        assert "\nntp_interno=" not in ini2, "nao deveria definir a variavel"
         p2 = os.path.join(d, "h2.ini"); open(p2, "w").write(ini2)
         r2 = subprocess.run(["ansible-inventory", "-i", p2, "--list"], capture_output=True, text=True)
         assert r2.returncode == 0, f"inventario sem NTP rejeitado: {r2.stderr[:300]}"
-        assert "ntp_server_internal" not in json.loads(r2.stdout)["_meta"]["hostvars"]["node1"]
+        assert "ntp_interno" not in json.loads(r2.stdout)["_meta"]["hostvars"]["node1"]
         print("  OK sem NTP interno: variavel ausente, inventario valido")
 
 # 8) as variaveis que 00-proxmox-setup.yml exige tem que CHEGAR ao host, nao

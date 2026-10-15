@@ -38,12 +38,12 @@ opnsense
 openwrt
 
 [all:vars]
-# Servidor NTP interno — normalmente o firewall, que costuma ser também o
-# gateway. OPCIONAL: enquanto ele não roteia, ou está sem o serviço de tempo
+# NTP interno: cada host usa o gateway da própria rede (o firewall atende em
+# todas as VLANs). OPCIONAL: enquanto ele não roteia, ou está sem o serviço de tempo
 # ligado, deixe comentado e só as fontes públicas do ntp.br valem (definidas em
 # inventories/_common/all.yml). Ter as duas é de propósito: relógio sem fonte
 # não dá erro, derrapa devagar até virar falha de TLS semanas depois.
-# ntp_server_internal=<IP-DO-FIREWALL>
+# ntp_interno=true
 
 # Lista de VMIDs dos convidados do Proxmox (VM QEMU e CT LXC) que entram no
 # backup agendado (playbooks/06-backup.yml). OBRIGATÓRIO para esse playbook

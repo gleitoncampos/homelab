@@ -597,15 +597,15 @@ def perguntar_respostas() -> str:
         "ATUAL_DEV": ask("IP do CT de desenvolvimento", f"{prefixo}.20.20", obrigatorio=False),
     }
 
-    # Papéis diferentes que às vezes coincidem: o gateway roteia, o servidor NTP
-    # serve tempo. Só são o mesmo host quando o firewall roteia E está com o
-    # serviço ligado. Enter deixa vazio, e valem só as públicas do ntp.br.
+    # Sim ou não, e não um IP: a fonte interna de cada host é o gateway da rede
+    # dele (`ansible_facts.default_ipv4.gateway`, em inventories/_common/all.yml).
+    # Um IP único deixava sem NTP quem não é da LAN, bloqueado entre VLANs.
     print(
-        "\n  O firewall serve NTP para a rede? Se sim, costuma ser o próprio"
-        "\n  gateway. Enter deixa vazio e usa só as fontes públicas."
+        "\n  O firewall serve NTP no gateway de cada VLAN? Não, ou ainda não"
+        "\n  roteia: só as fontes públicas valem."
     )
-    respostas["ATUAL_NTP"] = ask(
-        "Servidor NTP interno", respostas["ATUAL_GATEWAY"], obrigatorio=False
+    respostas["ATUAL_NTP"] = (
+        "sim" if confirm("Usar o gateway de cada host como NTP interno") else ""
     )
 
     print(_c("1", "\n  Nomes dos nós Proxmox — o Terraform os usa como destino."))
@@ -909,18 +909,21 @@ openwrt
 
 
 def _ntp(atual: dict) -> str:
-    """Servidor NTP interno. Opcional de propósito: `inventories/_common/all.yml`
-    acrescenta as públicas do ntp.br como fallback, porque apontar só para o
-    firewall pressupõe que ele já roteia E tem o serviço de tempo ligado. Sem
-    isso o host fica sem fonte, e relógio sem fonte não dá erro — derrapa."""
-    ntp = atual.get("ntp_interno") or ""
+    """NTP interno: liga ou não. Opcional de propósito: `inventories/_common/all.yml`
+    acrescenta as públicas do ntp.br como fallback, porque usar o firewall
+    pressupõe que ele já roteia E tem o serviço de tempo ligado. Sem isso o host
+    fica sem fonte, e relógio sem fonte não dá erro — derrapa.
+
+    Qualquer valor não vazio liga: respostas antigas guardavam o IP do servidor,
+    e continuam valendo sem pergunta nova."""
+    ligado = bool(atual.get("ntp_interno"))
     cabecalho = (
-        "# Servidor NTP interno, normalmente o firewall. As públicas do ntp.br\n"
-        "# entram como fallback via inventories/_common/all.yml.\n"
+        "# NTP interno = gateway da rede de cada host (o firewall). As públicas do\n"
+        "# ntp.br entram como fallback via inventories/_common/all.yml.\n"
     )
-    if not ntp:
-        return cabecalho + "# ntp_server_internal=<IP-DO-FIREWALL>   (nenhum informado)\n"
-    return cabecalho + f"ntp_server_internal={ntp}\n"
+    if not ligado:
+        return cabecalho + "# ntp_interno=true   (desligado: só as fontes públicas)\n"
+    return cabecalho + "ntp_interno=true\n"
 
 
 def _url_secundaria(resp: dict) -> str:

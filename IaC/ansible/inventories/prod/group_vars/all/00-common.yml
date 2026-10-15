@@ -188,9 +188,14 @@ syslog_server_port_rfc3164: "1515"
 # porque relógio sem fonte não dá erro — derrapa devagar, e em cluster com TLS
 # isso vira falha de certificado semanas depois, longe da causa.
 #
-# `ntp_server_internal` vem do inventário (gitignorado) e é OPCIONAL: enquanto o
-# firewall não roteia, ou não tem o serviço de tempo ligado, deixe vazio e só as
-# públicas valem.
+# `ntp_interno` vem do inventário (gitignorado) e é OPCIONAL: enquanto o
+# firewall não roteia, ou não tem o serviço de tempo ligado, deixe-o ausente e
+# só as públicas valem. Ligado, a fonte interna é o GATEWAY PADRÃO do próprio
+# host (`ansible_facts.default_ipv4.gateway`): o ntpd do firewall atende no
+# gateway de cada VLAN, e cada host só o alcança pelo IP da própria rede. Um IP
+# único para todos (o do firewall na LAN) ficava bloqueado entre VLANs para quem
+# não é da LAN — o NAS, na VLAN de servidores, descartado pela regra de rede do
+# lab (15/10/2026).
 #
 # ⚠️ `group_vars/network/` declara o seu próprio `ntp_servers` e tem
 # precedência MAIOR que `group_vars/all/` para opnsense e openwrt — o que é
@@ -201,7 +206,10 @@ ntp_servers_public:
   - "c.st1.ntp.br"
   - "d.st1.ntp.br"
 ntp_servers: >-
-  {{ ([ntp_server_internal] if (ntp_server_internal | default('')) else [])
+  {{ ([ansible_facts.default_ipv4.gateway]
+      if (ntp_interno | default(false) | bool)
+         and ((ansible_facts.default_ipv4 | default({})).gateway | default(''))
+      else [])
      + ntp_servers_public }}
 
 # --- Backup ------------------------------------------------------------------
