@@ -89,8 +89,13 @@ config wifi-iface 'wifi_media_5g'
 	option mcast_to_unicast '1'
 
 # =====================================================================
-# VLAN 50 - GUEST (Dual-Band 2.4GHz + 5GHz, Visivel, Client Isolation)
+# VLAN 50 - GUEST (Dual-Band 2.4GHz + 5GHz, Visivel, isolamento por BSS)
 # =====================================================================
+# `isolate '1'` vale DENTRO de cada BSS: visitante no 2.4 nao fala com
+# visitante no 2.4, nem no 5 com o 5. Entre as duas faixas nao ha isolamento:
+# os dois BSS caem na mesma bridge (vlan50) e o trafego entre eles fica em L2
+# no AP, sem passar pelo firewall. Isolar de verdade exige port isolation na
+# bridge (backlog, ranking de seguranca de 15/10/2026, OPENWRT r5 #206).
 config wifi-iface 'wifi_guest_2g'
 	option device 'radio0'
 	option mode 'ap'
