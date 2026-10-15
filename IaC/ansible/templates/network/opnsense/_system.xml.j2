@@ -140,8 +140,15 @@
       <keysig>ssh-ed25519,rsa-sha2-512,rsa-sha2-256</keysig>
       <rekeylimit/>
       <enabled>enabled</enabled>
-      <permitrootlogin>0</permitrootlogin>
-      <passwordauth>0</passwordauth>
+      {# ⚠️ permitrootlogin e passwordauth NÃO aparecem aqui, e a ausência é o
+         que desliga. O gerador (/usr/local/etc/inc/plugins.inc.d/openssh.inc)
+         testa por isset(): a chave PRESENTE liga, qualquer que seja o valor.
+         Até 15/10/2026 o template gravava `<permitrootlogin>0` e
+         `<passwordauth>0`, e o sshd vivo rodava com PermitRootLogin yes e
+         PasswordAuthentication yes — o contrário do pretendido, desde a
+         reinstalação. Para ligar algum dia, declare o elemento (com qualquer
+         valor); para manter desligado, não o escreva. Guardado pelo
+         tests/render_opnsense_ssh.py. #}
     </ssh>
     <syslog>
       <reverse>1</reverse>

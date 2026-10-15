@@ -1,4 +1,4 @@
-@@ -368,7 +351,7 @@
+@@ -368,7 +349,7 @@
      <firmware version="1.0.1">
        <mirror/>
        <flavour/>
@@ -7,7 +7,7 @@
        <type/>
        <subscription/>
        <reboot/>
-@@ -423,52 +406,44 @@
+@@ -423,52 +404,44 @@
        <blockpriv>1</blockpriv>
        <blockbogons>1</blockbogons>
        <ipaddr>pppoe</ipaddr>

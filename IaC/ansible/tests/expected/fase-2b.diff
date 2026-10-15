@@ -1,4 +1,4 @@
-@@ -515,16 +490,9 @@
+@@ -515,16 +488,9 @@
      </rule>
    </nat>
    <filter/>
@@ -15,7 +15,7 @@
    <revision>
      <username>ansible</username>
      <description>Provisionado via Ansible</description>
-@@ -539,11 +507,11 @@
+@@ -539,11 +505,11 @@
        <general version="0.0.1">
          <enabled>0</enabled>
        </general>
@@ -29,7 +29,7 @@
        <general>
          <enabled/>
          <preferred_oldsa>0</preferred_oldsa>
-@@ -635,7 +603,7 @@
+@@ -635,7 +601,7 @@
        <Instances/>
        <StaticKeys/>
      </OpenVPN>
@@ -38,7 +38,7 @@
        <zones/>
        <templates/>
      </captiveportal>
-@@ -643,7 +611,7 @@
+@@ -643,7 +609,7 @@
        <jobs>
          <job uuid="29a4a8cb-f14d-4faa-b8f7-6d7ddb0a758c">
            <origin>IDS</origin>
@@ -47,7 +47,7 @@
            <minutes>0</minutes>
            <hours>0</hours>
            <days>*</days>
-@@ -654,13 +622,26 @@
+@@ -654,13 +620,26 @@
            <parameters/>
            <description>ids rule updates</description>
          </job>
@@ -75,7 +75,7 @@
          <geoip>
            <url/>
          </geoip>
-@@ -838,23 +819,6 @@
+@@ -838,23 +817,6 @@
              <categories/>
              <description>Spamhaus DROP List</description>
            </alias>
@@ -99,7 +99,7 @@
            <alias uuid="5aeba382-8760-42dd-bea3-9dd5241fbe14">
              <enabled>1</enabled>
              <name>DNS_REDIRECT_BYPASS</name>
-@@ -1004,6 +968,43 @@
+@@ -1004,6 +966,43 @@
              <categories/>
              <description>Portas DNS-over-QUIC (UDP 853)</description>
            </alias>
@@ -143,7 +143,7 @@
            <alias uuid="d8c7b6a5-f4e3-2109-8765-443322110099">
              <enabled>1</enabled>
              <name>Management_Ports</name>
-@@ -1031,9 +1032,9 @@
+@@ -1031,9 +1030,9 @@
        <Category version="1.0.0">
          <categories/>
        </Category>
@@ -155,7 +155,7 @@
              <enabled>1</enabled>
              <statetype>keep</statetype>
              <state-policy/>
-@@ -1041,10 +1042,10 @@
+@@ -1041,10 +1040,10 @@
              <action>block</action>
              <quick>1</quick>
              <interfacenot>0</interfacenot>
@@ -168,7 +168,7 @@
              <icmptype/>
              <icmp6type/>
              <source_net>any</source_net>
-@@ -1052,7 +1053,7 @@
+@@ -1052,7 +1051,7 @@
              <source_port/>
              <destination_net>any</destination_net>
              <destination_not>0</destination_not>
@@ -177,7 +177,7 @@
              <divert-to/>
              <gateway/>
              <replyto/>
-@@ -1062,9 +1063,9 @@
+@@ -1062,9 +1061,9 @@
              <nosync>0</nosync>
              <nopfsync>0</nopfsync>
              <statetimeout/>
@@ -189,7 +189,7 @@
              <enabled>1</enabled>
              <statetype>keep</statetype>
              <state-policy/>
-@@ -1072,10 +1073,10 @@
+@@ -1072,10 +1071,10 @@
              <action>block</action>
              <quick>1</quick>
              <interfacenot>0</interfacenot>
@@ -202,7 +202,7 @@
              <icmptype/>
              <icmp6type/>
              <source_net>any</source_net>
-@@ -1083,7 +1084,7 @@
+@@ -1083,7 +1082,7 @@
              <source_port/>
              <destination_net>any</destination_net>
              <destination_not>0</destination_not>
@@ -211,7 +211,7 @@
              <divert-to/>
              <gateway/>
              <replyto/>
-@@ -1093,9 +1094,9 @@
+@@ -1093,9 +1092,9 @@
              <nosync>0</nosync>
              <nopfsync>0</nopfsync>
              <statetimeout/>
@@ -223,7 +223,7 @@
              <enabled>1</enabled>
              <statetype>keep</statetype>
              <state-policy/>
-@@ -1103,10 +1104,10 @@
+@@ -1103,10 +1102,10 @@
              <action>block</action>
              <quick>1</quick>
              <interfacenot>0</interfacenot>
@@ -236,7 +236,7 @@
              <icmptype/>
              <icmp6type/>
              <source_net>any</source_net>
-@@ -1114,19 +1115,21 @@
+@@ -1114,19 +1113,21 @@
              <source_port/>
              <destination_net>any</destination_net>
              <destination_not>0</destination_not>
@@ -262,7 +262,7 @@
              <enabled>1</enabled>
              <statetype>keep</statetype>
              <state-policy/>
-@@ -1134,10 +1137,10 @@
+@@ -1134,10 +1135,10 @@
              <action>block</action>
              <quick>1</quick>
              <interfacenot>0</interfacenot>
@@ -275,7 +275,7 @@
              <icmptype/>
              <icmp6type/>
              <source_net>any</source_net>
-@@ -1145,7 +1148,7 @@
+@@ -1145,7 +1146,7 @@
              <source_port/>
              <destination_net>any</destination_net>
              <destination_not>0</destination_not>
@@ -284,7 +284,7 @@
              <divert-to/>
              <gateway/>
              <replyto/>
-@@ -1155,30 +1158,86 @@
+@@ -1155,30 +1156,86 @@
              <nosync>0</nosync>
              <nopfsync>0</nopfsync>
              <statetimeout/>
@@ -380,7 +380,7 @@
              <divert-to/>
              <gateway/>
              <replyto/>
-@@ -1189,29 +1248,52 @@
+@@ -1189,29 +1246,52 @@
              <nopfsync>0</nopfsync>
              <statetimeout/>
              <udp-first/>
