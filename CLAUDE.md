@@ -515,8 +515,8 @@ Na ordem em que os problemas custam caro:
 ### Os dois arquivos de padrões
 
 ⚠️ `secret-patterns.txt` é **versionado e público**, e por isso guarda só o
-genérico — chave, hash, token, IP privado, MAC. Hostname e domínio vão em
-`secret-patterns.local.txt`, gitignorado: uma lista de termos proibidos
+genérico — chave, hash, token, IP privado, MAC. Hostname, domínio e nome das
+redes Wi-Fi vão em `secret-patterns.local.txt`, gitignorado: uma lista de termos proibidos
 publicada no repositório entrega o esquema de nomes e confirma quais nomes
 importam, protegendo contra o vazamento acidental ao custo de facilitar o
 deliberado.
