@@ -27,7 +27,7 @@ PLAYBOOKS   := $(wildcard $(ANSIBLE_DIR)/playbooks/*.yml $(ANSIBLE_DIR)/playbook
         secrets links snapshot omv-fs discover clean render-opnsense render-monitoring \
         render-proxmox-ifaces render-openwrt-led render-openwrt-network render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass render-opnsense-antiportscan gates-node-bootstrap gates-swarm-ct gates-pve-exporter gates-monitoring gates-nut gates-openwrt-nfc gates-openwrt-upgrade \
         gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade \
-        gates-tailscale gates-cpu-pinning validate-alloy render-traefik \
+        gates-tailscale gates-vault-local gates-cpu-pinning validate-alloy render-traefik \
         gates-repositorios
 
 help: ## Lista os alvos
@@ -62,7 +62,7 @@ ssh-keys: ## Instala a chave gerada pelo bootstrap em todo host do inventário (
 test-bootstrap: ## Testa os renderizadores do bootstrap contra os consumidores reais
 	@python3 IaC/bootstrap/test_render.py
 
-check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass render-opnsense-antiportscan gates-node-bootstrap gates-swarm-ct gates-pve-exporter gates-monitoring gates-nut gates-openwrt-nfc gates-openwrt-upgrade gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade gates-tailscale gates-cpu-pinning validate-alloy render-traefik gates-repositorios ## Tudo que a CI roda
+check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass render-opnsense-antiportscan gates-node-bootstrap gates-swarm-ct gates-pve-exporter gates-monitoring gates-nut gates-openwrt-nfc gates-openwrt-upgrade gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade gates-tailscale gates-vault-local gates-cpu-pinning validate-alloy render-traefik gates-repositorios ## Tudo que a CI roda
 	@echo
 	@echo "✓ check completo"
 
@@ -245,6 +245,26 @@ gates-identidade: ## Confere que o apply não pode renomear firewall e AP
 
 gates-tailscale: ## Confere que o apply não pode apagar a VPN de acesso remoto
 	@python3 $(ANSIBLE_DIR)/tests/gates_tailscale.py
+
+# Só a máquina de controle tem vault e senha; na CI e num clone de terceiro os
+# dois não existem e o alvo só avisa. Lê os 14 primeiros bytes do vault — o
+# cabeçalho `$ANSIBLE_VAULT` —, nunca o conteúdo: em texto puro, o que se lê
+# fica na variável e não é impresso. O .gitignore e o pre-commit já impedem o
+# vault de ir para o repositório; isto cobre o disco local (`ansible-vault
+# decrypt` esquecido) e a senha legível por outro usuário.
+gates-vault-local: ## Vault cifrado e senha do vault em 600, quando existirem
+	@fail=0; \
+	for f in $(ANSIBLE_DIR)/inventories/*/group_vars/all/vault.yml; do \
+	  [ -f "$$f" ] || continue; \
+	  if [ "$$(head -c 14 "$$f")" = '$$ANSIBLE_VAULT' ]; then echo "✓ vault cifrado: $$f"; \
+	  else echo "✗ vault em texto puro: $$f (ansible-vault encrypt)"; fail=1; fi; \
+	done; \
+	p=$(ANSIBLE_DIR)/.ansible_vault_pass; \
+	if [ -f "$$p" ]; then \
+	  m=$$(stat -c %a "$$p"); \
+	  if [ "$$m" = 600 ]; then echo "✓ $$p em 600"; else echo "✗ $$p em $$m, esperado 600 (chmod 600)"; fail=1; fi; \
+	else echo "· sem $$p (CI ou clone de terceiro): nada a conferir"; fi; \
+	exit $$fail
 
 gates-cpu-pinning: ## Afirma que o pinning da VM do firewall recusa VM com mais de 1 vCPU
 	@python3 $(ANSIBLE_DIR)/tests/gates_cpu_pinning.py

@@ -53,8 +53,8 @@
            Uma auth key da Tailscale REGISTRA dispositivos novos na tailnet.
            Guardá-la em arquivo permanentemente é manter uma credencial de
            admissão parada — categoricamente diferente de um hash bcrypt, que
-           só serve para comparar. Pior aqui, porque o vault deste repositório
-           ainda está em texto puro.
+           só serve para comparar. O vault é cifrado (o bootstrap o gera assim),
+           mas a chave seguiria utilizável por quem tiver a senha dele.
 
            O nó não precisa dela: a identidade dele é a chave de nó em
            /var/db/tailscale/tailscaled.state, não este campo. Duas proteções
@@ -69,7 +69,13 @@
                 num nó ainda não autenticado.
 
            Preencher só faz sentido para registrar um firewall reconstruído do
-           zero, e nesse caso a chave sai do vault e volta a ser vazia depois. #}
+           zero, e nesse caso a chave sai do vault e volta a ser vazia depois.
+
+           ⚠️ Expiração: a chave do nó registrado expira em 180 dias por padrão,
+           e o acesso remoto cai sem aviso. Decisão (14/10/2026): desligar a
+           expiração no console da Tailscale logo depois de registrar (passo 7
+           de docs/instalacao.md). É estado da tailnet, não do config.xml: um
+           firewall reconstruído se registra de novo e volta a expirar. #}
 {% if opnsense_tailscale_preauth_key %}
         <preAuthKey>{{ opnsense_tailscale_preauth_key }}</preAuthKey>
 {% else %}

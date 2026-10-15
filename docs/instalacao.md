@@ -309,6 +309,13 @@ cd ../terraform/proxmox
 terraform apply -target=proxmox_virtual_environment_vm.opnsense   # agente pelo default (true)
 ```
 
+**Tailscale.** Autentique o nó pela GUI do plugin Tailscale e, em seguida, no
+console da Tailscale (Machines), **desligue a expiração da chave** desse nó. Sem
+isso o acesso remoto cai em 180 dias, sem aviso. A decisão vive na tailnet, não
+no `config.xml`: todo firewall reconstruído repete este passo. Confira com
+`tailscale status` no firewall (nó online) e, no console, a máquina sem data de
+expiração.
+
 ## 8. Demais convidados
 
 ⚠️ NAS com dados: colete os filesystems ANTES deste apply (ver "Passo 9, duas
