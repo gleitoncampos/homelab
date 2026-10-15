@@ -635,7 +635,7 @@ opnsense_aliases:
     authtype: ''
     expire: ''
     categories: ''
-    description: Portas de Gerenciamento e WebGUI (SSH, Telnet, HTTP, HTTPS, 8080, 8443)
+    description: Portas de Gerenciamento e WebGUI (SSH, Telnet, HTTP, HTTPS, 8080, 8443, node_exporter 9100)
 
 # =============================================================================
 # REGRAS DE FILTRO — política de segurança, vale para prod e dev

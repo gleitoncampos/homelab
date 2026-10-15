@@ -145,7 +145,7 @@
            </alias>
            <alias uuid="d8c7b6a5-f4e3-2109-8765-443322110099">
              <enabled>1</enabled>
-@@ -1018,7 +1017,8 @@
+@@ -1018,22 +1017,23 @@
  80
  443
  8080
@@ -155,7 +155,13 @@
              <password/>
              <username/>
              <authtype/>
-@@ -1031,9 +1031,9 @@
+             <expire/>
+             <categories/>
+-            <description>Portas de Gerenciamento e WebGUI (SSH, Telnet, HTTP, HTTPS, 8080, 8443)</description>
++            <description>Portas de Gerenciamento e WebGUI (SSH, Telnet, HTTP, HTTPS, 8080, 8443, node_exporter 9100)</description>
+           </alias>
+         </aliases>
+       </Alias>
        <Category version="1.0.0">
          <categories/>
        </Category>
