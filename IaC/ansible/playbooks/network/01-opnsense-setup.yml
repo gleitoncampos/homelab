@@ -509,22 +509,6 @@
       delay: 5
       changed_when: false
 
-    # O reload regenera o sshd (openssh.inc registra openssh_configure_do no
-    # evento 'local'), mas o template já errou isto em silêncio uma vez: com
-    # `<permitrootlogin>0` e `<passwordauth>0` o sshd rodou com root e senha
-    # LIGADOS até 15/10/2026, porque o gerador testa por isset(). Confere o
-    # efetivo, com o -f do sshd do OPNsense (sem ele o -T lê o do sistema base).
-    # Keyboard-interactive conta como senha: UsePAM fica ligado aqui.
-    - name: Conferir no sshd efetivo do firewall que root e senha estão fechados
-      ansible.builtin.command: /usr/local/sbin/sshd -T -f /usr/local/etc/ssh/sshd_config
-      register: _sshd_fw
-      changed_when: false
-      check_mode: false
-      failed_when: >-
-        'permitrootlogin no' not in _sshd_fw.stdout_lines
-        or 'passwordauthentication no' not in _sshd_fw.stdout_lines
-        or 'kbdinteractiveauthentication no' not in _sshd_fw.stdout_lines
-
     # `rc.reload_all` não toca no Kea: `/etc/rc.conf.d/kea` seguia com
     # `kea_enable="NO"` e o kea-dhcp4.conf era o .sample do pacote — nenhum
     # DHCP no ar (13/10/2026). O template `OPNsense/Kea` escreve `kea_enable`
@@ -560,6 +544,24 @@
       register: opn_services
       failed_when: false
       changed_when: opn_services.rc == 0
+
+    # O reload regenera o sshd (openssh.inc registra openssh_configure_do no
+    # evento 'local'), mas o template já errou isto em silêncio uma vez: com
+    # `<permitrootlogin>0` e `<passwordauth>0` o sshd rodou com root e senha
+    # LIGADOS até 15/10/2026, porque o gerador testa por isset(). Confere o
+    # efetivo, com o -f do sshd do OPNsense (sem ele o -T lê o do sistema base).
+    # Keyboard-interactive conta como senha: UsePAM fica ligado aqui.
+    # NO FIM do play, depois do Kea, do mDNS e da DNSBL: falhar antes deles
+    # deixaria a rede sem DHCP só porque o SSH não fechou.
+    - name: Conferir no sshd efetivo do firewall que root e senha estão fechados
+      ansible.builtin.command: /usr/local/sbin/sshd -T -f /usr/local/etc/ssh/sshd_config
+      register: _sshd_fw
+      changed_when: false
+      check_mode: false
+      failed_when: >-
+        'permitrootlogin no' not in _sshd_fw.stdout_lines
+        or 'passwordauthentication no' not in _sshd_fw.stdout_lines
+        or 'kbdinteractiveauthentication no' not in _sshd_fw.stdout_lines
 
     - name: Exibir confirmação do OPNsense
       ansible.builtin.debug:
