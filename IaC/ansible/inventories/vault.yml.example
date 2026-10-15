@@ -106,10 +106,13 @@ wifi_guest_password: "TROCAR-psk-guest"
 # roda rc.reload_all. Valor no formato errado = firewall sem acesso à GUI e sem
 # WAN. Cada campo abaixo diz o formato exato que o OPNsense espera.
 
-# Hash bcrypt, NÃO a senha em texto. Gerar no próprio firewall:
-#   ssh root@opnsense -- php -r 'echo password_hash("SENHA", PASSWORD_BCRYPT)."\n";'
-# Deve começar com $2y$ ou $2b$. Use aspas simples no YAML (o $ não é interpolado,
-# mas evita surpresa) e cuidado para não quebrar a linha.
+# Hash bcrypt, NÃO a senha em texto. Gere pelo bootstrap, que pede a senha sem
+# eco e calcula o hash na estação: `make bootstrap ARGS=--senhas`.
+# ⚠️ NÃO use `ssh ... php -r 'password_hash("SENHA", ...)'`: a senha fica no
+# histórico do shell e aparece no `ps` do firewall. Quem já usou essa receita:
+# limpe o histórico e troque a senha.
+# Formato: $2y$ ou $2b$, custo de 2 dígitos e 53 caracteres; o validate_vault.yml
+# recusa outro formato. Use aspas simples no YAML e não quebre a linha.
 opnsense_root_password_hash: '$2y$11$TROCAR-hash-bcrypt-do-root'
 opnsense_admin_password_hash: '$2y$11$TROCAR-hash-bcrypt-do-usuario-admin'
 
