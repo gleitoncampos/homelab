@@ -1098,11 +1098,34 @@
     # Prefixo `20-`: o sshd usa o PRIMEIRO valor que lê, os drop-ins entram
     # pelo Include antes do `PermitRootLogin yes` do sshd_config, e nada de
     # fábrica em sshd_config.d/ vem antes.
+    # ⚠️ No PVE, /root/.ssh/authorized_keys é link para
+    # /etc/pve/priv/authorized_keys, dentro do pmxcfs: se o pve-cluster cair, a
+    # chave some — e com a senha fechada o SSH tranca, junto com a GUI (o
+    # pveproxy também depende do pmxcfs). Por isso a chave do admin vai TAMBÉM
+    # para um arquivo fora do /etc/pve, e o drop-in o declara em
+    # AuthorizedKeysFile ao lado do caminho de sempre.
+    - name: Criar o diretório de chaves do sshd fora do pmxcfs
+      ansible.builtin.file:
+        path: /etc/ssh/authorized_keys.d
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Gravar a chave do admin fora do pmxcfs
+      ansible.posix.authorized_key:
+        user: root
+        state: present
+        key: "{{ ssh_public_key }}"
+        path: /etc/ssh/authorized_keys.d/root
+        manage_dir: false
+
     - name: Fechar o SSH do Proxmox para login por senha
       ansible.builtin.copy:
         dest: /etc/ssh/sshd_config.d/20-so-chave.conf
         validate: /usr/sbin/sshd -t -f %s
         content: |
+          AuthorizedKeysFile .ssh/authorized_keys /etc/ssh/authorized_keys.d/%u
           PasswordAuthentication no
           KbdInteractiveAuthentication no
           PermitRootLogin prohibit-password
@@ -1125,6 +1148,7 @@
         'passwordauthentication no' not in _sshd_efetivo.stdout_lines
         or 'kbdinteractiveauthentication no' not in _sshd_efetivo.stdout_lines
         or 'permitrootlogin without-password' not in _sshd_efetivo.stdout_lines
+        or 'authorizedkeysfile .ssh/authorized_keys /etc/ssh/authorized_keys.d/%u' not in _sshd_efetivo.stdout_lines
 
     - name: Criar diretório local de exportação de backup das configurações do Proxmox
       ansible.builtin.file:

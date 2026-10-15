@@ -25,8 +25,9 @@
           - opnsense_pppoe_password_b64
           - opnsense_gui_cert_crt_b64
           - opnsense_gui_cert_key_b64
-          # Sem chave, o apply instala permitrootlogin=0 +
-          # passwordauth=0 e a PRÓXIMA execução não conecta.
+          # Sem chave, o apply fecha o login de root e por senha (o
+          # _system.xml.j2 omite permitrootlogin/passwordauth) e a PRÓXIMA
+          # execução não conecta.
           - opnsense_admin_authorizedkeys_b64
 
     # =====================================================================
@@ -92,8 +93,8 @@
           Dois objetos com o mesmo UUID fazem um sumir do modelo, sem erro —
           em opnsense_users isso troca o hash de senha e o nome que o
           _system.xml.j2 seleciona por UUID literal (root em vez de admin,
-          ou vice-versa), e este play em seguida aplica permitrootlogin=0 +
-          passwordauth=0, trancando o próximo acesso.
+          ou vice-versa), e este play em seguida fecha o login de root e por
+          senha, trancando o próximo acesso.
       loop:
         - { nome: "opnsense_tunables", valor: "{{ opnsense_tunables }}" }
         - { nome: "opnsense_aliases", valor: "{{ opnsense_aliases }}" }
@@ -363,7 +364,7 @@
     #
     # O dono é o admin nomeado, não `ansible_user`: o 1º apply de um firewall
     # novo roda como root (o admin ainda não existe) e o MESMO apply desliga o
-    # login de root (`permitrootlogin=0`). Gravar para `ansible_user` dava
+    # login de root (o template omite `permitrootlogin`). Gravar para `ansible_user` dava
     # sudoers ao root e deixava o admin — o usuário de todas as execuções
     # seguintes — sem sudo sem senha: a 2ª execução não tinha como entrar.
     #
@@ -507,6 +508,22 @@
       retries: 24
       delay: 5
       changed_when: false
+
+    # O reload regenera o sshd (openssh.inc registra openssh_configure_do no
+    # evento 'local'), mas o template já errou isto em silêncio uma vez: com
+    # `<permitrootlogin>0` e `<passwordauth>0` o sshd rodou com root e senha
+    # LIGADOS até 15/10/2026, porque o gerador testa por isset(). Confere o
+    # efetivo, com o -f do sshd do OPNsense (sem ele o -T lê o do sistema base).
+    # Keyboard-interactive conta como senha: UsePAM fica ligado aqui.
+    - name: Conferir no sshd efetivo do firewall que root e senha estão fechados
+      ansible.builtin.command: /usr/local/sbin/sshd -T -f /usr/local/etc/ssh/sshd_config
+      register: _sshd_fw
+      changed_when: false
+      check_mode: false
+      failed_when: >-
+        'permitrootlogin no' not in _sshd_fw.stdout_lines
+        or 'passwordauthentication no' not in _sshd_fw.stdout_lines
+        or 'kbdinteractiveauthentication no' not in _sshd_fw.stdout_lines
 
     # `rc.reload_all` não toca no Kea: `/etc/rc.conf.d/kea` seguia com
     # `kea_enable="NO"` e o kea-dhcp4.conf era o .sample do pacote — nenhum
