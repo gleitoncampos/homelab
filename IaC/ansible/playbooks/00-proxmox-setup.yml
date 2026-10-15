@@ -1089,6 +1089,43 @@
         state: present
         key: "{{ ssh_public_key }}"
 
+    # SSH só por chave, root inclusive (15/10/2026): a senha de root do PVE é o
+    # alvo mais valioso do parque, e o NAS e o firewall já fecham o login por
+    # senha. DEPOIS da task da chave, nunca antes. Que a chave funciona está
+    # provado pela própria conexão: o Ansible chega aqui sem senha nenhuma
+    # configurada (ansible_ssh_private_key_file em _common/all.yml). A GUI na
+    # 8006 continua aceitando a senha do root@pam — isto é só o sshd.
+    # Prefixo `20-`: o sshd usa o PRIMEIRO valor que lê, os drop-ins entram
+    # pelo Include antes do `PermitRootLogin yes` do sshd_config, e nada de
+    # fábrica em sshd_config.d/ vem antes.
+    - name: Fechar o SSH do Proxmox para login por senha
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/20-so-chave.conf
+        validate: /usr/sbin/sshd -t -f %s
+        content: |
+          PasswordAuthentication no
+          KbdInteractiveAuthentication no
+          PermitRootLogin prohibit-password
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Recarregar o sshd
+
+    # Aqui, e não no fim do play: o reload (não restart, a sessão do Ansible
+    # sobrevive) tem de valer antes de qualquer task seguinte.
+    - name: Recarregar o sshd agora
+      ansible.builtin.meta: flush_handlers
+
+    - name: Conferir no sshd efetivo que senha e root por senha estão fechados
+      ansible.builtin.command: /usr/sbin/sshd -T
+      register: _sshd_efetivo
+      changed_when: false
+      check_mode: false
+      failed_when: >-
+        'passwordauthentication no' not in _sshd_efetivo.stdout_lines
+        or 'kbdinteractiveauthentication no' not in _sshd_efetivo.stdout_lines
+        or 'permitrootlogin without-password' not in _sshd_efetivo.stdout_lines
+
     - name: Criar diretório local de exportação de backup das configurações do Proxmox
       ansible.builtin.file:
         path: /var/backups/proxmox_config_exports
@@ -1138,6 +1175,11 @@
       when: not (firewall_disponivel and nas_disponivel)
 
   handlers:
+    - name: Recarregar o sshd
+      ansible.builtin.systemd:
+        name: ssh
+        state: reloaded
+
     - name: Atualizar GRUB
       ansible.builtin.command: "update-grub"
       changed_when: true

@@ -176,6 +176,41 @@
         - "{{ system_user }}"
       when: ssh_public_key is defined and ssh_public_key != ""
 
+    # SSH só por chave (15/10/2026), igual ao Proxmox, ao NAS e ao firewall. O
+    # Debian deixa PasswordAuthentication no padrão (yes). DEPOIS da task da
+    # chave; que a chave funciona está provado pela própria conexão do Ansible,
+    # que chega aqui sem senha. O sudo é NOPASSWD, então o become não depende
+    # de senha de SSH. Prefixo `20-` pelo mesmo motivo do Proxmox: o sshd usa o
+    # primeiro valor que lê, e o Include vem antes do resto do sshd_config.
+    - name: Fechar o SSH dos nós para login por senha
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/20-so-chave.conf
+        validate: /usr/sbin/sshd -t -f %s
+        content: |
+          PasswordAuthentication no
+          KbdInteractiveAuthentication no
+          PermitRootLogin prohibit-password
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Recarregar o sshd
+
+    # Aqui, e não no fim do play: o reload (não restart, a sessão do Ansible
+    # sobrevive) tem de valer antes de qualquer task seguinte. Com o
+    # ssh.socket ativo (Debian 13), conexão nova já lê a configuração nova.
+    - name: Recarregar o sshd agora
+      ansible.builtin.meta: flush_handlers
+
+    - name: Conferir no sshd efetivo que senha e root por senha estão fechados
+      ansible.builtin.command: /usr/sbin/sshd -T
+      register: _sshd_efetivo
+      changed_when: false
+      check_mode: false
+      failed_when: >-
+        'passwordauthentication no' not in _sshd_efetivo.stdout_lines
+        or 'kbdinteractiveauthentication no' not in _sshd_efetivo.stdout_lines
+        or 'permitrootlogin without-password' not in _sshd_efetivo.stdout_lines
+
     # --- Estrutura de Diretórios de Dados (/srv/containers) ---
     # 0750, e não 0755: o mesmo modo que a varredura de remediação abaixo
     # aplica. Com 0755 aqui, as duas tasks brigavam pelo mesmo caminho a cada
@@ -423,6 +458,11 @@
       # repositório não usa roles — mesma convenção de tasks/portainer_stack.yml.
 
   handlers:
+    - name: Recarregar o sshd
+      ansible.builtin.systemd:
+        name: ssh
+        state: reloaded
+
     # Reiniciar o journald não derruba serviço nenhum: ele reabre os arquivos e
     # aplica o teto novo. Diferente do daemon do Docker, que é por isso que o
     # reinício dele fica atrás de `docker_allow_restart` lá em cima.
