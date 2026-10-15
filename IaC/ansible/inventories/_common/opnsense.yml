@@ -543,7 +543,7 @@ opnsense_aliases:
     authtype: ''
     expire: ''
     categories: ''
-    description: Portas DNS-over-QUIC (UDP 853)
+    description: Porta 853 (DNS-over-QUIC em UDP, DNS-over-TLS em TCP)
   # Espaço de endereçamento privado da RFC 1918. É CONSTANTE de protocolo, não
   # topologia: vale igual em prod, em dev e em qualquer rede do mundo, por isso
   # fica aqui e não em group_vars/network/.
@@ -627,7 +627,9 @@ opnsense_aliases:
 
       8080
 
-      8443'
+      8443
+
+      9100'
     password: ''
     username: ''
     authtype: ''
@@ -696,6 +698,42 @@ opnsense_rules:
     nopfsync: '0'
     statetimeout: ''
     description: Bloqueio de Evasao DNS-over-QUIC (UDP 853 Externo)
+  # DoT (TCP 853) só nas VLANs não confiáveis (15/10/2026): um aparelho com
+  # DoT próprio saía sem passar pelo Unbound — sem DNSBL e sem log —, e o
+  # redirect de DNS só pega a 53. `direction: in` na interface do cliente: a
+  # saída DoT do próprio firewall para os upstreams não passa por aqui. Android
+  # com "DNS privado" automático cai para a 53. Ranking de segurança,
+  # OPNSENSE r5 #104.
+  - uuid: c3d9e1f0-5a6b-4c7d-8e9f-0a1b2c3d4e85
+    enabled: '1'
+    statetype: keep
+    state-policy: ''
+    sequence: '0'
+    action: block
+    quick: '1'
+    interfacenot: '0'
+    interface: vlan40,vlan50
+    direction: in
+    ipprotocol: inet
+    protocol: tcp
+    icmptype: ''
+    icmp6type: ''
+    source_net: any
+    source_not: '0'
+    source_port: ''
+    destination_net: any
+    destination_not: '0'
+    destination_port: DoQ_Ports
+    divert-to: ''
+    gateway: ''
+    replyto: ''
+    disablereplyto: '0'
+    log: '1'
+    allowopts: '0'
+    nosync: '0'
+    nopfsync: '0'
+    statetimeout: ''
+    description: Bloqueio de Evasao DNS-over-TLS (TCP 853) em IoT e Visitantes
   - uuid: a9b8c7d6-e5f4-3210-9876-112233445566
     enabled: '1'
     statetype: keep
@@ -726,6 +764,39 @@ opnsense_rules:
     nopfsync: '0'
     statetimeout: ''
     description: Bloqueio Outbound SMTP Anti-Spam em IoT e Visitantes (Portas 25, 465)
+  # 587 (submission) só na IoT (15/10/2026): câmera ou gadget comprometido
+  # fazendo relay. Fora da VLAN 50 de propósito — celular de visitante usa a
+  # 587 para mandar e-mail. Ranking de segurança, OPNSENSE r1 #4.
+  - uuid: d4e0f2a1-6b7c-4d8e-9fa0-1b2c3d4e5f96
+    enabled: '1'
+    statetype: keep
+    state-policy: ''
+    sequence: '0'
+    action: block
+    quick: '1'
+    interfacenot: '0'
+    interface: vlan40
+    direction: in
+    ipprotocol: inet
+    protocol: tcp
+    icmptype: ''
+    icmp6type: ''
+    source_net: any
+    source_not: '0'
+    source_port: ''
+    destination_net: any
+    destination_not: '0'
+    destination_port: '587'
+    divert-to: ''
+    gateway: ''
+    replyto: ''
+    disablereplyto: '0'
+    log: '1'
+    allowopts: '0'
+    nosync: '0'
+    nopfsync: '0'
+    statetimeout: ''
+    description: Bloqueio Outbound SMTP Submission em IoT (Porta 587)
   # ⚠️ REMOVIDA em 14/10/2026: `Bloqueio Anti-PortScan de IoT e Visitantes` (uuid
   # d9e8f7a6). Era `block` em TCP de qualquer origem a qualquer destino, com
   # `max-src-conn-rate`/`overload` — mas limite de taxa só existe em regra de

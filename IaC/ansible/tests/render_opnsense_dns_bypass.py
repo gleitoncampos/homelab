@@ -100,6 +100,21 @@ if ping is not None:
         checar(int(_campo(r, "sequence") or 0) <= int(_campo(regras[bloq], "sequence") or 0),
                "sequence da passagem ICMP <= sequence do bloqueio")
 
+# DoT (TCP 853) bloqueado só na ENTRADA das VLANs não confiáveis (15/10/2026).
+# Em floating, na WAN ou sem `direction: in`, a regra pegaria a saída DoT do
+# próprio Unbound para os upstreams e o firewall ficaria sem DNS.
+dot = next((r for r in regras if r.get("uuid") == "c3d9e1f0-5a6b-4c7d-8e9f-0a1b2c3d4e85"), None)
+checar(dot is not None, "existe o bloqueio de DoT (TCP 853)")
+if dot is not None:
+    checar(_campo(dot, "action", "type") == "block", "DoT: action block")
+    checar(_campo(dot, "protocol") == "tcp", "DoT: protocolo tcp")
+    checar(_campo(dot, "interface") == "vlan40,vlan50", "DoT: só nas VLANs 40 e 50")
+    checar(_campo(dot, "direction") == "in", "DoT: direction in (não pega a saída do firewall)")
+    checar(_campo(dot, "floating") in ("", "0"), "DoT: não é floating")
+    porta = next((a for a in raiz.iter("alias") if a.findtext("name") == _campo(dot, "destination_port")), None)
+    checar(porta is not None and (porta.findtext("content") or "").split() == ["853"],
+           "DoT: destino é um alias só com a 853")
+
 if falhas:
     sys.exit(f"\n✗ render-opnsense-dns-bypass: {len(falhas)} falha(s)")
 print("\n✓ render-opnsense-dns-bypass")
