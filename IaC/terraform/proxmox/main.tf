@@ -151,6 +151,15 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
 
   started = true
 
+  # Ordem e tempo limite de desligamento (firewall: sobe primeiro e para por ÚLTIMO (ordem reversa no desligamento)). Sem isto o Proxmox espera
+  # até 180 s por convidado — na queda de 14/10/2026 a bateria durou 2 min 31 s
+  # e o nó primário morreu sem desligar. Quem para os convidados cedo é o NUT
+  # (pvesh stopall com N s na bateria, 07-nut-ups.yml); o stopall respeita isto.
+  startup {
+    order      = 1
+    down_delay = 45
+  }
+
   # Deliberadamente SEM lifecycle.prevent_destroy aqui: diferente dos CTs
   # 200/201, o README não afirma que esta VM já existe fora do Terraform.
   # Ainda assim, rode `terraform plan` e confira o VMID real no cluster antes
@@ -290,6 +299,15 @@ resource "proxmox_virtual_environment_container" "docker_swarm_node01" {
   }
 
   started = true
+
+  # Ordem e tempo limite de desligamento (nó do Swarm). Sem isto o Proxmox espera
+  # até 180 s por convidado — na queda de 14/10/2026 a bateria durou 2 min 31 s
+  # e o nó primário morreu sem desligar. Quem para os convidados cedo é o NUT
+  # (pvesh stopall com N s na bateria, 07-nut-ups.yml); o stopall respeita isto.
+  startup {
+    order      = 3
+    down_delay = 30
+  }
 
   # ⚠️ Este CT já existe em produção, criado por caminho MANUAL (não pelo
   # Terraform). `prevent_destroy` e `ignore_changes` só têm efeito - e só
@@ -454,6 +472,15 @@ resource "proxmox_virtual_environment_vm" "omv_nas" {
 
   started = true
 
+  # Ordem e tempo limite de desligamento (NAS: único convidado do nó secundário, pode usar mais tempo). Sem isto o Proxmox espera
+  # até 180 s por convidado — na queda de 14/10/2026 a bateria durou 2 min 31 s
+  # e o nó primário morreu sem desligar. Quem para os convidados cedo é o NUT
+  # (pvesh stopall com N s na bateria, 07-nut-ups.yml); o stopall respeita isto.
+  startup {
+    order      = 2
+    down_delay = 60
+  }
+
   # ⚠️ Decisão de 25/08/2026: esta VM é para ser RECRIADA, não importada. O
   # VMID 300 e o nome daqui são portanto o ALVO, e divergem de propósito da VM
   # que roda hoje no nó secundário - que tem outro VMID e outro nome. Não
@@ -539,6 +566,15 @@ resource "proxmox_virtual_environment_container" "docker_swarm_node02" {
   }
 
   started = true
+
+  # Ordem e tempo limite de desligamento (nó do Swarm). Sem isto o Proxmox espera
+  # até 180 s por convidado — na queda de 14/10/2026 a bateria durou 2 min 31 s
+  # e o nó primário morreu sem desligar. Quem para os convidados cedo é o NUT
+  # (pvesh stopall com N s na bateria, 07-nut-ups.yml); o stopall respeita isto.
+  startup {
+    order      = 3
+    down_delay = 30
+  }
 
   # Mesmo caso do CT 200: só vale depois de
   #   terraform import proxmox_virtual_environment_container.docker_swarm_node02 <node>/201
@@ -648,6 +684,15 @@ resource "proxmox_virtual_environment_container" "docker_dev_node" {
   }
 
   started = true
+
+  # Ordem e tempo limite de desligamento (nó de dev). Sem isto o Proxmox espera
+  # até 180 s por convidado — na queda de 14/10/2026 a bateria durou 2 min 31 s
+  # e o nó primário morreu sem desligar. Quem para os convidados cedo é o NUT
+  # (pvesh stopall com N s na bateria, 07-nut-ups.yml); o stopall respeita isto.
+  startup {
+    order      = 3
+    down_delay = 30
+  }
 
   # ⚠️ Sem isto, TODO `terraform apply` religa o nó dev mesmo que alguém o
   # tenha desligado de propósito por não estar em uso (é um nó de dev, fica

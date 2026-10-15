@@ -339,6 +339,61 @@
       no_log: true
       notify: Reiniciar o upsmon
 
+    # Desligamento em dois tempos: N s na bateria -> para os convidados deste
+    # nó; LB -> o upsmon desliga o hipervisor. O upssched roda como `nut` e só
+    # deixa pedido numa fila; o serviço root (acionado pela .path) chama o
+    # pvesh — não há sudo nos nós. Trava em tests/gates_nut.py.
+    - name: Criar a fila e o diretório do upssched a cada boot  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/nut/tmpfiles-iac-nut.conf.j2"
+        dest: /etc/tmpfiles.d/iac-nut.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Aplicar a fila e o diretório do upssched agora
+      ansible.builtin.command:
+        cmd: systemd-tmpfiles --create /etc/tmpfiles.d/iac-nut.conf
+      changed_when: false
+
+    - name: Configurar o upssched e o comando dele  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/nut/{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: root
+        group: nut
+        mode: "{{ item.mode }}"
+      loop:
+        - {src: upssched.conf.j2, dest: "{{ nut_sysconfdir }}/upssched.conf", mode: '0640'}
+        - {src: upssched-cmd.j2, dest: "{{ nut_sysconfdir }}/upssched-cmd", mode: '0750'}
+      notify: Reiniciar o upsmon
+
+    - name: Instalar o executor root dos pedidos do NUT  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/nut/iac-nut-convidados.sh.j2"
+        dest: /usr/local/sbin/iac-nut-convidados
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Instalar as units da fila de pedidos do NUT  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/nut/{{ item }}.j2"
+        dest: "/etc/systemd/system/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - iac-nut-convidados.service
+        - iac-nut-convidados.path
+
+    - name: Habilitar a vigia da fila de pedidos do NUT
+      ansible.builtin.systemd:
+        name: iac-nut-convidados.path
+        enabled: true
+        state: started
+        daemon_reload: true
+
     # ⚠️ Só depois do upsmon.conf: o target puxa o `nut-monitor`, que sem o
     # arquivo morre 5 vezes em 1 s e trava no limite de partidas do systemd
     # (13/10/2026). Trava em tests/gates_nut.py.

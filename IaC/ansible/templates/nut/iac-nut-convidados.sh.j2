@@ -1,0 +1,33 @@
+#!/bin/sh
+# /usr/local/sbin/iac-nut-convidados — gerado pelo Ansible (07-nut-ups.yml).
+#
+# Executa, como root, os pedidos que o upssched-cmd (usuário nut) deixa na
+# fila. Só religa o que ELE parou: o estado fica em {{ nut_iac_estado }}, e a
+# volta da energia sem parada anterior não mexe em nada.
+fila="{{ nut_iac_run_dir }}/fila"
+estado="{{ nut_iac_estado }}"
+no="$(hostname)"
+
+if [ -e "$fila/parar" ]; then
+  rm -f "$fila/parar"
+  logger -t iac-nut-convidados "parando os convidados de $no (stopall)"
+  touch "$estado"
+  if pvesh create "/nodes/$no/stopall" >/dev/null 2>&1; then
+    logger -t iac-nut-convidados "convidados de $no parados"
+  else
+    logger -t iac-nut-convidados "stopall de $no falhou (rc=$?)"
+  fi
+fi
+
+if [ -e "$fila/religar" ]; then
+  rm -f "$fila/religar"
+  if [ -e "$estado" ]; then
+    rm -f "$estado"
+    logger -t iac-nut-convidados "religando os convidados de $no (startall)"
+    if pvesh create "/nodes/$no/startall" >/dev/null 2>&1; then
+      logger -t iac-nut-convidados "convidados de $no religados"
+    else
+      logger -t iac-nut-convidados "startall de $no falhou (rc=$?)"
+    fi
+  fi
+fi

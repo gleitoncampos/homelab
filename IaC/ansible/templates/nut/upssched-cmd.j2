@@ -1,0 +1,21 @@
+#!/bin/sh
+# /etc/nut/upssched-cmd — gerado pelo Ansible (07-nut-ups.yml). Não editar à mão.
+#
+# Roda como o usuário `nut`, que NÃO pode parar convidado do Proxmox (pvesh
+# exige root, e não há sudo nos nós). Só deixa um PEDIDO na fila; quem executa
+# é o iac-nut-convidados.service (root), acionado pela unit .path que vigia a
+# fila.
+fila="{{ nut_iac_run_dir }}/fila"
+case "$1" in
+  parar-convidados)
+    logger -t upssched-cmd "{{ nut_convidados_parar_apos_s }} s na bateria: pedindo a parada dos convidados"
+    : > "$fila/parar"
+    ;;
+  religar-convidados)
+    logger -t upssched-cmd "energia de volta: pedindo para religar os convidados (se foram parados)"
+    : > "$fila/religar"
+    ;;
+  *)
+    logger -t upssched-cmd "evento desconhecido: $1"
+    ;;
+esac

@@ -1,0 +1,7 @@
+# Gerado pelo Ansible (07-nut-ups.yml). Acionado por iac-nut-convidados.path.
+[Unit]
+Description=Para ou religa os convidados do Proxmox a pedido do NUT
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/iac-nut-convidados

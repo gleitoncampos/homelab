@@ -22,8 +22,11 @@ FINALDELAY 5
 # ⚠️ Todo evento vai para o syslog. É assim que a queda de energia aparece no
 # Loki e no Grafana: sem SYSLOG, o evento morre no terminal de quem estiver
 # logado. WALL cobre o caso de haver alguém em sessão.
-NOTIFYFLAG ONLINE     SYSLOG+WALL
-NOTIFYFLAG ONBATT     SYSLOG+WALL
+# ONLINE e ONBATT também vão para o upssched (EXEC): parar os convidados com
+# {{ nut_convidados_parar_apos_s }} s na bateria e religá-los se a energia voltar (upssched.conf).
+NOTIFYCMD {{ (nut_prefix ~ '/sbin/upssched') if nut_is_primary else '/sbin/upssched' }}
+NOTIFYFLAG ONLINE     SYSLOG+WALL+EXEC
+NOTIFYFLAG ONBATT     SYSLOG+WALL+EXEC
 NOTIFYFLAG LOWBATT    SYSLOG+WALL
 NOTIFYFLAG FSD        SYSLOG+WALL
 NOTIFYFLAG COMMOK     SYSLOG

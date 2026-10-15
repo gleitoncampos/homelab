@@ -1,0 +1,10 @@
+# Gerado pelo Ansible (07-nut-ups.yml). Vigia a fila de pedidos do upssched-cmd.
+[Unit]
+Description=Fila de pedidos do NUT para parar/religar convidados do Proxmox
+
+[Path]
+PathExistsGlob={{ nut_iac_run_dir }}/fila/*
+Unit=iac-nut-convidados.service
+
+[Install]
+WantedBy=multi-user.target

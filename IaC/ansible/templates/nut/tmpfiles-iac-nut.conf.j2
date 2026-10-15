@@ -1,0 +1,6 @@
+# /etc/tmpfiles.d/iac-nut.conf — gerado pelo Ansible (07-nut-ups.yml).
+# Fila do upssched-cmd (escreve o `nut`) e pipe/lock do upssched. Diretório
+# próprio: o /run/nut/upssched só existe no nó com o NUT compilado.
+d {{ nut_iac_run_dir }} 0750 root nut -
+d {{ nut_iac_run_dir }}/fila 0770 root nut -
+d {{ nut_iac_run_dir }}/upssched 0770 nut nut -

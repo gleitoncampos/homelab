@@ -1,0 +1,14 @@
+{# /etc/nut/upssched.conf — gerado pelo Ansible (07-nut-ups.yml). Não editar à mão. #}
+# Desligamento em dois tempos (decisão de 14/10/2026, após a queda real):
+#   {{ nut_convidados_parar_apos_s }} s na bateria -> para os CONVIDADOS deste nó (stopall);
+#   energia volta antes do LB          -> cancela, e religa o que foi parado;
+#   LB                                 -> o upsmon desliga o HIPERVISOR (como sempre).
+# Com esta bateria, entre o LB e a morte do nobreak passaram 13 s: só dá para
+# desligar o host a tempo se os convidados já estiverem parados.
+CMDSCRIPT {{ nut_sysconfdir }}/upssched-cmd
+PIPEFN {{ nut_iac_run_dir }}/upssched/upssched.pipe
+LOCKFN {{ nut_iac_run_dir }}/upssched/upssched.lock
+
+AT ONBATT * START-TIMER parar-convidados {{ nut_convidados_parar_apos_s }}
+AT ONLINE * CANCEL-TIMER parar-convidados
+AT ONLINE * EXECUTE religar-convidados

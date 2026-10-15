@@ -347,6 +347,18 @@ nut_git_ref: "86aaf8150f1590a226b35ee4cfdba5d4dabc1842"
 nut_prefix: "/usr/local"
 nut_sysconfdir: "/etc/nut"
 
+# Desligamento em dois tempos (14/10/2026, depois da queda real: a bateria
+# durou 2 min 31 s e o nó primário morreu 13 s depois do LB, sem conseguir desligar):
+# com N s na bateria, cada nó para os PRÓPRIOS convidados (pvesh stopall); no
+# LB o upsmon desliga o hipervisor, como antes. A energia voltando antes do LB
+# religa o que foi parado. Os hosts ficam ligados até o LB de propósito: se
+# desligassem cedo, numa queda curta o nobreak não chegaria a cortar a saída,
+# o BIOS não veria a falta de energia e o parque ficaria desligado.
+nut_convidados_parar_apos_s: 60
+# Fila do upssched-cmd (usuário nut) para o serviço root que chama o pvesh.
+nut_iac_run_dir: "/run/nut-iac"
+nut_iac_estado: "/run/nut-iac/convidados-parados"
+
 # Usuários do `upsd.users`. As senhas vêm do vault. Não há usuário para o
 # exportador do Prometheus: o `upsd` não exige autenticação para LER variável.
 nut_monitor_user: "upsmon"
