@@ -190,6 +190,45 @@ _falta = _fix - _vers - _comdefault - _vk
 assert not _falta, f"o render do OPNsense consome e o vault do bootstrap nao gera: {sorted(_falta)}"
 print(f"  OK vault do bootstrap cobre o que so ele fornece ao render do OPNsense ({len(_fix - _vers - _comdefault)} chaves)")
 
+# 5a) senha de PESSOA: recusa igual ao usuario e senha obvia, exige o minimo
+#     (12 nas de administrador). Proposta de 12/10/2026, aceita em 14/10: a
+#     senha do admin do OPNsense tinha saido igual ao usuario.
+import builtins as _bi
+_digitadas = iter(["operador-casa", "Operador-Casa", "curta12", "SenhaBoa-com-12", "SenhaBoa-com-12"])
+_ask_real = bs.ask_secret
+bs.ask_secret = lambda label, obrigatorio=True: next(_digitadas)
+_print_real, _ditos = _bi.print, []
+_bi.print = lambda *a, **k: _ditos.append(" ".join(map(str, a)))
+try:
+    _v = bs.perguntar_senha("teste", "sugestao", minimo=12, usuarios=("operador-casa",))
+finally:
+    _bi.print = _print_real
+assert _v == "SenhaBoa-com-12", _v
+assert sum("nome de usu" in d for d in _ditos) == 2, _ditos   # usuario, mesma em outra caixa
+assert bs.senha_recusada("Admin") and bs.senha_recusada("OPNsense") and not bs.senha_recusada("Admin-x")
+assert sum("no mínimo 12" in d for d in _ditos) == 1, _ditos   # curta12
+# o admin do OPNsense e perguntado com minimo 12 e com o nome do usuario
+_pedidos = []
+bs.perguntar_senha = lambda d, sug, **k: (_pedidos.append(k), sug)[1]
+bs.segredos_opnsense(None, pub, "homelab.example",
+                     {"root_hash": "$2b$x", "pppoe": ""}, admin_user="netadmin")
+assert _pedidos and _pedidos[0].get("minimo") == bs.MINIMO_ADMIN == 12, _pedidos
+assert "netadmin" in _pedidos[0].get("usuarios", ()), _pedidos
+# root do OPNsense: digitada, passa pela mesma regra
+_digitadas = iter(["netadmin", "curta", "RaizBoa-com-12c", "RaizBoa-com-12c"])
+bs.ask_secret = lambda label, obrigatorio=True: next(_digitadas)
+_bi.print = lambda *a, **k: None
+try:
+    _o, _ = bs.segredos_opnsense(None, pub, "homelab.example", {"pppoe": ""}, admin_user="netadmin")
+finally:
+    _bi.print = _print_real
+assert _o["opnsense_root_password_hash"].startswith(("$2b$", "$2y$")), "root nao aceitou senha valida"
+assert next(_digitadas, "fim") == "fim", "root aceitou senha curta ou igual ao usuario"
+for _k in ("omv_admin_password", "proxmox_backup_share_password"):
+    assert bs.LIMITES_SENHA[_k][0] >= 12, f"{_k} sem minimo de administrador"
+bs.ask_secret = _ask_real
+print("  OK senha de pessoa: recusa usuario/obvia, minimo 12 nas de administrador")
+
 # 5b) segredos do OPNsense: os seis saem preenchidos, sem pergunta quando o
 #     cache ja tem root/PPPoE, e valor existente nunca e trocado.
 import base64 as _b64

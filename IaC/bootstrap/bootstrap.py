@@ -190,11 +190,23 @@ EXTERNAL = [
 LIMITES_SENHA = {
     "portainer_admin_password": (16, None),
     "grafana_admin_password": (16, None),
+    # Contas de administrador: mínimo de 12 (proposta de 12/10/2026, aceita em
+    # 14/10 — a senha do admin do OPNsense tinha saído igual ao usuário).
+    "omv_admin_password": (12, None),
+    "proxmox_backup_share_password": (12, None),
     "wifi_main_password": (8, 63),
     "wifi_iot_password": (8, 63),
     "wifi_media_password": (8, 63),
     "wifi_guest_password": (8, 63),
 }
+
+# Mínimo das senhas de administrador que não estão em LIMITES_SENHA (admin e
+# root do OPNsense, perguntados em segredos_opnsense).
+MINIMO_ADMIN = 12
+
+# Senha recusada em QUALQUER pergunta, além do nome de usuário da conta:
+# nomes de conta e padrões de fábrica que um ataque tenta primeiro.
+SENHAS_PROIBIDAS = ("admin", "root", "opnsense", "password", "senha")
 
 # Nome de cada rede Wi-Fi, perguntado como as senhas. O padrão vem do arquivo
 # de respostas. Os quatro nomes de EXEMPLO são recusados: o validate_vault.yml
@@ -287,7 +299,8 @@ def cert_autoassinado(dominio: str) -> tuple[str, str]:
 
 
 def segredos_opnsense(existente: dict | None, ssh_pub: str, dominio: str,
-                      cache: dict, trocar: bool = False) -> tuple[dict, list[tuple[str, str, str]]]:
+                      cache: dict, trocar: bool = False, admin_user: str = "",
+                      ) -> tuple[dict, list[tuple[str, str, str]]]:
     """Valor já presente no vault é preservado. `cache` faz prod e dev
     compartilharem o mesmo valor — e perguntar uma vez só."""
     e = existente or {}
@@ -303,7 +316,8 @@ def segredos_opnsense(existente: dict | None, ssh_pub: str, dominio: str,
         # credencial entregue que não abre nada.
         if "admin_pw" not in cache:
             novo = perguntar_senha("OPNsense — admin nomeado (GUI, SSH e sudo)",
-                                   gen("wifi"), atual=tem_hash)
+                                   gen("wifi"), atual=tem_hash, minimo=MINIMO_ADMIN,
+                                   usuarios=(admin_user,))
             cache["admin_pw"] = pw if novo is None else novo
             cache["admin_hash"] = (e["opnsense_admin_password_hash"] if novo is None
                                    else bcrypt_hash(novo))
@@ -327,6 +341,10 @@ def segredos_opnsense(existente: dict | None, ssh_pub: str, dominio: str,
                 if not a:
                     cache["root_hash"] = e["opnsense_root_password_hash"]
                     break
+                if len(a) < MINIMO_ADMIN or senha_recusada(a, (admin_user,)):
+                    print(f"    (mínimo {MINIMO_ADMIN} caracteres, diferente do usuário e de senha"
+                          " óbvia — o apply grava esta como a nova senha de root)")
+                    continue
                 if a == ask_secret("Repita"):
                     cache["root_hash"] = bcrypt_hash(a)
                     break
@@ -374,11 +392,19 @@ def ask(label: str, default: str = "", *, obrigatorio: bool = True) -> str:
         print("    (obrigatório)")
 
 
+def senha_recusada(senha: str, usuarios: tuple[str, ...] = ()) -> bool:
+    """Igual (sem distinguir caixa) ao nome de usuário ou a um padrão óbvio."""
+    proibidas = {p.casefold() for p in (*SENHAS_PROIBIDAS, *usuarios) if p}
+    return senha.casefold() in proibidas
+
+
 def perguntar_senha(descricao: str, sugestao: str, *, atual: bool = False,
-                    minimo: int = 8, maximo: int | None = None) -> str | None:
+                    minimo: int = 8, maximo: int | None = None,
+                    usuarios: tuple[str, ...] = ()) -> str | None:
     """Senha que uma pessoa usa. Enter aceita a sugestão — ou, com `atual`,
     mantém a do vault (devolve None, sem exibi-la). Digitada: sem eco, duas
-    vezes, dentro dos limites."""
+    vezes, dentro dos limites, e diferente do nome de usuário (`usuarios`) e
+    dos padrões óbvios (SENHAS_PROIBIDAS)."""
     print(f"\n  {descricao}")
     if atual:
         print(f"    {_c('90', 'Enter mantém a atual.')}")
@@ -391,6 +417,9 @@ def perguntar_senha(descricao: str, sugestao: str, *, atual: bool = False,
         if len(v) < minimo or (maximo and len(v) > maximo):
             faixa = f"{minimo} a {maximo}" if maximo else f"no mínimo {minimo}"
             print(f"    (precisa ter {faixa} caracteres)")
+            continue
+        if senha_recusada(v, usuarios):
+            print("    (igual ao nome de usuário ou a uma senha óbvia — escolha outra)")
             continue
         if v == ask_secret("Repita"):
             return v
@@ -643,6 +672,8 @@ def montar_segredos(existente: dict | None, ssh_pub: str, dominio: str,
     precisam sobrescrever o vault."""
     step("3. Segredos")
     e = existente or {}
+    usuarios = tuple(u for u in ((resp or {}).get("ssh_user", ""),
+                                 (resp or {}).get("dominio_admin_user", "")) if u)
     segredos: dict[str, str] = {}
     humanas: list[tuple[str, str, str]] = []
     trocadas: set[str] = set()
@@ -663,7 +694,7 @@ def montar_segredos(existente: dict | None, ssh_pub: str, dominio: str,
             if chave not in cache:
                 minimo, maximo = LIMITES_SENHA.get(chave, (8, None))
                 novo = perguntar_senha(descricao, gen("wifi"), atual=bool(e.get(chave)),
-                                       minimo=minimo, maximo=maximo)
+                                       minimo=minimo, maximo=maximo, usuarios=usuarios)
                 cache[chave] = e[chave] if novo is None else novo
             valor = cache[chave]
             if valor != e.get(chave):
@@ -703,7 +734,8 @@ def montar_segredos(existente: dict | None, ssh_pub: str, dominio: str,
     for chave, *_ in EXTERNAL:
         segredos.setdefault(chave, (existente or {}).get(chave, ""))
 
-    opn, opn_humanas = segredos_opnsense(existente, ssh_pub, dominio, cache, trocar)
+    opn, opn_humanas = segredos_opnsense(existente, ssh_pub, dominio, cache, trocar,
+                                         admin_user=(resp or {}).get("dominio_admin_user", ""))
     segredos.update(opn)
     humanas += opn_humanas
     for k in ("opnsense_admin_password", "opnsense_admin_password_hash",
