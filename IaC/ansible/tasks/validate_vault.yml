@@ -166,14 +166,15 @@
 - name: Exigir formato válido da chave pública SSH
   ansible.builtin.assert:
     that:
+      # `ssh-ecdsa` não existe: chave ECDSA começa com `ecdsa-sha2-nistpNNN`, e a
+      # lista antiga recusava uma chave válida (15/10/2026).
       - >-
-        ssh_public_key.startswith('ssh-ed25519 AAAA')
-        or ssh_public_key.startswith('ssh-rsa AAAA')
-        or ssh_public_key.startswith('ssh-ecdsa AAAA')
+        ssh_public_key is match('^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)|sk-ssh-ed25519@openssh\.com|sk-ecdsa-sha2-nistp256@openssh\.com) AAAA')
       - ssh_public_key | length > 80
     fail_msg: >-
       ssh_public_key não parece uma chave pública SSH válida: precisa começar com
-      "ssh-ed25519 AAAA", "ssh-rsa AAAA" ou "ssh-ecdsa AAAA" e ter mais de 80
+      o tipo ("ssh-ed25519", "ssh-rsa", "ecdsa-sha2-nistp256/384/521" ou uma
+      variante "sk-" de chave de hardware) seguido de " AAAA", e ter mais de 80
       caracteres. O valor anterior em main.yml era um placeholder truncado que
       nunca instalou chave nenhuma.
     quiet: true
