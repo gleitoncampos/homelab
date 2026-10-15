@@ -671,7 +671,13 @@
       <general>
         <enabled>1</enabled>
         <loglocal>1</loglocal>
-        <maxpreserve>7</maxpreserve>
+        {# Dias de log local guardados (filtro, sistema, auditoria). É ESTE campo
+           que o /usr/local/opnsense/scripts/syslog/log_archive lê na 26.7 — o
+           rotatecount/rotatetime de <syslog> em _system.xml.j2 não é lido por
+           ninguém. 7 era curto para investigar acesso indevido, que costuma ser
+           percebido semanas depois. 90 dias ≈ 0,6 GB pela taxa medida em
+           15/10/2026 (filtro ~6,5 MB/dia; /var/log com 21 GB livres). #}
+        <maxpreserve>90</maxpreserve>
         <maxfilesize/>
       </general>
       <destinations>

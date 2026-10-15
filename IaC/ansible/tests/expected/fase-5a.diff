@@ -133,7 +133,7 @@
        <gateway_item uuid="f42ac827-3c2e-4237-998d-603930653b98">
          <disabled>0</disabled>
          <name>WAN_GW</name>
-@@ -2065,25 +2842,103 @@
+@@ -2065,29 +2842,107 @@
          <gateway/>
          <defaultgw>1</defaultgw>
          <fargw>0</fargw>
@@ -245,6 +245,11 @@
        <general>
          <enabled>1</enabled>
          <loglocal>1</loglocal>
+-        <maxpreserve>7</maxpreserve>
++        <maxpreserve>90</maxpreserve>
+         <maxfilesize/>
+       </general>
+       <destinations>
 @@ -2096,7 +2951,7 @@
            <transport>udp4</transport>
            <program>audit,configd.py,dhcpd,filterlog,firewall,dpinger,kernel,ppp,unbound,suricata</program>
