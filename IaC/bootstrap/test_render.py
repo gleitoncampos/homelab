@@ -105,8 +105,12 @@ loc = yaml.safe_load(bs.render_local_all(resp))
 # do firewall e do NAS (VLAN 20), do Proxmox (LAN), e o operador da LAN
 # (13/10/2026). LAN = gateway atual /24; homelab = gateway-alvo /cidr;
 # gerência = <prefixo>.10.0/24, pela convenção <prefixo>.<vlan>.x.
+# traefik_admin_cidrs: a mesma lista mais a MAIN (<prefixo>.30.0/24) — quem
+# chega às GUIs de equipamento pelo Traefik (middleware `rede-admin`).
 assert loc == {"system_user": resp["ssh_user"],
-               "mgmt_allowed_cidrs": ["192.0.2.0/24", "198.51.10.0/24", "198.51.100.0/24"]}, \
+               "mgmt_allowed_cidrs": ["192.0.2.0/24", "198.51.10.0/24", "198.51.100.0/24"],
+               "traefik_admin_cidrs": ["192.0.2.0/24", "198.51.10.0/24", "198.51.100.0/24",
+                                       "198.51.30.0/24"]}, \
     f"99-local inesperado: {loc}"
 assert f"ansible_user={resp['ssh_user']}" in ini, "hosts.ini sem o ssh_user respondido"
 print("  OK 99-local: system_user igual ao ansible_user dos nos")

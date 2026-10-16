@@ -43,9 +43,22 @@ services:
     environment:
       - CF_DNS_API_TOKEN=${CLOUDFLARE_TOKEN} ## Passar essa env no Portainer
 
+    # `mode: host` (15/10/2026): no formato curto as portas iam pela malha
+    # ingress, e o Traefik via o IP interno dela, não o do cliente — o
+    # `ipAllowList` do middleware `rede-admin` (rotas.yml.j2) não teria como
+    # funcionar. Em host, a porta abre só no nó da task (o manager, pela
+    # constraint abaixo).
+    # ⚠️ Premissas: update `stop-first` (o padrão do Swarm; `start-first`
+    # prende a porta com duas tasks no mesmo nó) e manager único (o curinga
+    # do Unbound aponta para groups['homelab_managers'][0]; um segundo manager
+    # pode receber a task e o DNS seguir no primeiro).
     ports:
-      - 80:80
-      - 443:443
+      - target: 80
+        published: 80
+        mode: host
+      - target: 443
+        published: 443
+        mode: host
       #- 8080:8080 # Dashboard port
 
     volumes:

@@ -83,6 +83,26 @@ http:
       tls:
         certResolver: "{{ traefik_certresolver }}"
       service: "{{ r.nome | replace('.', '-') }}"
+      middlewares:
+        - rede-admin
+{% endfor %}
+
+{#
+  ⚠️ `rede-admin` existe SEMPRE, mesmo sem rota nenhuma: o Portainer a usa por
+  label (`rede-admin@file`), e router com middleware inexistente não sobe.
+
+  Sem ela, o Traefik na VLAN 20 fazia a ponte de qualquer rede que o alcança
+  (MEDIA, IoT) até a gerência, por cima das regras do firewall (15/10/2026).
+  Só funciona com as portas do Traefik em `mode: host` (compose.yml): no modo
+  ingress ele vê o IP interno da malha, não o do cliente, e a lista ou barra
+  todo mundo ou ninguém.
+#}
+  middlewares:
+    rede-admin:
+      ipAllowList:
+        sourceRange:
+{% for c in traefik_admin_cidrs %}
+          - "{{ c }}"
 {% endfor %}
 
   services:

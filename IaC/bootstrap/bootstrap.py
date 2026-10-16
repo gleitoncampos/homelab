@@ -835,7 +835,13 @@ def render_local_all(resp: dict) -> str:
     operador está na LAN: uma faixa só fechava a porta a alguém (13/10/2026).
     LAN = gateway atual /24 (máscara fixa no template do OPNsense); homelab =
     gateway-alvo /cidr; gerência = <prefixo>.10.0/24, pela convenção
-    <prefixo>.<vlan>.x do prefixo perguntado no passo de rede."""
+    <prefixo>.<vlan>.x do prefixo perguntado no passo de rede.
+
+    `traefik_admin_cidrs`: quem chega às GUIs de equipamento e ao Portainer
+    publicados pelo Traefik (middleware `rede-admin`, rotas.yml.j2). É a
+    `mgmt_allowed_cidrs` mais a MAIN (<prefixo>.30.0/24), de onde o operador
+    acessa. Sem a lista, o Traefik na VLAN 20 fazia a ponte de qualquer VLAN
+    que o alcança (MEDIA, IoT) até a gerência (15/10/2026)."""
     import ipaddress
 
     alvo = resp["rede_alvo"]
@@ -846,12 +852,15 @@ def render_local_all(resp: dict) -> str:
         ipaddress.ip_interface(f"{alvo['gateway']}/{alvo['cidr']}").network,
     ]
     linhas = "".join(f"  - {r}\n" for r in redes)
+    admin = "".join(f"  - {r}\n" for r in redes + [ipaddress.ip_network(f"{prefixo}.30.0/24")])
     return (
         f"# Gerado por IaC/bootstrap/bootstrap.py em {date.today().isoformat()}.\n"
         "# NÃO versionado. Vence o 00-common.yml ao lado (ordem alfabética).\n"
         f"system_user: {resp['ssh_user']!r}\n"
         "# LAN, gerência (VLAN 10) e homelab (VLAN 20): ver render_local_all.\n"
         f"mgmt_allowed_cidrs:\n{linhas}"
+        "# A lista acima mais a MAIN (VLAN 30): ver render_local_all.\n"
+        f"traefik_admin_cidrs:\n{admin}"
     )
 
 

@@ -64,6 +64,7 @@ CONTEXTO = {
     "traefik_porta_proxmox": 8006,
     "traefik_porta_omv": 80,
     "traefik_porta_openwrt": 80,
+    "traefik_admin_cidrs": ["192.0.2.0/24", "198.51.100.0/24"],
 }
 
 falhas = []
@@ -138,6 +139,16 @@ for nome, roteador in routers.items():
     checar((roteador.get("tls") or {}).get("certResolver") == "cloudflare",
            f"router {nome} usa o certresolver da variável")
 
+# `rede-admin` é o que impede o Traefik (VLAN 20) de fazer a ponte de MEDIA e
+# IoT até a gerência (15/10/2026). Router sem ela é GUI de equipamento aberta
+# a toda rede que alcança o Traefik.
+_mw = ((http.get("middlewares") or {}).get("rede-admin") or {}).get("ipAllowList") or {}
+checar(_mw.get("sourceRange") == CONTEXTO["traefik_admin_cidrs"],
+       "middleware rede-admin com a lista de traefik_admin_cidrs")
+for nome, roteador in routers.items():
+    checar(roteador.get("middlewares") == ["rede-admin"],
+           f"router {nome} passa pelo middleware rede-admin")
+
 # A rota do AP vai à gerência; com o `ansible_host` antigo dava timeout
 # (14/10/2026).
 _ap = ((services.get(IDENTIDADE["ap-um"]) or {}).get("loadBalancer") or {}).get("servers") or [{}]
@@ -176,8 +187,25 @@ try:
     doc_vazio = yaml.safe_load(vazio) or {}
     checar(not ((doc_vazio.get("http") or {}).get("routers")),
            "inventário sem nenhum dos quatro grupos rende arquivo sem rota, e não erro")
+    # O Portainer usa `rede-admin@file` por label: sem a middleware, o router
+    # dele não sobe, mesmo sem equipamento nenhum no inventário.
+    checar("rede-admin" in ((doc_vazio.get("http") or {}).get("middlewares") or {}),
+           "rede-admin existe mesmo sem rota de equipamento")
 except Exception as exc:  # noqa: BLE001 - o ponto do teste é não estourar
     checar(False, f"inventário vazio rende sem erro ({exc})")
+
+print("\n== mode: host e Portainer ==")
+# Sem `mode: host` as portas vão pela malha ingress e o Traefik vê o IP dela,
+# não o do cliente: a ipAllowList barraria todo mundo ou ninguém.
+_portas = (yaml.safe_load(_compose)["services"]["traefik"].get("ports") or [])
+checar(sorted(p.get("published") for p in _portas if isinstance(p, dict)
+              and p.get("mode") == "host") == [80, 443]
+       and all(isinstance(p, dict) for p in _portas),
+       "Traefik publica 80 e 443 em mode: host, nada pela malha ingress")
+_portainer = yaml.safe_load((RAIZ / "docker/portainer/swarm/compose.yml").read_text())
+checar("traefik.http.routers.portainer.middlewares=rede-admin@file"
+       in _portainer["services"]["portainer"]["deploy"]["labels"],
+       "router do Portainer passa pelo middleware rede-admin")
 
 print("\n== playbook e inventário ==")
 playbook_txt = PLAYBOOK.read_text(encoding="utf-8")

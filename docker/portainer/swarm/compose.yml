@@ -87,6 +87,8 @@ services:
         - "traefik.http.services.portainer.loadbalancer.server.port=9000"
         - "traefik.http.routers.portainer.service=portainer"
         - "traefik.http.routers.portainer.tls.certresolver=cloudflare"
+        # Só as redes de gerência e a MAIN (lista em docker/traefik/swarm/rotas.yml.j2).
+        - "traefik.http.routers.portainer.middlewares=rede-admin@file"
 
   # Âncora da `traefik_public`: overlay só existe no nó que tem container
   # nela. O Portainer manda o deploy de stack por `tasks.portainer-agent`, que

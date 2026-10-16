@@ -64,6 +64,21 @@
           - cloudflare_email
           - cloudflare_api_token
           - homelab_domain
+
+    # Antes do Portainer subir com o label `rede-admin@file`: sem a lista, o
+    # render das rotas falharia depois, longe da causa; como string, o laço do
+    # template percorreria caractere por caractere.
+    - name: Exigir traefik_admin_cidrs para o middleware rede-admin
+      ansible.builtin.assert:
+        that:
+          - traefik_admin_cidrs is defined
+          - traefik_admin_cidrs is not string
+          - traefik_admin_cidrs | length > 0
+        fail_msg: >-
+          traefik_admin_cidrs não definida (ou não é lista). Sem ela o
+          middleware rede-admin barra todo acesso às GUIs de equipamento e ao
+          Portainer pelo Traefik. Rode `make bootstrap`, que a gera em
+          group_vars/all/99-local.yml.
   tasks:
     - name: Criar rede overlay externa traefik_public
       community.docker.docker_network:
@@ -176,6 +191,21 @@
             value: "{{ acme_caserver }}"
         portainer_endpoint_id: "{{ endpoint_id }}"
       no_log: true
+
+    # ⚠️ O compose do Traefik vem do GitHub (`github_repo_branch`), não desta
+    # árvore: o gate render_traefik.py lê o compose local, não o implantado.
+    # Com o ref ainda em modo ingress, o Traefik vê o IP da malha, o
+    # rede-admin devolve 403 a todo mundo e o playbook terminaria verde.
+    - name: Conferir que o Traefik implantado publica 80/443 em mode host
+      ansible.builtin.command:
+        cmd: >-
+          docker service inspect traefik_traefik
+          --format '{{ "{{" }}range .Endpoint.Spec.Ports{{ "}}" }}{{ "{{" }}.PublishMode{{ "}}" }} {{ "{{" }}end{{ "}}" }}'
+      register: _traefik_portas
+      changed_when: false
+      until: _traefik_portas.stdout.split() == ['host', 'host']
+      retries: 12
+      delay: 5
 
     - name: Exibir confirmação do Bootstrap de Infraestrutura
       ansible.builtin.debug:
