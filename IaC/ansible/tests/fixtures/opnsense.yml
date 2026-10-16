@@ -147,6 +147,12 @@ dhcp_static_maps:
     hostname: "host-dois"
     ipaddr: "192.0.2.202"
     descr: "Fixture dois"
+  # Reserva fora da LAN: tem de cair na subnet da VLAN, não na da LAN.
+  - mac: "00:00:5e:00:53:03"
+    hostname: "host-tres"
+    ipaddr: "203.0.113.10"
+    rede: "vlan20"
+    descr: "Fixture tres, em VLAN"
 
 unbound_host_overrides:
   - hostname: "*"

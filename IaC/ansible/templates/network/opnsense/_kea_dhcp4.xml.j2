@@ -46,11 +46,13 @@
 {% endfor %}
         </subnets>
         <reservations>
-{# Reservas: `dhcp_static_maps` é a lista da LAN. Reserva em VLAN entra
-   quando houver dado para ela. #}
+{# Reservas: `dhcp_static_maps`, na LAN por padrão. `rede` (`vlan<tag>`)
+   põe a reserva na subnet de uma VLAN — a estação na MAIN precisa de IP fixo
+   para a exceção por host da política (16/10/2026). O IP tem de estar dentro
+   da subnet: o Kea valida com `isIPInCIDR`. #}
 {% for map in dhcp_static_maps | default([]) %}
           <reservation uuid="{{ ('kea:reserva:' ~ map.mac | lower) | to_uuid }}">
-            <subnet>{{ ('kea:subnet4:lan') | to_uuid }}</subnet>
+            <subnet>{{ ('kea:subnet4:' ~ (map.rede | default('lan'))) | to_uuid }}</subnet>
             <ip_address>{{ map.ipaddr | e }}</ip_address>
             <hw_address>{{ map.mac | e }}</hw_address>
             <client_id/>

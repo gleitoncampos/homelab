@@ -14,7 +14,7 @@ sem endereço (13/10/2026). O Kea é quem serve agora, e este teste trava:
    só preenche esses campos quando alguém salva pela GUI/API
    (`KeaDhcpv4::setNodes`); o IaC grava o config.xml direto, e sem eles o
    cliente recebe endereço sem gateway.
-5. Reservas de `dhcp_static_maps` na subnet da LAN, por UUID.
+5. Reservas de `dhcp_static_maps` na subnet da LAN, ou na da VLAN de `rede`, por UUID.
 """
 import ipaddress
 import subprocess
@@ -89,14 +89,21 @@ for nome, ip, prefixo, inicio, fim in redes:
     checar(s.findtext("option_data/routers") == ip, f"{nome}: routers = {ip}")
     checar(s.findtext("option_data/domain_name_servers") == ip, f"{nome}: DNS = {ip}")
 
-print("\nInvariante 5 — reservas na subnet da LAN:")
-lan_cidr = str(ipaddress.ip_interface(f"{fixture['lan_ipaddr']}/24").network)
-lan_uuid = subnets[lan_cidr].get("uuid") if lan_cidr in subnets else None
+print("\nInvariante 5 — reservas na subnet da LAN ou da VLAN de `rede`:")
+cidr_por_rede = {nome: str(ipaddress.ip_interface(f"{ip}/{pref}").network)
+                 for nome, ip, pref, _i, _f in redes}
 reservas = dhcp4.findall("reservations/reservation")
 mapas = fixture.get("dhcp_static_maps") or []
 checar(len(reservas) == len(mapas), f"{len(mapas)} reservas (veio {len(reservas)})")
+checar(any(m.get("rede", "lan") != "lan" for m in mapas), "a fixture tem reserva fora da LAN")
 for m, r in zip(mapas, reservas):
-    checar(r.findtext("subnet") == lan_uuid, f"{m['hostname']}: subnet = uuid da LAN")
+    rede = m.get("rede", "lan")
+    cidr = cidr_por_rede.get(rede)
+    esperado = subnets[cidr].get("uuid") if cidr in subnets else None
+    checar(esperado is not None and r.findtext("subnet") == esperado,
+           f"{m['hostname']}: subnet = uuid da {rede}")
+    checar(cidr is not None and ipaddress.ip_address(m["ipaddr"]) in ipaddress.ip_network(cidr),
+           f"{m['hostname']}: ip dentro de {cidr}")
     checar(r.findtext("ip_address") == m["ipaddr"], f"{m['hostname']}: ip {m['ipaddr']}")
     checar(r.findtext("hw_address") == m["mac"], f"{m['hostname']}: mac {m['mac']}")
 
