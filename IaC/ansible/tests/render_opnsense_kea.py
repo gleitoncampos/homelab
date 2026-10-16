@@ -16,6 +16,7 @@ sem endereço (13/10/2026). O Kea é quem serve agora, e este teste trava:
    cliente recebe endereço sem gateway.
 5. Reservas de `dhcp_static_maps` na subnet da LAN, ou na da VLAN de `rede`, por UUID.
 """
+import copy
 import ipaddress
 import subprocess
 import sys
@@ -23,6 +24,7 @@ import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import jinja2
 import yaml
 
 RAIZ = Path(__file__).resolve().parents[1]
@@ -138,6 +140,38 @@ checar(p_daemon != -1, "o rc.reload_all é disparado com `daemon`, fora da sess�
 checar("command: /usr/local/etc/rc.reload_all" not in pb, "nenhuma task roda o rc.reload_all preso à sessão")
 checar(-1 not in (p_daemon, p_reset, p_espera, p_kea) and p_daemon < p_reset < p_espera < p_kea,
        "ordem: daemon → reset_connection → wait_for_connection → Kea")
+
+print("\nInvariante 8 — o pre_task recusa reserva que não cabe na rede:")
+# O `isIPInCIDR` do modelo do OPNsense não roda com o config.xml gravado
+# direto: `rede` errada ou IP fora rendiam reserva órfã sem erro (16/10/2026).
+# Avalia a expressão REAL do playbook com a fixture e com mutações dela.
+GATE_RESERVA = "Abortar se uma reserva de DHCP não cabe na rede declarada"
+play = yaml.safe_load(pb)[0]
+gate = next((t for t in play.get("pre_tasks", []) if t.get("name") == GATE_RESERVA), None)
+checar(gate is not None, f"pre_task '{GATE_RESERVA}' existe")
+if gate is not None:
+    checar(gate["ansible.builtin.assert"]["that"] == ["_reservas_erros | trim | length == 0"],
+           "o assert exige `_reservas_erros` vazio")
+    expr = jinja2.Environment().from_string(gate["vars"]["_reservas_erros"])
+
+    def erros(dado):
+        return expr.render(**dado).strip()
+
+    checar(erros(fixture) == "", f"fixture passa (veio {erros(fixture)!r})")
+    mutacoes = {
+        "rede inexistente": lambda d: d["dhcp_static_maps"][2].update(rede="vlan99"),
+        "VLAN sem DHCP": lambda d: d["dhcp_static_maps"][2].update(rede="vlan10"),
+        "IP fora da VLAN": lambda d: d["dhcp_static_maps"][2].update(ipaddr="192.0.2.10"),
+        "IP fora da LAN": lambda d: d["dhcp_static_maps"][0].update(ipaddr="203.0.113.11"),
+        "MAC repetido": lambda d: d["dhcp_static_maps"][1].update(
+            mac=d["dhcp_static_maps"][0]["mac"].upper()),
+        "IP repetido": lambda d: d["dhcp_static_maps"][1].update(
+            ipaddr=d["dhcp_static_maps"][0]["ipaddr"]),
+    }
+    for nome, mutar in mutacoes.items():
+        dado = copy.deepcopy(fixture)
+        mutar(dado)
+        checar(erros(dado) != "", f"{nome}: recusado ({erros(dado)!r})")
 
 if falhas:
     print(f"\n✗ render-opnsense-kea: {len(falhas)} falha(s)")

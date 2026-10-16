@@ -11,8 +11,7 @@
    e dependeria de uma regra de passagem que não existe. O Unbound escuta em
    todas elas (ver _dns.xml.j2).
 
-   `subnet` é o CIDR da REDE, calculado do IP do gateway e do prefixo: o
-   modelo valida o endereço da reserva com `isIPInCIDR` contra ele.
+   `subnet` é o CIDR da REDE, calculado do IP do gateway e do prefixo.
 
    UUIDs estáveis (`to_uuid`): a reserva aponta para a subnet pelo UUID, e um
    UUID novo a cada render faria todo apply parecer mudança. #}
@@ -49,7 +48,8 @@
 {# Reservas: `dhcp_static_maps`, na LAN por padrão. `rede` (`vlan<tag>`)
    põe a reserva na subnet de uma VLAN — a estação na MAIN precisa de IP fixo
    para a exceção por host da política (16/10/2026). O IP tem de estar dentro
-   da subnet: o Kea valida com `isIPInCIDR`. #}
+   da subnet. O `isIPInCIDR` do modelo do OPNsense não roda com o config.xml
+   gravado direto: quem barra é o assert dos pre_tasks do 01-opnsense-setup. #}
 {% for map in dhcp_static_maps | default([]) %}
           <reservation uuid="{{ ('kea:reserva:' ~ map.mac | lower) | to_uuid }}">
             <subnet>{{ ('kea:subnet4:' ~ (map.rede | default('lan'))) | to_uuid }}</subnet>

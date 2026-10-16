@@ -224,6 +224,52 @@
           (`internet: false`, `alcanca: []`), desde que ESCRITA. Ver
           .local/docs/TODO-E-ROADMAP.md, item 1.1.6.
         success_msg: "Toda VLAN declara política de passagem completa."
+
+    # A reserva aponta para a subnet pelo UUID derivado de `rede`, e quem
+    # confere o IP contra a subnet (`isIPInCIDR`) é o modelo do OPNsense — que
+    # não roda quando o config.xml é gravado direto. Sem este gate, `rede`
+    # inexistente, VLAN sem DHCP ou IP fora da rede rendem reserva órfã sem
+    # erro nenhum (16/10/2026). Mesmas redes do `_kea_redes` de config.xml.j2
+    # (LAN /24). Aritmética de IP à mão: sem `netaddr`.
+    - name: Abortar se uma reserva de DHCP não cabe na rede declarada
+      vars:
+        _reservas_erros: |-
+          {%- macro _n(ip) -%}
+          {%- set o = ip.split('.') | map('int') | list -%}
+          {{ o[0] * 16777216 + o[1] * 65536 + o[2] * 256 + o[3] }}
+          {%- endmacro -%}
+          {%- set redes = {'lan': [lan_ipaddr, 24]} -%}
+          {%- for v in vlans if v.dhcp_enabled | default(false) -%}
+          {%- set _ = redes.update({'vlan' ~ v.tag: [v.ip, v.subnet | int]}) -%}
+          {%- endfor -%}
+          {%- set mapas = dhcp_static_maps | default([]) -%}
+          {%- set erros = [] -%}
+          {%- for m in mapas -%}
+          {%- set r = m.rede | default('lan') -%}
+          {%- if r not in redes -%}
+          {%- set _ = erros.append(m.hostname ~ ': rede ' ~ r ~ ' inexistente ou sem DHCP') -%}
+          {%- elif (_n(m.ipaddr) | int) // (2 ** (32 - redes[r][1])) != (_n(redes[r][0]) | int) // (2 ** (32 - redes[r][1])) -%}
+          {%- set _ = erros.append(m.hostname ~ ': ' ~ m.ipaddr ~ ' fora da ' ~ r) -%}
+          {%- endif -%}
+          {%- endfor -%}
+          {%- set macs = mapas | map(attribute='mac') | map('lower') | list -%}
+          {%- set ips = mapas | map(attribute='ipaddr') | list -%}
+          {%- if macs | length != macs | unique | list | length -%}
+          {%- set _ = erros.append('MAC repetido') -%}
+          {%- endif -%}
+          {%- if ips | length != ips | unique | list | length -%}
+          {%- set _ = erros.append('IP repetido') -%}
+          {%- endif -%}
+          {{ erros | join('; ') }}
+      ansible.builtin.assert:
+        that:
+          - _reservas_erros | trim | length == 0
+        fail_msg: >-
+          Reserva de DHCP inválida: {{ _reservas_erros }}.
+          `rede` tem de ser `lan` ou `vlan<tag>` de uma VLAN com `dhcp_enabled`,
+          o IP tem de estar na rede dela, e MAC e IP não se repetem
+          (dhcp_static_maps em group_vars/network/).
+        success_msg: "Toda reserva de DHCP cabe na rede declarada."
   tasks:
     # Sem ignore_errors: se o backup falhar, ABORTA. A task seguinte sobrescreve
     # o /conf/config.xml inteiro — seguir sem cópia de segurança deixaria o
