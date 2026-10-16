@@ -167,6 +167,14 @@ if gate is not None:
             mac=d["dhcp_static_maps"][0]["mac"].upper()),
         "IP repetido": lambda d: d["dhcp_static_maps"][1].update(
             ipaddr=d["dhcp_static_maps"][0]["ipaddr"]),
+        "IP com letra": lambda d: d["dhcp_static_maps"][0].update(ipaddr="192.0.2.2O1"),
+        "IP com zero à esquerda": lambda d: d["dhcp_static_maps"][0].update(ipaddr="192.0.2.0201"),
+        "IP com 3 octetos": lambda d: d["dhcp_static_maps"][0].update(ipaddr="192.0.2"),
+        "MAC inválido": lambda d: d["dhcp_static_maps"][0].update(mac="zz:zz"),
+        "MAC com hífen": lambda d: d["dhcp_static_maps"][0].update(mac="00-00-5e-00-53-01"),
+        "IP do gateway": lambda d: d["dhcp_static_maps"][0].update(ipaddr="192.0.2.1"),
+        "endereço de rede": lambda d: d["dhcp_static_maps"][0].update(ipaddr="192.0.2.0"),
+        "broadcast": lambda d: d["dhcp_static_maps"][0].update(ipaddr="192.0.2.255"),
     }
     for nome, mutar in mutacoes.items():
         dado = copy.deepcopy(fixture)

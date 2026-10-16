@@ -238,6 +238,29 @@
           {%- set o = ip.split('.') | map('int') | list -%}
           {{ o[0] * 16777216 + o[1] * 65536 + o[2] * 256 + o[3] }}
           {%- endmacro -%}
+          {#- Sintaxe antes da conta: `int` devolve 0 em octeto inválido, e
+              `192.0.2.2O1` ou `0201` passariam pela comparação de rede. -#}
+          {%- macro _ip_ok(ip) -%}
+          {%- set o = (ip ~ '').split('.') -%}
+          {%- set ns = namespace(ok=(o | length == 4)) -%}
+          {%- for p in o -%}
+          {%- if not (p.isdigit() and p == (p | int | string) and p | int <= 255) -%}
+          {%- set ns.ok = false -%}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ 'ok' if ns.ok else '' }}
+          {%- endmacro -%}
+          {%- macro _mac_ok(mac) -%}
+          {%- set o = (mac ~ '') | lower -%}
+          {%- set o = o.split(':') -%}
+          {%- set ns = namespace(ok=(o | length == 6)) -%}
+          {%- for p in o -%}
+          {%- if p | length != 2 or p | list | reject('in', '0123456789abcdef') | list | length > 0 -%}
+          {%- set ns.ok = false -%}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ 'ok' if ns.ok else '' }}
+          {%- endmacro -%}
           {%- set redes = {'lan': [lan_ipaddr, 24]} -%}
           {%- for v in vlans if v.dhcp_enabled | default(false) -%}
           {%- set _ = redes.update({'vlan' ~ v.tag: [v.ip, v.subnet | int]}) -%}
@@ -246,10 +269,21 @@
           {%- set erros = [] -%}
           {%- for m in mapas -%}
           {%- set r = m.rede | default('lan') -%}
-          {%- if r not in redes -%}
+          {%- if not _ip_ok(m.ipaddr) -%}
+          {%- set _ = erros.append(m.hostname ~ ': IP ' ~ m.ipaddr ~ ' inválido') -%}
+          {%- elif not _mac_ok(m.mac) -%}
+          {%- set _ = erros.append(m.hostname ~ ': MAC ' ~ m.mac ~ ' inválido (6 pares hex separados por :)') -%}
+          {%- elif r not in redes -%}
           {%- set _ = erros.append(m.hostname ~ ': rede ' ~ r ~ ' inexistente ou sem DHCP') -%}
-          {%- elif (_n(m.ipaddr) | int) // (2 ** (32 - redes[r][1])) != (_n(redes[r][0]) | int) // (2 ** (32 - redes[r][1])) -%}
+          {%- else -%}
+          {%- set tam = 2 ** (32 - redes[r][1]) -%}
+          {%- set n = _n(m.ipaddr) | int -%}
+          {%- set gw = _n(redes[r][0]) | int -%}
+          {%- if n // tam != gw // tam -%}
           {%- set _ = erros.append(m.hostname ~ ': ' ~ m.ipaddr ~ ' fora da ' ~ r) -%}
+          {%- elif n == gw or n % tam == 0 or n % tam == tam - 1 -%}
+          {%- set _ = erros.append(m.hostname ~ ': ' ~ m.ipaddr ~ ' é gateway, rede ou broadcast da ' ~ r) -%}
+          {%- endif -%}
           {%- endif -%}
           {%- endfor -%}
           {%- set macs = mapas | map(attribute='mac') | map('lower') | list -%}
@@ -267,7 +301,8 @@
         fail_msg: >-
           Reserva de DHCP inválida: {{ _reservas_erros }}.
           `rede` tem de ser `lan` ou `vlan<tag>` de uma VLAN com `dhcp_enabled`,
-          o IP tem de estar na rede dela, e MAC e IP não se repetem
+          o IP tem de estar na rede dela (fora gateway, rede e broadcast),
+          IP e MAC bem formados, e MAC e IP não se repetem
           (dhcp_static_maps em group_vars/network/).
         success_msg: "Toda reserva de DHCP cabe na rede declarada."
   tasks:
