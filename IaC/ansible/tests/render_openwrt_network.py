@@ -326,6 +326,17 @@ checar(len(radios) == 2, "o wireless declara dois rádios")
 for nome, corpo in radios:
     checar(re.search(r"option path '[^']+'", corpo) is not None, f"o {nome} declara `option path`")
 
+print("\nInvariante 12 — o 5 GHz escolhe canal só fora do DFS:")
+# Com `channel auto` livre, o reboot semanal pôs o rádio no canal 140 (DFS) e
+# a TV da Media nem tentava associar; no 36 associou na hora (20/10/2026).
+_dfs = {52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144}
+_r5 = dict(radios).get("radio1", "")
+_canais = re.search(r"option channels '([^']+)'", _r5)
+checar(_canais is not None, "o radio1 restringe o ACS com `option channels`")
+if _canais:
+    _lista = {int(c) for c in _canais.group(1).split()}
+    checar(not (_lista & _dfs), f"nenhum canal DFS na lista ({sorted(_lista & _dfs)})")
+
 print("\nHigiene do render:")
 for rotulo, texto_render in (("network", rede), ("system", sistema)):
     checar(

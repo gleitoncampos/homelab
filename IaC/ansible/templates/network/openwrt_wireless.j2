@@ -16,6 +16,8 @@ config wifi-device 'radio1'
 	option type 'mac80211'
 	option path '{{ openwrt_radio1_path }}'
 	option channel 'auto'
+	# ACS só fora do DFS: no canal 140 a TV da Media nem tentava associar (20/10/2026).
+	option channels '36 40 44 48 149 153 157 161'
 	option band '5g'
 	option htmode 'VHT80'
 	option cell_density '0'
