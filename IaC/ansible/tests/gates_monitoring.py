@@ -90,6 +90,13 @@ _cura = [t for t in yaml.safe_load(exp)[0]["tasks"]
          if "^openwrt_firmware_update_level" in str(t.get("ansible.builtin.raw", ""))
          and "prometheus-node-exporter-lua restart" in str(t.get("ansible.builtin.raw", ""))]
 checar(len(_cura) == 1, "02-openwrt-exporter reinicia o exportador se o /metrics não traz o textfile")
+# Redes vizinhas (20/10/2026): script -> textfile -> painel, de hora em hora
+# por banda. Scan a cada 15 min dava soluço de 1,5 s nos clientes do 5 GHz.
+checar("openwrt_wifi_neighbors.uc.j2" in exp, "02-openwrt-exporter instala o script de redes vizinhas")
+_cron_viz = re.findall(r'"(\S+) (\S+) \* \* \* /usr/bin/openwrt-wifi-neighbors (\S+) (\S+)"', exp)
+checar(sorted(b for *_, b in _cron_viz) == ["2g", "5g"], f"um cron de redes vizinhas por banda ({_cron_viz})")
+checar(all(h == "*" and m.isdigit() and m != "17" for m, h, *_ in _cron_viz),
+       "redes vizinhas de hora em hora, fora do minuto do update-metrics")
 painel = json.loads((REPO / "docker/monitoring/swarm/dashboards/openwrt.json").read_text(encoding="utf-8"))
 exprs = " ".join(t.get("expr", "") for p in painel["panels"] for t in p.get("targets") or [])
 usadas = set(re.findall(r"\bopenwrt_[a-z_]+", exprs))

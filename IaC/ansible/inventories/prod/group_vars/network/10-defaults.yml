@@ -382,6 +382,7 @@ openwrt_sysupgrade_keep:
   - /etc/rc.d/K10led-health
   - /usr/bin/iac-net-failsafe
   - /usr/bin/openwrt-update-metrics
+  - /usr/bin/openwrt-wifi-neighbors
   - /etc/crontabs/root
   - /etc/sysctl.d/99-iac-tuning.conf
   - /usr/bin/xinfc-wsc

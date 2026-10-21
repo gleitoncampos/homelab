@@ -160,6 +160,42 @@
       changed_when: "'TEXTFILE:REINICIADO' in _textfile.stdout"
       failed_when: "'TEXTFILE:' not in _textfile.stdout"
 
+    # Redes Wi-Fi vizinhas (canal, largura, sinal) para as curvas por canal do
+    # dashboard OpenWRT (20/10/2026). Mesmo caminho do update-metrics: script
+    # -> textfile -> painel. ⚠️ O scan tira o rádio do canal por 2-3 s (5 GHz:
+    # 9% de perda e RTT de 1,5 s medidos): de hora em hora, uma banda em cada
+    # meia hora, fora do minuto 17 do update-metrics. Trava em
+    # tests/gates_monitoring.py.
+    - name: Instalar o script de redes Wi-Fi vizinhas
+      ansible.builtin.raw: |
+        cat << 'IAC_WIFI_NEIGHBORS' > /usr/bin/openwrt-wifi-neighbors
+        {{ lookup('template', '../../templates/network/openwrt_wifi_neighbors.uc.j2') }}
+        IAC_WIFI_NEIGHBORS
+        chmod +x /usr/bin/openwrt-wifi-neighbors
+      changed_when: true
+
+    - name: Agendar o scan de redes vizinhas no cron do OpenWrt
+      ansible.builtin.raw: >-
+        (crontab -l 2>/dev/null | grep -v openwrt-wifi-neighbors;
+        echo "7 * * * * /usr/bin/openwrt-wifi-neighbors phy0-ap0 2g";
+        echo "37 * * * * /usr/bin/openwrt-wifi-neighbors phy1-ap0 5g") | crontab -
+        && /etc/init.d/cron restart
+      changed_when: true
+
+    # Roda uma vez agora para o painel não ficar vazio até a próxima hora
+    # (custa o mesmo soluço de 2-3 s por banda). O exportador já lê o
+    # textfile: o coletor foi garantido pela task de update acima.
+    - name: Rodar o scan de redes vizinhas uma vez agora
+      ansible.builtin.raw: |
+        /usr/bin/openwrt-wifi-neighbors phy0-ap0 2g && /usr/bin/openwrt-wifi-neighbors phy1-ap0 5g &&
+        wget -qO- "http://{{ ansible_host }}:{{ node_exporter_port | default(9100) }}/metrics" |
+          grep '^wifi_neighbor_scan_success'
+      register: _vizinhos
+      changed_when: false
+      failed_when: >-
+        'wifi_neighbor_scan_success{banda="2g"} 1' not in _vizinhos.stdout
+        or 'wifi_neighbor_scan_success{banda="5g"} 1' not in _vizinhos.stdout
+
     # ⚠️ A sonda vai contra o ENDEREÇO DO INVENTÁRIO, e não contra 127.0.0.1.
     # No OpenWrt o exportador é um CGI do `uhttpd`, que escuta no endereço da
     # interface e NÃO no loopback — uma sonda em 127.0.0.1 devolve zero métrica
