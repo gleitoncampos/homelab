@@ -38,7 +38,7 @@
       },
       "id": 308,
       "panels": [],
-      "title": "Overview",
+      "title": "Visão geral",
       "type": "row"
     },
     {
@@ -129,7 +129,7 @@
           "refId": "A"
         }
       ],
-      "title": "Host Info",
+      "title": "Equipamento",
       "transformations": [
         {
           "id": "organize",
@@ -172,7 +172,8 @@
           }
         }
       ],
-      "type": "table"
+      "type": "table",
+      "description": "Modelo, placa e versão do OpenWrt informados pelo próprio AP (coletor openwrt do exportador)."
     },
     {
       "datasource": {
@@ -435,7 +436,7 @@
           "refId": "A"
         }
       ],
-      "title": "System info",
+      "title": "Sistema",
       "transformations": [
         {
           "id": "organize",
@@ -473,14 +474,15 @@
           }
         }
       ],
-      "type": "table"
+      "type": "table",
+      "description": "Hostname, kernel e arquitetura do AP (node_uname_info)."
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Busy state of all CPU cores together",
+      "description": "Percentual de tempo em que os núcleos do AP não estiveram ociosos (média de todos os núcleos, janela de 5 min).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -557,7 +559,7 @@
           "step": 900
         }
       ],
-      "title": "CPU Busy",
+      "title": "CPU ocupada",
       "type": "gauge"
     },
     {
@@ -565,7 +567,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Non available RAM memory",
+      "description": "Memória RAM que não está disponível para novos processos. O AP tem pouca RAM (~241 MB): acima de 90% o kernel começa a matar processos.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -645,7 +647,7 @@
           "step": 900
         }
       ],
-      "title": "Used RAM Memory",
+      "title": "RAM usada",
       "type": "gauge"
     },
     {
@@ -653,7 +655,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Average WiFi quality",
+      "description": "Média da qualidade de enlace (0–100%) que o iwinfo calcula a partir do sinal dos clientes, em todos os SSIDs. SSID sem cliente conta como 0 e puxa a média para baixo.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -731,7 +733,7 @@
           "step": 900
         }
       ],
-      "title": "Avg WiFi Quality",
+      "title": "Qualidade média do Wi-Fi",
       "type": "gauge"
     },
     {
@@ -739,7 +741,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Busy state of all CPU cores together (1 min average)",
+      "description": "Load average de 1 min dividido pelo número de núcleos. 100% = todos os núcleos com fila cheia; acima disso há processos esperando CPU.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -815,7 +817,7 @@
           "step": 900
         }
       ],
-      "title": "CPU System Load (1m avg)",
+      "title": "Carga do sistema (1 min)",
       "type": "gauge"
     },
     {
@@ -823,7 +825,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Busy state of all CPU cores together (5 min average)",
+      "description": "Load average de 5 min dividido pelo número de núcleos. Mais estável que o de 1 min: é o que mostra sobrecarga de verdade.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -900,7 +902,7 @@
           "step": 900
         }
       ],
-      "title": "CPU System Load (5m avg)",
+      "title": "Carga do sistema (5 min)",
       "type": "gauge"
     },
     {
@@ -908,7 +910,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Used Swap",
+      "description": "Percentual da área de swap em uso. O OpenWrt normalmente não tem swap: sem swap o painel fica vazio, o que é esperado.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -983,7 +985,7 @@
           "step": 900
         }
       ],
-      "title": "Used SWAP",
+      "title": "SWAP usado",
       "type": "gauge"
     },
     {
@@ -1077,7 +1079,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Total number of CPU cores",
+      "description": "Quantidade de núcleos de CPU do AP.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1152,7 +1154,7 @@
           "step": 900
         }
       ],
-      "title": "CPU Cores",
+      "title": "Núcleos de CPU",
       "type": "stat"
     },
     {
@@ -1160,7 +1162,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "All connected wireless clients",
+      "description": "Total de aparelhos conectados agora, somando todos os SSIDs e as duas bandas.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1230,7 +1232,7 @@
           "refId": "A"
         }
       ],
-      "title": "WiFi Clients",
+      "title": "Clientes Wi-Fi",
       "type": "stat"
     },
     {
@@ -1238,7 +1240,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "All active network connections",
+      "description": "Fluxos no conntrack do próprio AP. O AP não faz o NAT da rede (quem faz é o firewall): conta só o tráfego que passa pelo AP como host.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1312,7 +1314,7 @@
           "refId": "A"
         }
       ],
-      "title": "Active Connections",
+      "title": "Conexões rastreadas",
       "type": "stat"
     },
     {
@@ -1320,7 +1322,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "System uptime",
+      "description": "Tempo desde o último boot do AP. O AP reinicia sozinho todo domingo às 04:00 (cron do IaC).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1392,7 +1394,7 @@
           "step": 1800
         }
       ],
-      "title": "Uptime",
+      "title": "Tempo ligado",
       "type": "stat"
     },
     {
@@ -1400,7 +1402,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Total RAM",
+      "description": "Memória RAM total do AP.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1472,7 +1474,7 @@
           "step": 900
         }
       ],
-      "title": "Total RAM",
+      "title": "RAM total",
       "type": "stat"
     },
     {
@@ -1480,7 +1482,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Total network traffic",
+      "description": "Bytes enviados + recebidos por todas as interfaces do AP desde o boot (contador zera a cada reinício).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1556,7 +1558,7 @@
           "step": 900
         }
       ],
-      "title": "Total Network Traffic",
+      "title": "Tráfego total de rede",
       "type": "stat"
     },
     {
@@ -1564,7 +1566,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Total NAT traffic (WAN)",
+      "description": "Soma dos bytes dos fluxos no conntrack do AP. Só o tráfego que o AP rastreia como host, não o da rede inteira.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1636,7 +1638,7 @@
           "step": 900
         }
       ],
-      "title": "Total NAT Traffic",
+      "title": "Tráfego total no conntrack",
       "type": "stat"
     },
     {
@@ -1644,7 +1646,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Total SWAP",
+      "description": "Tamanho da área de swap. Vazio = AP sem swap, o normal no OpenWrt.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1716,7 +1718,7 @@
           "step": 900
         }
       ],
-      "title": "Total SWAP",
+      "title": "SWAP total",
       "type": "stat"
     },
     {
@@ -1814,7 +1816,7 @@
       },
       "id": 265,
       "panels": [],
-      "title": "CPU Memory",
+      "title": "CPU e memória",
       "type": "row"
     },
     {
@@ -1822,7 +1824,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Basic CPU info",
+      "description": "Uso de CPU por tipo: System (kernel), User (programas), Iowait (esperando disco), IRQs (interrupções de hardware, ex.: Wi-Fi e rede), Other e Idle (ocioso).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2266,7 +2268,7 @@
           "step": 240
         }
       ],
-      "title": "CPU Basic",
+      "title": "CPU resumida",
       "type": "timeseries"
     },
     {
@@ -2274,7 +2276,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Basic memory usage",
+      "description": "RAM total, usada por programas, em cache/buffer (o kernel devolve quando precisa), livre, e swap usado.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2424,7 +2426,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Harware Corrupted - Amount of RAM that the kernel identified as corrupted / not working"
+              "options": "Hardware Corrupted - Amount of RAM that the kernel identified as corrupted / not working"
             },
             "properties": [
               {
@@ -2786,7 +2788,7 @@
           "step": 240
         }
       ],
-      "title": "Memory Basic",
+      "title": "Memória resumida",
       "type": "timeseries"
     },
     {
@@ -2794,7 +2796,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "",
+      "description": "Uso de CPU em cada modo do kernel. Em AP, softirq alto costuma ser tráfego de rede e Wi-Fi.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3148,7 +3150,7 @@
           "step": 240
         }
       ],
-      "title": "CPU",
+      "title": "CPU detalhada",
       "type": "timeseries"
     },
     {
@@ -3156,7 +3158,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "",
+      "description": "Como a RAM está dividida: aplicações, tabelas de página, slab do kernel, cache, buffers e livre. A soma é a RAM total.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3306,7 +3308,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Harware Corrupted - Amount of RAM that the kernel identified as corrupted / not working"
+              "options": "Hardware Corrupted - Amount of RAM that the kernel identified as corrupted / not working"
             },
             "properties": [
               {
@@ -3655,12 +3657,12 @@
           "format": "time_series",
           "hide": false,
           "intervalFactor": 2,
-          "legendFormat": "Harware Corrupted - Amount of RAM that the kernel identified as corrupted / not working",
+          "legendFormat": "Hardware Corrupted - Amount of RAM that the kernel identified as corrupted / not working",
           "refId": "O",
           "step": 240
         }
       ],
-      "title": "Memory Stack",
+      "title": "Memória empilhada",
       "type": "timeseries"
     },
     {
@@ -3827,7 +3829,7 @@
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Harware Corrupted - Amount of RAM that the kernel identified as corrupted / not working"
+                  "options": "Hardware Corrupted - Amount of RAM that the kernel identified as corrupted / not working"
                 },
                 "properties": [
                   {
@@ -4043,8 +4045,9 @@
               "step": 4
             }
           ],
-          "title": "Memory Active / Inactive",
-          "type": "timeseries"
+          "title": "Memória ativa / inativa",
+          "type": "timeseries",
+          "description": "Ativa = usada recentemente, o kernel evita liberar. Inativa = candidata a ser liberada quando faltar memória."
         },
         {
           "datasource": {
@@ -4200,7 +4203,7 @@
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Harware Corrupted - Amount of RAM that the kernel identified as corrupted / not working"
+                  "options": "Hardware Corrupted - Amount of RAM that the kernel identified as corrupted / not working"
                 },
                 "properties": [
                   {
@@ -4437,8 +4440,9 @@
               "step": 4
             }
           ],
-          "title": "Memory Commited",
-          "type": "timeseries"
+          "title": "Memória comprometida",
+          "type": "timeseries",
+          "description": "Committed_AS = memória que os processos já pediram. CommitLimit = quanto o kernel aceita prometer. Committed perto do limite = risco de falta de memória."
         },
         {
           "datasource": {
@@ -4594,7 +4598,7 @@
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Harware Corrupted - Amount of RAM that the kernel identified as corrupted / not working"
+                  "options": "Hardware Corrupted - Amount of RAM that the kernel identified as corrupted / not working"
                 },
                 "properties": [
                   {
@@ -4838,8 +4842,9 @@
               "step": 4
             }
           ],
-          "title": "Memory Active / Inactive Detail",
-          "type": "timeseries"
+          "title": "Memória ativa / inativa em detalhe",
+          "type": "timeseries",
+          "description": "A memória ativa e inativa separada em páginas de arquivo (cache) e anônimas (dados dos processos e tmpfs)."
         },
         {
           "datasource": {
@@ -5252,8 +5257,9 @@
               "step": 4
             }
           ],
-          "title": "Memory Writeback and Dirty",
-          "type": "timeseries"
+          "title": "Memória em gravação (writeback e dirty)",
+          "type": "timeseries",
+          "description": "Dirty = dados alterados esperando ir para o armazenamento. Writeback = sendo gravados agora. No AP o /var e o /tmp são tmpfs, então costuma ser quase zero."
         },
         {
           "datasource": {
@@ -5409,7 +5415,7 @@
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Harware Corrupted - Amount of RAM that the kernel identified as corrupted / not working"
+                  "options": "Hardware Corrupted - Amount of RAM that the kernel identified as corrupted / not working"
                 },
                 "properties": [
                   {
@@ -5625,8 +5631,9 @@
               "step": 4
             }
           ],
-          "title": "Memory Shared and Mapped",
-          "type": "timeseries"
+          "title": "Memória compartilhada e mapeada",
+          "type": "timeseries",
+          "description": "Mapped = arquivos mapeados em memória (ex.: bibliotecas). Shmem = memória compartilhada, inclui o tmpfs (/tmp e /var do AP)."
         },
         {
           "datasource": {
@@ -6027,8 +6034,9 @@
               "step": 4
             }
           ],
-          "title": "Memory Slab",
-          "type": "timeseries"
+          "title": "Memória slab",
+          "type": "timeseries",
+          "description": "Caches de estruturas do kernel. SReclaimable pode ser liberado sob pressão; SUnreclaim não."
         },
         {
           "datasource": {
@@ -6429,8 +6437,9 @@
               "step": 4
             }
           ],
-          "title": "Memory Vmalloc",
-          "type": "timeseries"
+          "title": "Memória vmalloc",
+          "type": "timeseries",
+          "description": "Área de memória virtual contígua do kernel: total, usada e maior bloco livre. Informativo, raramente muda."
         },
         {
           "datasource": {
@@ -6586,7 +6595,7 @@
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Harware Corrupted - Amount of RAM that the kernel identified as corrupted / not working"
+                  "options": "Hardware Corrupted - Amount of RAM that the kernel identified as corrupted / not working"
                 },
                 "properties": [
                   {
@@ -6790,8 +6799,9 @@
               "step": 4
             }
           ],
-          "title": "Memory Bounce",
-          "type": "timeseries"
+          "title": "Memória bounce",
+          "type": "timeseries",
+          "description": "Buffers de bounce de dispositivos de bloco. Normalmente zero no AP."
         },
         {
           "datasource": {
@@ -7189,8 +7199,9 @@
               "step": 4
             }
           ],
-          "title": "Memory Anonymous",
-          "type": "timeseries"
+          "title": "Memória anônima",
+          "type": "timeseries",
+          "description": "Páginas de processos que não vêm de arquivo (heap, pilha). AnonHugePages não existe no kernel do AP e fica vazio."
         },
         {
           "datasource": {
@@ -7346,7 +7357,7 @@
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Harware Corrupted - Amount of RAM that the kernel identified as corrupted / not working"
+                  "options": "Hardware Corrupted - Amount of RAM that the kernel identified as corrupted / not working"
                 },
                 "properties": [
                   {
@@ -7550,8 +7561,9 @@
               "step": 4
             }
           ],
-          "title": "Memory Kernel",
-          "type": "timeseries"
+          "title": "Memória do kernel (pilha)",
+          "type": "timeseries",
+          "description": "Memória usada pelas pilhas das threads do kernel. Não pode ser liberada."
         },
         {
           "datasource": {
@@ -7940,8 +7952,9 @@
               "step": 4
             }
           ],
-          "title": "Memory NFS",
-          "type": "timeseries"
+          "title": "Memória NFS",
+          "type": "timeseries",
+          "description": "Páginas NFS ainda não confirmadas no servidor. O AP não usa NFS: zero é o esperado."
         },
         {
           "datasource": {
@@ -8097,7 +8110,7 @@
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Harware Corrupted - Amount of RAM that the kernel identified as corrupted / not working"
+                  "options": "Hardware Corrupted - Amount of RAM that the kernel identified as corrupted / not working"
                 },
                 "properties": [
                   {
@@ -8313,11 +8326,12 @@
               "step": 4
             }
           ],
-          "title": "Memory Unevictable and MLocked",
-          "type": "timeseries"
+          "title": "Memória não removível e travada",
+          "type": "timeseries",
+          "description": "Unevictable = páginas que não podem ir para swap. Mlocked = travadas por mlock()."
         }
       ],
-      "title": "Memory Detail Meminfo",
+      "title": "Memória em detalhe (meminfo)",
       "type": "row"
     },
     {
@@ -8330,7 +8344,7 @@
       },
       "id": 269,
       "panels": [],
-      "title": "System Detail",
+      "title": "Sistema em detalhe",
       "type": "row"
     },
     {
@@ -8447,8 +8461,9 @@
           "step": 240
         }
       ],
-      "title": "Context Switches / Interrupts",
-      "type": "timeseries"
+      "title": "Trocas de contexto / interrupções",
+      "type": "timeseries",
+      "description": "Por segundo. Interrupções sobem com tráfego de Wi-Fi e rede; um pico isolado sem tráfego pode indicar driver com problema."
     },
     {
       "datasource": {
@@ -8576,8 +8591,9 @@
           "step": 480
         }
       ],
-      "title": "System Load",
-      "type": "timeseries"
+      "title": "Carga do sistema",
+      "type": "timeseries",
+      "description": "Load average de 1, 5 e 15 min (número de processos rodando ou esperando CPU). Compare com o número de núcleos."
     },
     {
       "datasource": {
@@ -8682,15 +8698,16 @@
           "step": 240
         }
       ],
-      "title": "Processes  Forks",
-      "type": "timeseries"
+      "title": "Processos criados",
+      "type": "timeseries",
+      "description": "Processos novos (fork) por segundo. Sobe a cada execução do cron (scripts de métricas)."
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "",
+      "description": "Arquivos e sockets abertos no AP contra o máximo do sistema.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -8800,7 +8817,7 @@
           "step": 4
         }
       ],
-      "title": "File Descriptor",
+      "title": "Descritores de arquivo",
       "type": "timeseries"
     },
     {
@@ -8813,7 +8830,7 @@
       },
       "id": 285,
       "panels": [],
-      "title": "WiFi",
+      "title": "Wi-Fi",
       "type": "row"
     },
     {
@@ -8821,7 +8838,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Total sum of associated stations",
+      "description": "Total de aparelhos associados aos SSIDs do AP agora.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -8891,7 +8908,7 @@
           "refId": "A"
         }
       ],
-      "title": "WiFi Associated Stations",
+      "title": "Clientes associados",
       "type": "stat"
     },
     {
@@ -8989,13 +9006,14 @@
           },
           "editorMode": "code",
           "expr": "wifi_network_noise_dbm{instance=~\"$node:$port\",job=~\"$job\"}",
-          "legendFormat": "{{ifname}}, SSID: {{ssid}}",
+          "legendFormat": "{{ssid}} ({{ifname}})",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "WiFi Network Noise",
-      "type": "timeseries"
+      "title": "Ruído do Wi-Fi",
+      "type": "timeseries",
+      "description": "Nível de ruído medido pelo rádio de cada SSID, em dBm. Quanto mais negativo, melhor (ex.: -92 é melhor que -85). O SSID herda o ruído do rádio."
     },
     {
       "datasource": {
@@ -9093,8 +9111,9 @@
           "refId": "A"
         }
       ],
-      "title": "WiFi Stations",
-      "type": "timeseries"
+      "title": "Clientes por SSID",
+      "type": "timeseries",
+      "description": "Aparelhos conectados em cada interface (phy0 = 2,4 GHz, phy1 = 5 GHz; ap0 = principal, ap1 = IoT/Media, ap2 = Guest)."
     },
     {
       "datasource": {
@@ -9191,20 +9210,21 @@
           },
           "editorMode": "code",
           "expr": "wifi_network_quality{instance=~\"$node:$port\",job=~\"$job\"}",
-          "legendFormat": "{{ifname}}, SSID: {{ssid}}",
+          "legendFormat": "{{ssid}} ({{ifname}})",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "WiFi Network Quality",
-      "type": "timeseries"
+      "title": "Qualidade do Wi-Fi por SSID",
+      "type": "timeseries",
+      "description": "Qualidade de enlace (0–100%) que o iwinfo calcula a partir do sinal dos clientes. SSID sem cliente fica em 0."
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "",
+      "description": "Melhor qualidade de enlace (0–100%) entre os SSIDs do rádio de 2,4 GHz, calculada pelo iwinfo a partir do sinal dos clientes. 0 = nenhum cliente nessa banda.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -9276,7 +9296,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "wifi_network_quality{instance=~\"$node:$port\",job=~\"$job\",device=\"radio0\"}",
+          "expr": "max(wifi_network_quality{instance=~\"$node:$port\",job=~\"$job\",device=\"radio0\"})",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -9286,7 +9306,7 @@
           "step": 900
         }
       ],
-      "title": "Radio 0 (2.4GHz) Quality",
+      "title": "Qualidade do rádio 2,4 GHz",
       "type": "gauge"
     },
     {
@@ -9294,7 +9314,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "",
+      "description": "Melhor qualidade de enlace (0–100%) entre os SSIDs do rádio de 5 GHz, calculada pelo iwinfo a partir do sinal dos clientes. 0 = nenhum cliente nessa banda.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -9365,7 +9385,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "wifi_network_quality{instance=~\"$node:$port\",job=~\"$job\",device=\"radio1\"}",
+          "expr": "max(wifi_network_quality{instance=~\"$node:$port\",job=~\"$job\",device=\"radio1\"})",
           "format": "time_series",
           "hide": false,
           "intervalFactor": 1,
@@ -9374,7 +9394,7 @@
           "step": 900
         }
       ],
-      "title": "Radio 1 (5GHz) quality",
+      "title": "Qualidade do rádio 5 GHz",
       "type": "gauge"
     },
     {
@@ -9472,19 +9492,20 @@
             "uid": "${datasource}"
           },
           "expr": "wifi_station_inactive_milliseconds{instance=~\"$node:$port\",job=~\"$job\"}",
-          "legendFormat": "{{mac}} # {{ifname}}",
+          "legendFormat": "{{mac}} ({{ifname}})",
           "refId": "A"
         }
       ],
-      "title": "WiFi Station inactive",
-      "type": "timeseries"
+      "title": "Inatividade dos clientes",
+      "type": "timeseries",
+      "description": "Há quanto tempo cada cliente não troca dados com o AP. Sobe e zera o tempo todo em aparelho ocioso (celular em espera); só preocupa se o cliente some depois."
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "",
+      "description": "Taxa de transmissão (bitrate) negociada no SSID, em Mbit/s. É a velocidade do rádio, não o tráfego real. SSID sem cliente fica em 0.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -9573,12 +9594,12 @@
           },
           "editorMode": "code",
           "expr": "wifi_network_bitrate{instance=~\"$node:$port\",job=~\"$job\"}/1024",
-          "legendFormat": "{{ifname}}, SSID: {{ssid}}",
+          "legendFormat": "{{ssid}} ({{ifname}})",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "WiFi Bitrate",
+      "title": "Taxa do Wi-Fi por SSID",
       "type": "timeseries"
     },
     {
@@ -9586,7 +9607,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "",
+      "description": "Vazão que o driver estima conseguir com cada cliente, em Mbit/s. Cai com sinal fraco ou interferência.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -9675,12 +9696,12 @@
           },
           "editorMode": "code",
           "expr": "wifi_station_expected_throughput_kilobits_per_second{instance=~\"$node:$port\",job=~\"$job\"}/1024",
-          "legendFormat": "{{mac}} # {{ifname}}",
+          "legendFormat": "{{mac}} ({{ifname}})",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "WiFi Station Expected Throughput",
+      "title": "Vazão esperada por cliente",
       "type": "timeseries"
     },
     {
@@ -9688,7 +9709,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "",
+      "description": "Sinal de cada cliente recebido pelo AP, em dBm. Acima de -60 é ótimo, até -70 é bom, abaixo de -80 a conexão fica instável.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -9777,12 +9798,12 @@
           },
           "editorMode": "code",
           "expr": "wifi_station_signal_dbm{instance=~\"$node:$port\",job=~\"$job\"}",
-          "legendFormat": "{{mac}} # {{ifname}}",
+          "legendFormat": "{{mac}} ({{ifname}})",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "WiFi Station Signal",
+      "title": "Sinal por cliente",
       "type": "timeseries"
     },
     {
@@ -9795,7 +9816,7 @@
       },
       "id": 294,
       "panels": [],
-      "title": "Network Traffic",
+      "title": "Tráfego de rede",
       "type": "row"
     },
     {
@@ -10094,8 +10115,9 @@
           "step": 4
         }
       ],
-      "title": "Network Traffic by Bytes",
-      "type": "timeseries"
+      "title": "Tráfego por interface (bytes)",
+      "type": "timeseries",
+      "description": "KB/s enviados (para baixo do eixo) e recebidos (para cima) em cada interface do AP. As phy* são os SSIDs; as vlan* e a do switch levam o tráfego até o firewall."
     },
     {
       "datasource": {
@@ -10391,8 +10413,9 @@
           "step": 4
         }
       ],
-      "title": "Network Traffic by Packets",
-      "type": "timeseries"
+      "title": "Tráfego por interface (pacotes)",
+      "type": "timeseries",
+      "description": "Pacotes por segundo enviados (para baixo do eixo) e recebidos (para cima) em cada interface do AP."
     },
     {
       "datasource": {
@@ -10491,8 +10514,9 @@
           "refId": "A"
         }
       ],
-      "title": "Transmit Bytes Total",
-      "type": "timeseries"
+      "title": "Total enviado",
+      "type": "timeseries",
+      "description": "MB enviados por interface desde o boot. Contador: zera quando o AP reinicia."
     },
     {
       "datasource": {
@@ -10591,8 +10615,9 @@
           "refId": "A"
         }
       ],
-      "title": "Receive Bytes Total",
-      "type": "timeseries"
+      "title": "Total recebido",
+      "type": "timeseries",
+      "description": "MB recebidos por interface desde o boot. Contador: zera quando o AP reinicia."
     },
     {
       "datasource": {
@@ -10691,8 +10716,9 @@
           "refId": "A"
         }
       ],
-      "title": "Transmit Packets Total",
-      "type": "timeseries"
+      "title": "Total de pacotes enviados",
+      "type": "timeseries",
+      "description": "Pacotes enviados por interface desde o boot."
     },
     {
       "datasource": {
@@ -10791,8 +10817,9 @@
           "refId": "A"
         }
       ],
-      "title": "Receive Packets Total",
-      "type": "timeseries"
+      "title": "Total de pacotes recebidos",
+      "type": "timeseries",
+      "description": "Pacotes recebidos por interface desde o boot."
     },
     {
       "datasource": {
@@ -10899,8 +10926,9 @@
           "refId": "A"
         }
       ],
-      "title": "Top NAT Traffic",
-      "type": "timeseries"
+      "title": "Maiores fluxos no conntrack",
+      "type": "timeseries",
+      "description": "Os 10 fluxos com mais tráfego no conntrack do AP (origem → destino), em MB. Só o que o AP rastreia como host: o NAT da rede é no firewall."
     },
     {
       "datasource": {
@@ -11005,8 +11033,9 @@
           "refId": "B"
         }
       ],
-      "title": "Server src NAT Traffic",
-      "type": "timeseries"
+      "title": "Fluxos por origem",
+      "type": "timeseries",
+      "description": "Os 10 fluxos com mais tráfego, filtrados pela origem escolhida na variável `src`, na média do período do painel."
     },
     {
       "collapsed": false,
@@ -11018,7 +11047,7 @@
       },
       "id": 272,
       "panels": [],
-      "title": "Network Traffic Detail",
+      "title": "Tráfego de rede em detalhe",
       "type": "row"
     },
     {
@@ -11252,8 +11281,9 @@
           "step": 4
         }
       ],
-      "title": "Network Traffic Drop",
-      "type": "timeseries"
+      "title": "Pacotes descartados",
+      "type": "timeseries",
+      "description": "Pacotes por segundo descartados em cada interface (fila cheia, sem buffer). Envio para baixo do eixo, recebimento para cima. Deve ficar perto de zero."
     },
     {
       "datasource": {
@@ -11481,13 +11511,14 @@
           "expr": "irate(node_network_transmit_errs_total{instance=~\"$node:$port\",job=~\"$job\"}[5m])",
           "format": "time_series",
           "intervalFactor": 2,
-          "legendFormat": "{{device}} - Rransmit errors",
+          "legendFormat": "{{device}} - Transmit errors",
           "refId": "F",
           "step": 4
         }
       ],
-      "title": "Network Traffic Errors",
-      "type": "timeseries"
+      "title": "Erros de rede",
+      "type": "timeseries",
+      "description": "Pacotes com erro por segundo em cada interface. Envio para baixo do eixo, recebimento para cima. Erro constante na porta cabeada = cabo ou porta com defeito."
     },
     {
       "datasource": {
@@ -11708,8 +11739,9 @@
           "step": 4
         }
       ],
-      "title": "Network Traffic Multicast",
-      "type": "timeseries"
+      "title": "Multicast recebido",
+      "type": "timeseries",
+      "description": "Pacotes multicast recebidos por segundo (mDNS, SSDP, IPv6). Pico alto em Wi-Fi gasta tempo de ar."
     },
     {
       "datasource": {
@@ -11942,8 +11974,9 @@
           "step": 4
         }
       ],
-      "title": "Network Traffic Compressed",
-      "type": "timeseries"
+      "title": "Pacotes comprimidos",
+      "type": "timeseries",
+      "description": "Pacotes comprimidos por segundo. Os drivers do AP não usam compressão: zero é o esperado."
     },
     {
       "datasource": {
@@ -12165,8 +12198,9 @@
           "step": 4
         }
       ],
-      "title": "Network Traffic Frame",
-      "type": "timeseries"
+      "title": "Erros de quadro",
+      "type": "timeseries",
+      "description": "Quadros recebidos com erro de alinhamento ou CRC por segundo. Constante na porta cabeada = problema de cabo."
     },
     {
       "datasource": {
@@ -12399,8 +12433,9 @@
           "step": 4
         }
       ],
-      "title": "Network Traffic Fifo",
-      "type": "timeseries"
+      "title": "Estouro de FIFO",
+      "type": "timeseries",
+      "description": "Estouros da fila de hardware por segundo: a placa recebeu mais rápido do que o sistema conseguiu tratar."
     },
     {
       "datasource": {
@@ -12576,8 +12611,9 @@
           "step": 4
         }
       ],
-      "title": "Network Traffic Colls",
-      "type": "timeseries"
+      "title": "Colisões",
+      "type": "timeseries",
+      "description": "Colisões por segundo no envio. Em link full-duplex deve ser zero."
     },
     {
       "datasource": {
@@ -12748,13 +12784,14 @@
           "expr": "irate(node_network_transmit_carrier_total{instance=~\"$node:$port\",job=~\"$job\"}[5m])",
           "format": "time_series",
           "intervalFactor": 2,
-          "legendFormat": "{{device}} - Statistic transmit_carrier",
+          "legendFormat": "{{device}} - Transmit carrier",
           "refId": "C",
           "step": 4
         }
       ],
-      "title": "Network Traffic Carrier",
-      "type": "timeseries"
+      "title": "Perda de portadora",
+      "type": "timeseries",
+      "description": "Erros de portadora por segundo no envio: o link físico caiu ou oscilou (cabo, porta ou negociação)."
     },
     {
       "datasource": {
@@ -12889,8 +12926,9 @@
           "step": 4
         }
       ],
-      "title": "NF Contrack",
-      "type": "timeseries"
+      "title": "Tabela de conntrack",
+      "type": "timeseries",
+      "description": "Entradas em uso no conntrack do AP contra o limite. Perto do limite, conexões novas começam a falhar."
     },
     {
       "collapsed": true,
@@ -12907,7 +12945,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "description": "",
+          "description": "Quanto cada coletor do prometheus-node-exporter-lua levou na última raspagem. Coletor lento atrasa o /metrics inteiro.",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -13004,7 +13042,7 @@
               "step": 4
             }
           ],
-          "title": "Node Exporter Scrape Time",
+          "title": "Tempo de coleta do exportador",
           "type": "timeseries"
         },
         {
@@ -13012,7 +13050,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "description": "",
+          "description": "1 = o coletor respondeu na última raspagem, 0 = falhou.",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -13109,11 +13147,11 @@
               "step": 4
             }
           ],
-          "title": "Node Exporter Scrape Success",
+          "title": "Sucesso da coleta do exportador",
           "type": "timeseries"
         }
       ],
-      "title": "Node Exporter",
+      "title": "Exportador",
       "type": "row"
     }
   ],
@@ -13136,18 +13174,22 @@
         "options": []
       },
       {
-        "current": {},
+        "current": {
+          "selected": true,
+          "text": "openwrt",
+          "value": "openwrt"
+        },
         "datasource": {
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "",
+        "definition": "label_values(node_uname_info{job=\"openwrt\"}, job)",
         "includeAll": false,
         "label": "Job",
         "name": "job",
         "options": [],
         "query": {
-          "query": "label_values(node_uname_info, job)",
+          "query": "label_values(node_uname_info{job=\"openwrt\"}, job)",
           "refId": "Prometheus-job-Variable-Query"
         },
         "refresh": 1,
