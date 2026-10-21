@@ -9807,12 +9807,371 @@
       "type": "timeseries"
     },
     {
+      "id": 400,
+      "type": "row",
+      "title": "Wi-Fi vizinhos",
       "collapsed": false,
+      "panels": [],
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
         "y": 109
+      }
+    },
+    {
+      "id": 401,
+      "type": "volkovlabs-echarts-panel",
+      "pluginVersion": "7.2.5",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "title": "Redes vizinhas — 2,4 GHz",
+      "description": "Cada curva é uma rede Wi-Fi que o rádio de 2,4 GHz do AP enxergou na última varredura (de hora em hora): o pico é o sinal em dBm, a largura é a largura do canal (20/40/80 MHz) centrada no canal central do bloco. Curvas que se sobrepõem disputam o mesmo ar. A linha tracejada é o canal em uso por este AP. Nome só nas redes acima de -85 dBm; (oculta) = SSID escondido.",
+      "gridPos": {
+        "h": 12,
+        "w": 12,
+        "x": 0,
+        "y": 110
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "wifi_neighbor_signal_dbm{instance=~\"$node:$port\",job=~\"$job\",banda=\"2g\"}",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "count by (channel) (wifi_network_quality{instance=~\"$node:$port\",job=~\"$job\",device=\"radio0\"})",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "refId": "B"
+        }
+      ],
+      "options": {
+        "renderer": "canvas",
+        "editorMode": "code",
+        "map": "none",
+        "editor": {
+          "format": "auto"
+        },
+        "themeEditor": {
+          "name": "default",
+          "config": "{}"
+        },
+        "getOption": "// Curvas por canal das redes vizinhas (Business Charts / ECharts).\n// Consulta A: wifi_neighbor_signal_dbm, instantânea, formato tabela.\n// Consulta B: canal em uso pelo próprio AP nesta banda (linha vertical).\nconst frames = context.panel.data.series;\nconst achar = (ref) => frames.find((f) => f.refId === ref);\nconst coluna = (f, nome) => {\n  const c = f && f.fields.find((x) => x.name === nome);\n  return c ? Array.from(c.values) : [];\n};\nconst valor = (f) => {\n  const c = f && f.fields.find((x) => x.name.startsWith('Value'));\n  return c ? Array.from(c.values) : [];\n};\n\nconst A = achar('A');\nconst ssid = coluna(A, 'ssid');\nconst centro = coluna(A, 'centro').map(Number);\nconst largura = coluna(A, 'largura_mhz').map(Number);\nconst sinal = valor(A).map(Number);\nconst proprio = coluna(achar('B'), 'channel').map(Number);\n\n// Canal = 5 MHz: meia-largura em números de canal é largura/10 (20 MHz -> ±2).\nconst PISO = -100;\nconst ROTULO = -85;\nconst series = sinal.map((s, i) => {\n  const c = centro[i], h = (largura[i] || 20) / 10;\n  const pontos = [];\n  for (let k = -8; k <= 8; k++) {\n    const x = c + (h * k) / 8;\n    pontos.push([x, PISO + (s - PISO) * (1 - (k / 8) ** 2)]);\n  }\n  const nome = ssid[i] || '(oculta)';\n  return {\n    type: 'line',\n    name: nome,\n    data: pontos,\n    smooth: true,\n    symbol: 'none',\n    lineStyle: { width: 1.5 },\n    areaStyle: { opacity: 0.25, origin: 'start' },\n    // Nome só nas redes que importam: as fracas se empilham no rodapé.\n    markPoint: s >= ROTULO ? {\n      symbol: 'circle',\n      symbolSize: 1,\n      data: [{ coord: [c, s], value: nome }],\n      label: { show: true, position: 'top', formatter: nome, fontSize: 10 },\n    } : undefined,\n    tooltip: { formatter: () => `${nome}<br/>${s} dBm · canal ${c} · ${largura[i] || 20} MHz` },\n  };\n});\n\nif (proprio.length) {\n  series.push({\n    type: 'line',\n    name: 'este AP',\n    data: [],\n    markLine: {\n      symbol: 'none',\n      silent: true,\n      lineStyle: { type: 'dashed', width: 2 },\n      label: { formatter: 'este AP', position: 'insideEndTop' },\n      data: proprio.map((x) => ({ xAxis: x })),\n    },\n  });\n}\n\nconst banda5 = centro.some((c) => c > 14) || proprio.some((c) => c > 14);\nconst texto = (context.grafana && context.grafana.theme && context.grafana.theme.colors.text.primary) || '#ccc';\nreturn {\n  backgroundColor: 'transparent',\n  textStyle: { color: texto },\n  animation: false,\n  grid: { left: 45, right: 20, top: 30, bottom: 35 },\n  tooltip: { trigger: 'item' },\n  legend: { show: false },\n  xAxis: {\n    type: 'value',\n    name: 'canal',\n    nameLocation: 'middle',\n    nameGap: 25,\n    min: banda5 ? 32 : -1,\n    max: banda5 ? 168 : 15,\n    interval: banda5 ? 8 : 1,\n    axisLabel: { formatter: (v) => (banda5 || (v >= 1 && v <= 14) ? v : '') },\n    splitLine: { lineStyle: { opacity: 0.15 } },\n  },\n  yAxis: {\n    type: 'value',\n    name: 'dBm',\n    min: PISO,\n    max: -20,\n    interval: 10,\n    splitLine: { lineStyle: { opacity: 0.15 } },\n  },\n  series,\n};\n"
+      }
+    },
+    {
+      "id": 402,
+      "type": "volkovlabs-echarts-panel",
+      "pluginVersion": "7.2.5",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "title": "Redes vizinhas — 5 GHz",
+      "description": "Cada curva é uma rede Wi-Fi que o rádio de 5 GHz do AP enxergou na última varredura (de hora em hora): o pico é o sinal em dBm, a largura é a largura do canal (20/40/80 MHz) centrada no canal central do bloco. Curvas que se sobrepõem disputam o mesmo ar. A linha tracejada é o canal em uso por este AP. Nome só nas redes acima de -85 dBm; (oculta) = SSID escondido.",
+      "gridPos": {
+        "h": 12,
+        "w": 12,
+        "x": 12,
+        "y": 110
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "wifi_neighbor_signal_dbm{instance=~\"$node:$port\",job=~\"$job\",banda=\"5g\"}",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "count by (channel) (wifi_network_quality{instance=~\"$node:$port\",job=~\"$job\",device=\"radio1\"})",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "refId": "B"
+        }
+      ],
+      "options": {
+        "renderer": "canvas",
+        "editorMode": "code",
+        "map": "none",
+        "editor": {
+          "format": "auto"
+        },
+        "themeEditor": {
+          "name": "default",
+          "config": "{}"
+        },
+        "getOption": "// Curvas por canal das redes vizinhas (Business Charts / ECharts).\n// Consulta A: wifi_neighbor_signal_dbm, instantânea, formato tabela.\n// Consulta B: canal em uso pelo próprio AP nesta banda (linha vertical).\nconst frames = context.panel.data.series;\nconst achar = (ref) => frames.find((f) => f.refId === ref);\nconst coluna = (f, nome) => {\n  const c = f && f.fields.find((x) => x.name === nome);\n  return c ? Array.from(c.values) : [];\n};\nconst valor = (f) => {\n  const c = f && f.fields.find((x) => x.name.startsWith('Value'));\n  return c ? Array.from(c.values) : [];\n};\n\nconst A = achar('A');\nconst ssid = coluna(A, 'ssid');\nconst centro = coluna(A, 'centro').map(Number);\nconst largura = coluna(A, 'largura_mhz').map(Number);\nconst sinal = valor(A).map(Number);\nconst proprio = coluna(achar('B'), 'channel').map(Number);\n\n// Canal = 5 MHz: meia-largura em números de canal é largura/10 (20 MHz -> ±2).\nconst PISO = -100;\nconst ROTULO = -85;\nconst series = sinal.map((s, i) => {\n  const c = centro[i], h = (largura[i] || 20) / 10;\n  const pontos = [];\n  for (let k = -8; k <= 8; k++) {\n    const x = c + (h * k) / 8;\n    pontos.push([x, PISO + (s - PISO) * (1 - (k / 8) ** 2)]);\n  }\n  const nome = ssid[i] || '(oculta)';\n  return {\n    type: 'line',\n    name: nome,\n    data: pontos,\n    smooth: true,\n    symbol: 'none',\n    lineStyle: { width: 1.5 },\n    areaStyle: { opacity: 0.25, origin: 'start' },\n    // Nome só nas redes que importam: as fracas se empilham no rodapé.\n    markPoint: s >= ROTULO ? {\n      symbol: 'circle',\n      symbolSize: 1,\n      data: [{ coord: [c, s], value: nome }],\n      label: { show: true, position: 'top', formatter: nome, fontSize: 10 },\n    } : undefined,\n    tooltip: { formatter: () => `${nome}<br/>${s} dBm · canal ${c} · ${largura[i] || 20} MHz` },\n  };\n});\n\nif (proprio.length) {\n  series.push({\n    type: 'line',\n    name: 'este AP',\n    data: [],\n    markLine: {\n      symbol: 'none',\n      silent: true,\n      lineStyle: { type: 'dashed', width: 2 },\n      label: { formatter: 'este AP', position: 'insideEndTop' },\n      data: proprio.map((x) => ({ xAxis: x })),\n    },\n  });\n}\n\nconst banda5 = centro.some((c) => c > 14) || proprio.some((c) => c > 14);\nconst texto = (context.grafana && context.grafana.theme && context.grafana.theme.colors.text.primary) || '#ccc';\nreturn {\n  backgroundColor: 'transparent',\n  textStyle: { color: texto },\n  animation: false,\n  grid: { left: 45, right: 20, top: 30, bottom: 35 },\n  tooltip: { trigger: 'item' },\n  legend: { show: false },\n  xAxis: {\n    type: 'value',\n    name: 'canal',\n    nameLocation: 'middle',\n    nameGap: 25,\n    min: banda5 ? 32 : -1,\n    max: banda5 ? 168 : 15,\n    interval: banda5 ? 8 : 1,\n    axisLabel: { formatter: (v) => (banda5 || (v >= 1 && v <= 14) ? v : '') },\n    splitLine: { lineStyle: { opacity: 0.15 } },\n  },\n  yAxis: {\n    type: 'value',\n    name: 'dBm',\n    min: PISO,\n    max: -20,\n    interval: 10,\n    splitLine: { lineStyle: { opacity: 0.15 } },\n  },\n  series,\n};\n"
+      }
+    },
+    {
+      "id": 403,
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "title": "Idade da última varredura",
+      "description": "Há quanto tempo o AP fez a última varredura de vizinhos em cada banda (cron do openwrt-wifi-neighbors, de hora em hora). Laranja acima de 65 min, vermelho acima de 2 h: o script parou e as curvas mostram dado velho.",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 122
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "time() - wifi_neighbor_scan_timestamp_seconds{instance=~\"$node:$port\",job=~\"$job\"}",
+          "legendFormat": "{{banda}}",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 3900
+              },
+              {
+                "color": "red",
+                "value": 7200
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "orientation": "horizontal",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 404,
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "title": "Varredura respondeu",
+      "description": "Se a última varredura de cada banda trouxe redes. Falhou = o rádio estava ocupado ou o scan não respondeu: as curvas continuam as da varredura anterior.",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 122
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "wifi_neighbor_scan_success{instance=~\"$node:$port\",job=~\"$job\"}",
+          "legendFormat": "{{banda}}",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "falhou",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "ok",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "orientation": "horizontal",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 405,
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "title": "Redes vizinhas por canal",
+      "description": "Quantas redes vizinhas estão em cada canal primário e o sinal da mais forte. Canal com muita rede ou com vizinho acima de -60 dBm é ruim para o AP; o canal do 5 GHz só é escolhido entre 36–48 e 149–161 (fora do DFS).",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 122
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "count by (banda, canal) (wifi_neighbor_signal_dbm{instance=~\"$node:$port\",job=~\"$job\"})",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max by (banda, canal) (wifi_neighbor_signal_dbm{instance=~\"$node:$port\",job=~\"$job\"})",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "refId": "B"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "banda": "Banda",
+              "canal": "Canal",
+              "Value #A": "Redes",
+              "Value #B": "Sinal mais forte (dBm)"
+            }
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "conversions": [
+              {
+                "targetField": "Canal",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Canal"
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 130
       },
       "id": 294,
       "panels": [],
@@ -10064,7 +10423,7 @@
         "h": 13,
         "w": 12,
         "x": 0,
-        "y": 110
+        "y": 131
       },
       "id": 302,
       "options": {
@@ -10364,7 +10723,7 @@
         "h": 13,
         "w": 12,
         "x": 12,
-        "y": 110
+        "y": 131
       },
       "id": 60,
       "options": {
@@ -10482,7 +10841,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 123
+        "y": 144
       },
       "id": 295,
       "interval": "5m",
@@ -10583,7 +10942,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 123
+        "y": 144
       },
       "id": 300,
       "interval": "5m",
@@ -10684,7 +11043,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 131
+        "y": 152
       },
       "id": 296,
       "interval": "5m",
@@ -10785,7 +11144,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 131
+        "y": 152
       },
       "id": 301,
       "interval": "5m",
@@ -10886,7 +11245,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 139
+        "y": 160
       },
       "id": 281,
       "options": {
@@ -10995,7 +11354,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 149
+        "y": 170
       },
       "id": 318,
       "options": {
@@ -11043,7 +11402,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 159
+        "y": 180
       },
       "id": 272,
       "panels": [],
@@ -11233,7 +11592,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 160
+        "y": 181
       },
       "id": 143,
       "options": {
@@ -11468,7 +11827,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 160
+        "y": 181
       },
       "id": 142,
       "options": {
@@ -11703,7 +12062,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 170
+        "y": 191
       },
       "id": 146,
       "options": {
@@ -11926,7 +12285,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 170
+        "y": 191
       },
       "id": 141,
       "options": {
@@ -12161,7 +12520,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 180
+        "y": 201
       },
       "id": 145,
       "options": {
@@ -12385,7 +12744,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 180
+        "y": 201
       },
       "id": 144,
       "options": {
@@ -12575,7 +12934,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 190
+        "y": 211
       },
       "id": 232,
       "options": {
@@ -12753,7 +13112,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 190
+        "y": 211
       },
       "id": 231,
       "options": {
@@ -12879,7 +13238,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 200
+        "y": 221
       },
       "id": 61,
       "options": {
@@ -12936,7 +13295,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 210
+        "y": 231
       },
       "id": 279,
       "panels": [
@@ -13006,7 +13365,7 @@
             "h": 10,
             "w": 12,
             "x": 0,
-            "y": 188
+            "y": 209
           },
           "id": 40,
           "options": {
@@ -13111,7 +13470,7 @@
             "h": 10,
             "w": 12,
             "x": 12,
-            "y": 188
+            "y": 209
           },
           "id": 157,
           "options": {

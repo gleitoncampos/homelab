@@ -107,6 +107,22 @@ checar({"openwrt_firmware_update_level", "openwrt_packages_upgradable"} <= usada
 checar({"openwrt_filesystem_size_bytes", "openwrt_filesystem_avail_bytes"} <= usadas,
        "dashboard do OpenWrt mede o armazenamento pelo script")
 checar("node_filesystem_" not in exprs, "dashboard do OpenWrt não consulta node_filesystem_* (o AP não publica)")
+
+# Curvas por canal dos vizinhos (20/10/2026): plugin Business Charts instalado
+# antes da partida e na MESMA versão dos painéis; métrica do painel tem que
+# sair do script, senão é painel vazio sem erro.
+_graf = (servicos.get("grafana") or {}).get("environment") or {}
+_pin = re.fullmatch(r"volkovlabs-echarts-panel@(\d+\.\d+\.\d+)", str(_graf.get("GF_PLUGINS_PREINSTALL_SYNC", "")))
+checar(_pin is not None, "Grafana instala o volkovlabs-echarts-panel com versão fixada, antes de subir (_SYNC)")
+_ech = [p for p in painel["panels"] if p.get("type") == "volkovlabs-echarts-panel"]
+checar(len(_ech) == 2, f"dashboard do OpenWrt tem as curvas das duas bandas ({len(_ech)})")
+checar(bool(_pin) and all(p.get("pluginVersion") == _pin.group(1) for p in _ech),
+       "painéis ECharts na mesma versão do plugin instalado")
+_viz_script = set(re.findall(r"\b(wifi_neighbors?_[a-z_]+)\b",
+                             (ANSIBLE / "templates/network/openwrt_wifi_neighbors.uc.j2").read_text(encoding="utf-8")))
+_viz_painel = set(re.findall(r"\b(wifi_neighbors?_[a-z_]+)\b", exprs))
+checar(bool(_viz_painel) and _viz_painel <= _viz_script,
+       f"toda métrica de vizinhos do dashboard sai do script ({sorted(_viz_painel - _viz_script)})")
 checar(usadas <= metricas_script,
        f"toda métrica openwrt_* do dashboard sai do script ({sorted(usadas - metricas_script)})")
 

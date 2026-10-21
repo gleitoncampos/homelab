@@ -104,6 +104,11 @@ services:
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
       GF_ANALYTICS_FEEDBACK_LINKS_ENABLED: "false"
+      # Curvas por canal das redes Wi-Fi vizinhas no dashboard OpenWRT
+      # (20/10/2026). `_SYNC`: instala ANTES de subir, senão o dashboard
+      # provisionado abre com "painel desconhecido". Versão fixada: sem ela o
+      # Grafana atualiza sozinho a cada partida (`preinstall_auto_update`).
+      GF_PLUGINS_PREINSTALL_SYNC: "volkovlabs-echarts-panel@7.2.5"
     volumes:
       - /srv/containers/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
       - /srv/containers/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml
