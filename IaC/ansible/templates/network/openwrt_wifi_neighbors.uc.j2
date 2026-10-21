@@ -1,0 +1,109 @@
+#!/usr/bin/ucode -S
+// =============================================================================
+// openwrt-wifi-neighbors -- redes Wi-Fi vizinhas para o Prometheus
+// =============================================================================
+// RENDERIZADO POR ANSIBLE (playbooks/network/02-openwrt-exporter.yml). Nao
+// editar no equipamento.
+//
+// Uso: openwrt-wifi-neighbors <iface> <banda> [arquivo] [json-do-scan]
+//   iface  interface AP do radio (phy0-ap0 = 2.4 GHz, phy1-ap0 = 5 GHz)
+//   banda  rotulo da metrica (2g, 5g)
+//   json   so para teste: le o resultado do scan de um arquivo, sem ubus
+//
+// Escreve no diretorio do coletor `textfile` do prometheus-node-exporter-lua
+// (/var/prometheus/*.prom), como o openwrt-update-metrics. Roda de hora em
+// hora pelo cron.
+//
+//   wifi_neighbor_signal_dbm               sinal de cada rede vizinha, com
+//                                          canal primario, canal central e
+//                                          largura (desenho das curvas)
+//   wifi_neighbors_seen                    redes vistas no scan
+//   wifi_neighbor_scan_success             1/0; 0 = as redes acima NAO valem
+//   wifi_neighbor_scan_timestamp_seconds   quando o scan rodou
+//
+// ⚠️ O scan tira o radio do canal por ~2-3 s: clientes sentem um soluco
+//    (5 GHz: 9% de perda e RTT de 1,5 s medidos em 20/10/2026). Por isso de
+//    hora em hora, e nunca em laco.
+// ⚠️ SSID e BSSID vem de terceiros: tudo que vai para label passa por esc().
+//    Sem isso, um vizinho com aspas ou quebra de linha no nome quebra o
+//    arquivo ou injeta metrica falsa nele.
+// ⚠️ SEM ACENTO NO CORPO: o console do OpenWrt nao e garantidamente UTF-8.
+// =============================================================================
+'use strict';
+
+import { readfile, writefile, rename, mkdir } from 'fs';
+
+const iface = ARGV[0], banda = ARGV[1];
+if (!iface || !banda) {
+	warn('uso: openwrt-wifi-neighbors <iface> <banda> [arquivo] [json-do-scan]\n');
+	exit(2);
+}
+const arq = ARGV[2] || `/var/prometheus/wifi_neighbors_${banda}.prom`;
+
+// Escape de valor de label no formato de exposicao do Prometheus.
+function esc(s) {
+	return replace(replace(replace(`${s}`, '\\', '\\\\'), '"', '\\"'), '\n', '\\n');
+}
+
+// Largura em MHz e canal central. VHT de 80/160 traz os dois; abaixo disso o
+// iwinfo poe `channel_width: 40` no VHT com o sentido de "veja o HT" (rede de
+// 20 MHz no 2.4 aparece assim, 20/10/2026), e quem decide e o canal
+// secundario do HT (acima/abaixo do primario = 40 MHz, centro a 2 canais).
+function geometria(r) {
+	const vht = r.vht_operation, ht = r.ht_operation;
+	if (vht && vht.channel_width >= 80)
+		return [vht.channel_width, vht.center_freq_1 || r.channel];
+	if (ht && ht.channel_width == 2040) {
+		if (ht.secondary_channel_offset == 'above')
+			return [40, r.channel + 2];
+		if (ht.secondary_channel_offset == 'below')
+			return [40, r.channel - 2];
+	}
+	return [20, r.channel];
+}
+
+let scan;
+if (ARGV[3]) {
+	scan = json(readfile(ARGV[3]));
+} else {
+	const conn = require('ubus').connect();
+	scan = conn ? conn.call('iwinfo', 'scan', { device: iface }) : null;
+}
+
+// Mesmo BSSID duas vezes no scan viraria serie duplicada: fica o mais forte.
+const redes = {};
+for (let r in (scan?.results || [])) {
+	if (r.bssid == null || r.signal == null || r.channel == null)
+		continue;
+	const id = lc(r.bssid);
+	if (!redes[id] || r.signal > redes[id].signal)
+		redes[id] = r;
+}
+
+const b = esc(banda);
+let out = [
+	'# HELP wifi_neighbor_signal_dbm Sinal de cada rede Wi-Fi vizinha.',
+	'# TYPE wifi_neighbor_signal_dbm gauge',
+];
+let n = 0;
+for (let id in sort(keys(redes))) {
+	const r = redes[id], g = geometria(r);
+	push(out, sprintf('wifi_neighbor_signal_dbm{banda="%s",canal="%d",centro="%d",largura_mhz="%d",ssid="%s",bssid="%s"} %d',
+		b, r.channel, g[1], g[0], esc(r.ssid ?? ''), esc(id), r.signal));
+	n++;
+}
+push(out,
+	'# HELP wifi_neighbors_seen Redes vistas no scan.',
+	'# TYPE wifi_neighbors_seen gauge',
+	sprintf('wifi_neighbors_seen{banda="%s"} %d', b, n),
+	'# HELP wifi_neighbor_scan_success 1 se o scan respondeu.',
+	'# TYPE wifi_neighbor_scan_success gauge',
+	sprintf('wifi_neighbor_scan_success{banda="%s"} %d', b, scan?.results ? 1 : 0),
+	'# HELP wifi_neighbor_scan_timestamp_seconds Quando o scan rodou.',
+	'# TYPE wifi_neighbor_scan_timestamp_seconds gauge',
+	sprintf('wifi_neighbor_scan_timestamp_seconds{banda="%s"} %d', b, time()),
+	'');
+
+mkdir(replace(arq, /\/[^\/]*$/, ''));
+writefile(`${arq}.tmp`, join('\n', out));
+rename(`${arq}.tmp`, arq);
