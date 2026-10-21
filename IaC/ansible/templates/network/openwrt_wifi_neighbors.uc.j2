@@ -26,7 +26,13 @@
 //    hora em hora, e nunca em laco.
 // ⚠️ SSID e BSSID vem de terceiros: tudo que vai para label passa por esc().
 //    Sem isso, um vizinho com aspas ou quebra de linha no nome quebra o
-//    arquivo ou injeta metrica falsa nele.
+//    arquivo ou injeta metrica falsa nele. SSID sao 32 bytes quaisquer: se
+//    nao for UTF-8 valido, o Prometheus recusa o alvo INTEIRO (todas as
+//    series do AP somem, nao so as de Wi-Fi). Nesse caso os bytes >= 0x80
+//    e o `%` viram %XX.
+// ⚠️ Os dois arquivos (2g e 5g) repetem o HELP/TYPE das mesmas metricas. O
+//    /metrics concatenado reprova no `promtool check metrics`, mas o scrape
+//    do Prometheus aceita (3.13.2, conferido em 20/10/2026).
 // ⚠️ SEM ACENTO NO CORPO: o console do OpenWrt nao e garantidamente UTF-8.
 // =============================================================================
 'use strict';
@@ -40,9 +46,43 @@ if (!iface || !banda) {
 }
 const arq = ARGV[2] || `/var/prometheus/wifi_neighbors_${banda}.prom`;
 
+// UTF-8 estrito, na regra do Go (o parser do Prometheus): sem sequencia
+// truncada, sem forma longa, sem surrogate, nada acima de U+10FFFF.
+function utf8_ok(s) {
+	const n = length(s);
+	let i = 0;
+	while (i < n) {
+		const c = ord(s, i);
+		let k, cp, min;
+		if (c < 0x80) { i++; continue; }
+		else if (c >= 0xc2 && c <= 0xdf) { k = 1; cp = c & 0x1f; min = 0x80; }
+		else if (c >= 0xe0 && c <= 0xef) { k = 2; cp = c & 0x0f; min = 0x800; }
+		else if (c >= 0xf0 && c <= 0xf4) { k = 3; cp = c & 0x07; min = 0x10000; }
+		else return false;
+		if (i + k >= n) return false;
+		for (let j = 1; j <= k; j++) {
+			const b = ord(s, i + j);
+			if ((b & 0xc0) != 0x80) return false;
+			cp = (cp << 6) | (b & 0x3f);
+		}
+		if (cp < min || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) return false;
+		i += k + 1;
+	}
+	return true;
+}
+
 // Escape de valor de label no formato de exposicao do Prometheus.
 function esc(s) {
-	return replace(replace(replace(`${s}`, '\\', '\\\\'), '"', '\\"'), '\n', '\\n');
+	s = `${s}`;
+	if (!utf8_ok(s)) {
+		let r = '';
+		for (let i = 0; i < length(s); i++) {
+			const c = ord(s, i);
+			r += (c >= 0x80 || c == 0x25) ? sprintf('%%%02X', c) : chr(c);
+		}
+		s = r;
+	}
+	return replace(replace(replace(s, '\\', '\\\\'), '"', '\\"'), '\n', '\\n');
 }
 
 // Largura em MHz e canal central. VHT de 80/160 traz os dois; abaixo disso o
@@ -98,12 +138,20 @@ push(out,
 	sprintf('wifi_neighbors_seen{banda="%s"} %d', b, n),
 	'# HELP wifi_neighbor_scan_success 1 se o scan respondeu.',
 	'# TYPE wifi_neighbor_scan_success gauge',
-	sprintf('wifi_neighbor_scan_success{banda="%s"} %d', b, scan?.results ? 1 : 0),
+	// Lista vazia e o que o rpcd devolve quando o scan falha ou o radio esta
+	// ocupado: sem nenhuma rede, o scan nao vale.
+	sprintf('wifi_neighbor_scan_success{banda="%s"} %d', b, length(scan?.results || []) > 0 ? 1 : 0),
 	'# HELP wifi_neighbor_scan_timestamp_seconds Quando o scan rodou.',
 	'# TYPE wifi_neighbor_scan_timestamp_seconds gauge',
 	sprintf('wifi_neighbor_scan_timestamp_seconds{banda="%s"} %d', b, time()),
 	'');
 
 mkdir(replace(arq, /\/[^\/]*$/, ''));
-writefile(`${arq}.tmp`, join('\n', out));
+// Arquivo truncado (tmpfs cheio) no ar quebraria o scrape do AP inteiro, como
+// o UTF-8 invalido: so troca o arquivo se a gravacao foi completa.
+const conteudo = join('\n', out);
+if (writefile(`${arq}.tmp`, conteudo) !== length(conteudo)) {
+	warn(`openwrt-wifi-neighbors: falha ao gravar ${arq}.tmp\n`);
+	exit(1);
+}
 rename(`${arq}.tmp`, arq);

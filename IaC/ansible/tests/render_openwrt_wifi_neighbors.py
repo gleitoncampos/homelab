@@ -34,7 +34,7 @@ if not shutil.which("docker"):
     sys.exit(0)
 
 texto = SCRIPT.read_text(encoding="utf-8")
-checar("{{" not in texto and "{%" not in texto, "o script não tem sintaxe que o Jinja do lookup('template') interprete")
+checar(not any(m in texto for m in ("{{", "{%", "{#")), "o script não tem sintaxe que o Jinja do lookup('template') interprete")
 
 INJECAO = 'x"} 1\nwifi_neighbors_seen{banda="2g"} 999\n#'
 scan = {"results": [
@@ -55,26 +55,34 @@ scan = {"results": [
     {"ssid": "incompleta", "bssid": "bssid-5", "channel": 3},
 ]}
 
-with tempfile.TemporaryDirectory() as tmp:
-    Path(tmp, "scan.json").write_text(json.dumps(scan), encoding="utf-8")
-    shutil.copy(SCRIPT, Path(tmp, "script.uc"))
-    roda = subprocess.run(
-        ["docker", "run", "--rm", "--user", f"{os.getuid()}:{os.getgid()}", "-v", f"{tmp}:/t", OPENWRT,
-         "ucode", "-S", "/t/script.uc", "phy0-ap0", "2g", "/t/out/wifi.prom", "/t/scan.json"],
-        capture_output=True, text=True)
-    checar(roda.returncode == 0, f"o script roda no ucode do {OPENWRT} {roda.stderr.strip()}")
-    saida = Path(tmp, "out/wifi.prom")
-    prom = saida.read_text(encoding="utf-8") if saida.exists() else ""
-    checar(not Path(tmp, "out/wifi.prom.tmp").exists(), "não sobra o .tmp da gravação atômica")
+img = re.search(r"quay\.io/prometheus/prometheus:[^\"\s]+",
+                (REPO / "docker/monitoring/swarm/compose.yml").read_text(encoding="utf-8"))
+checar(img is not None, "achei a imagem do Prometheus no compose")
 
-    img = re.search(r"quay\.io/prometheus/prometheus:[^\"\s]+",
-                    (REPO / "docker/monitoring/swarm/compose.yml").read_text(encoding="utf-8"))
-    checar(img is not None, "achei a imagem do Prometheus no compose")
-    if img and prom:
+
+def rodar(rotulo, scan_bytes):
+    """Roda o script no ucode do AP contra o scan dado e passa a saída no promtool."""
+    with tempfile.TemporaryDirectory() as tmp:
+        Path(tmp, "scan.json").write_bytes(scan_bytes)
+        shutil.copy(SCRIPT, Path(tmp, "script.uc"))
+        roda = subprocess.run(
+            ["docker", "run", "--rm", "--user", f"{os.getuid()}:{os.getgid()}", "-v", f"{tmp}:/t", OPENWRT,
+             "ucode", "-S", "/t/script.uc", "phy0-ap0", "2g", "/t/out/wifi.prom", "/t/scan.json"],
+            capture_output=True, text=True)
+        checar(roda.returncode == 0, f"{rotulo}: o script roda no ucode do {OPENWRT} {roda.stderr.strip()}")
+        saida = Path(tmp, "out/wifi.prom")
+        bruto = saida.read_bytes() if saida.exists() else b""
+        checar(not Path(tmp, "out/wifi.prom.tmp").exists(), f"{rotulo}: não sobra o .tmp da gravação atômica")
+    if img and bruto:
         lint = subprocess.run(
             ["docker", "run", "--rm", "-i", "--entrypoint", "promtool", img.group(0), "check", "metrics"],
-            input=prom, capture_output=True, text=True)
-        checar(lint.returncode == 0, f"o promtool aceita a saída ({img.group(0)}) {lint.stdout.strip()} {lint.stderr.strip()}")
+            input=bruto, capture_output=True)
+        checar(lint.returncode == 0, f"{rotulo}: o promtool aceita a saída ({img.group(0)}) "
+               f"{lint.stdout.decode(errors='replace').strip()} {lint.stderr.decode(errors='replace').strip()}")
+    return bruto.decode("utf-8", errors="replace")
+
+
+prom = rodar("scan fictício", json.dumps(scan).encode())
 
 sinais = [ln for ln in prom.splitlines() if ln.startswith("wifi_neighbor_signal_dbm{")]
 checar(len(sinais) == 5, f"uma série por BSSID válido, sem duplicata nem incompleta ({len(sinais)})")
@@ -91,6 +99,23 @@ checar('canal="36",centro="42",largura_mhz="80",ssid=""' in prom, "VHT80: centro
 checar('canal="11",centro="11",largura_mhz="20"' in prom, "sem HT/VHT: 20 MHz no primário")
 checar('canal="3",centro="3",largura_mhz="20",ssid="vht40-falso"' in prom, "VHT 40 sem secundário no HT fica em 20 MHz")
 checar('wifi_neighbor_scan_success{banda="2g"} 1' in prom, "scan com resultado marca sucesso")
+
+# SSID são 32 bytes quaisquer: byte que não é UTF-8 válido derrubava o alvo
+# inteiro no Prometheus (`invalid UTF-8 label value`, Hades 20/10/2026). O
+# fixture vai em bytes porque o json.dumps não representa byte cru.
+_bytes = [(b"Caf\xe9", "Caf%E9"), (b"ok\xc3", "ok%C3"), (b"\xed\xa0\x80", "%ED%A0%80"),
+          (b"\xc0\xaf", "%C0%AF"), (b"\xf4\x90\x80\x80", "%F4%90%80%80"),
+          (b"100% Caf\xe9", "100%25 Caf%E9"), ("Café 100%".encode(), "Café 100%")]
+_cru = b'{"results":[' + b",".join(
+    b'{"ssid":"' + ssid + b'","bssid":"bssid-' + str(i).encode() + b'","channel":1,"signal":-50}'
+    for i, (ssid, _) in enumerate(_bytes)) + b"]}"
+prom_cru = rodar("SSID em bytes crus", _cru)
+for i, (ssid, esperado) in enumerate(_bytes):
+    checar(f'ssid="{esperado}",bssid="bssid-{i}"' in prom_cru, f"SSID {ssid!r} sai como {esperado!r}")
+
+# Lista vazia é o que o rpcd devolve com o scan falho ou o rádio ocupado.
+prom_vazio = rodar("scan vazio", b'{"results":[]}')
+checar('wifi_neighbor_scan_success{banda="2g"} 0' in prom_vazio, "scan sem nenhuma rede não marca sucesso")
 
 if falhas:
     print(f"\n✗ render-openwrt-wifi-neighbors: {len(falhas)} falha(s)")
