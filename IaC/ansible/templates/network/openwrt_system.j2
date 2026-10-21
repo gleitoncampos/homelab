@@ -7,7 +7,10 @@ config system
 	option zonename '{{ network_timezone | default('America/Sao_Paulo') }}'
 	option log_proto '{{ syslog_protocol | default('udp') }}'
 	option conloglevel '8'
-	option cronloglevel '5'
+	{# 8 = uma linha por job executado. No 5 o crond do busybox logava a cada
+	   minuto o wakeup e o reparse do crontab inteiro, tudo como `cron.err`: 516 de
+	   768 linhas do logread, empurrando o resto para fora do anel (20/10/2026). #}
+	option cronloglevel '8'
 	option log_ip '{{ syslog_server_ip }}'
 	{# ⚠️ Porta do ouvinte RFC3164, não a mesma dos demais: o `logd` do
 	   OpenWrt não fala RFC5424 e não há opção para mudar isso. #}
