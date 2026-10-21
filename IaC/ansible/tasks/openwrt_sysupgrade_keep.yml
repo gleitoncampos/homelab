@@ -10,6 +10,9 @@
 # Trava em tests/gates_openwrt_upgrade.py.
 - name: Preservar no sysupgrade os arquivos que o IaC instala
   ansible.builtin.raw: |
+    # Grava em arquivo novo e troca no fim: uma falha no meio (tmpfs cheio)
+    # perderia linha manual fora do bloco logo antes do backup e do flash.
+    set -e
     f=/etc/sysupgrade.conf
     t="$f.iac.tmp"
     touch "$f"
@@ -21,13 +24,15 @@
       echo "{{ p }}"
     {% endfor %}
       echo "# IAC-FIM"
-    } > "$f"
+    } > "$f.new"
+    mv "$f.new" "$f"
     rm -f "$t"
+    set +e
     echo "PRESERVADOS:$(sysupgrade -l | grep -c -E '^({{ openwrt_sysupgrade_keep | map('regex_escape') | join('|') }})')"
     # Arquivo da lista que existe no AP e não sai no `sysupgrade -l` some no
     # upgrade. Caminho que não existe (recurso não instalado) não conta.
     {% for p in openwrt_sysupgrade_keep %}
-    [ ! -e "{{ p }}" ] || sysupgrade -l | grep -q -E '^{{ p | regex_escape }}' || echo "FALTA:{{ p }}"
+    [ ! -e "{{ p }}" ] || sysupgrade -l | grep -q -E '^{{ p | regex_escape }}{{ '' if p.endswith('/') else '$' }}' || echo "FALTA:{{ p }}"
     {% endfor %}
   register: _sysupgrade_keep
   changed_when: true

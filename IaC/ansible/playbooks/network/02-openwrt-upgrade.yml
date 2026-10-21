@@ -15,9 +15,10 @@
 #    .local/backups/openwrt/ (gitignorado, contém senha); imagem anterior pelo
 #    sysupgrade ou, sem boot, failsafe/TFTP (ver a Frente do homelab).
 #
-# Pré-requisito: o 02-openwrt-setup.yml já rodou nesta versão do IaC — é ele
-# que põe no /etc/sysupgrade.conf o que precisa sobreviver (led-health, cron,
-# scripts, xinfc). Este play confere isso antes de gravar.
+# O que precisa sobreviver (led-health, cron, scripts, xinfc) vai para o
+# /etc/sysupgrade.conf pela mesma task do setup (tasks/openwrt_sysupgrade_keep.yml),
+# que este play roda antes do backup e falha se algum arquivo do IaC presente
+# no AP ficar fora. ⚠️ No --check a task é pulada (raw): nada é conferido.
 # Trava em tests/gates_openwrt_upgrade.py.
 # ==============================================================================
 - name: "OpenWrt - upgrade pelo owut"
