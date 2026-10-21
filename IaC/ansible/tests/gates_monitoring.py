@@ -102,6 +102,11 @@ exprs = " ".join(t.get("expr", "") for p in painel["panels"] for t in p.get("tar
 usadas = set(re.findall(r"\bopenwrt_[a-z_]+", exprs))
 checar({"openwrt_firmware_update_level", "openwrt_packages_upgradable"} <= usadas,
        "dashboard do OpenWrt mostra firmware e pacotes pendentes")
+# O exportador lua não tem coletor de filesystem: o painel de disco lia
+# node_filesystem_* e ficava sempre vazio (20/10/2026).
+checar({"openwrt_filesystem_size_bytes", "openwrt_filesystem_avail_bytes"} <= usadas,
+       "dashboard do OpenWrt mede o armazenamento pelo script")
+checar("node_filesystem_" not in exprs, "dashboard do OpenWrt não consulta node_filesystem_* (o AP não publica)")
 checar(usadas <= metricas_script,
        f"toda métrica openwrt_* do dashboard sai do script ({sorted(usadas - metricas_script)})")
 

@@ -993,7 +993,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Used Root FS",
+      "description": "Percentual usado do / do AP, que é o overlay gravável (/overlay): onde ficam a configuração e os pacotes instalados depois da imagem. O /rom (squashfs, somente leitura) fica de fora. Medido de hora em hora pelo openwrt-update-metrics; cheio, o AP não grava mais configuração.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1063,7 +1063,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "100 - ((node_filesystem_avail_bytes{instance=~\"$node:$port\",job=~\"$job\",mountpoint=\"/\",fstype!=\"rootfs\"} * 100) / node_filesystem_size_bytes{instance=~\"$node:$port\",job=~\"$job\",mountpoint=\"/\",fstype!=\"rootfs\"})",
+          "expr": "100 - (openwrt_filesystem_avail_bytes{instance=~\"$node:$port\",job=~\"$job\",mountpoint=\"/\"} * 100 / openwrt_filesystem_size_bytes{instance=~\"$node:$port\",job=~\"$job\",mountpoint=\"/\"})",
           "format": "time_series",
           "intervalFactor": 1,
           "range": true,
@@ -1071,7 +1071,7 @@
           "step": 900
         }
       ],
-      "title": "Used Root FS",
+      "title": "Armazenamento usado",
       "type": "gauge"
     },
     {
@@ -1726,7 +1726,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Total RootFS",
+      "description": "Tamanho do / do AP (overlay gravável), medido de hora em hora pelo openwrt-update-metrics.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1795,7 +1795,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "node_filesystem_size_bytes{instance=~\"$node:$port\",job=~\"$job\",mountpoint=\"/\",fstype!=\"rootfs\"}",
+          "expr": "openwrt_filesystem_size_bytes{instance=~\"$node:$port\",job=~\"$job\",mountpoint=\"/\"}",
           "format": "time_series",
           "hide": false,
           "intervalFactor": 1,
@@ -1803,7 +1803,7 @@
           "step": 900
         }
       ],
-      "title": "Total RootFS",
+      "title": "Armazenamento total",
       "type": "stat"
     },
     {

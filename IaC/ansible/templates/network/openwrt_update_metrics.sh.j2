@@ -15,6 +15,10 @@
 #   openwrt_packages_upgradable    pacotes com versao nova no feed
 #   openwrt_update_check_success   1/0 por checagem; 0 = o numero acima NAO
 #                                  vale (sem internet, feed travado...)
+#   openwrt_filesystem_size_bytes  tamanho e espaco livre do / (o overlay
+#   openwrt_filesystem_avail_bytes gravavel): o exportador lua nao tem coletor
+#                                  de filesystem, e o painel de disco ficava
+#                                  sempre vazio (20/10/2026)
 #
 # ⚠️ /var e tmpfs: o arquivo some no boot e volta na proxima hora cheia.
 # ⚠️ Pacotes so a cada 24 h: `opkg update`/`apk update` baixa as listas para
@@ -73,6 +77,16 @@ else
   printf '%s\n%s\n%s\n' "$agora" "$pkg_ok" "$pkgs" > "$CACHE_PKG"
 fi
 
+# / e o overlay gravavel (/overlay por baixo); o /rom e squashfs, sempre
+# 100%, e nao entra. -P: uma linha por montagem, sem quebra de nome longo.
+fs_size=0
+fs_avail=0
+set -- $(df -Pk / 2>/dev/null | awk 'NR==2{print $2, $4}')
+if [ $# -eq 2 ]; then
+  fs_size=$(($1 * 1024))
+  fs_avail=$(($2 * 1024))
+fi
+
 mkdir -p "$(dirname "$ARQ")"
 cat > "$ARQ.tmp" <<EOF
 # HELP openwrt_firmware_info Versao instalada e as ultimas publicadas.
@@ -88,6 +102,12 @@ openwrt_packages_upgradable $pkgs
 # TYPE openwrt_update_check_success gauge
 openwrt_update_check_success{check="firmware"} $fw_ok
 openwrt_update_check_success{check="packages"} $pkg_ok
+# HELP openwrt_filesystem_size_bytes Tamanho do / (overlay gravavel).
+# TYPE openwrt_filesystem_size_bytes gauge
+openwrt_filesystem_size_bytes{mountpoint="/"} $fs_size
+# HELP openwrt_filesystem_avail_bytes Espaco livre no / (overlay gravavel).
+# TYPE openwrt_filesystem_avail_bytes gauge
+openwrt_filesystem_avail_bytes{mountpoint="/"} $fs_avail
 # HELP openwrt_update_check_timestamp_seconds Quando o script rodou.
 # TYPE openwrt_update_check_timestamp_seconds gauge
 openwrt_update_check_timestamp_seconds $agora
