@@ -1,7 +1,9 @@
 config wifi-device 'radio0'
 	option type 'mac80211'
 	option path '{{ openwrt_radio0_path }}'
-	option channel 'auto'
+	# Canal fixo: com ACS ele ficou no 6, colado num modem vizinho a -22 dBm no
+	# canal 5; o 1 recebe ~29 dB menos energia de vizinhos (20/10/2026).
+	option channel '1'
 	option band '2g'
 	option htmode 'HT20'
 	option cell_density '0'

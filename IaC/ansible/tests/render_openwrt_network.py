@@ -337,6 +337,13 @@ if _canais:
     _lista = {int(c) for c in _canais.group(1).split()}
     checar(not (_lista & _dfs), f"nenhum canal DFS na lista ({sorted(_lista & _dfs)})")
 
+print("\nInvariante 13 — o 2,4 GHz fica num canal que não encavala (1, 6 ou 11):")
+# Com ACS o rádio escolheu o 6, encavalado num vizinho a -22 dBm no canal 5;
+# fixado no 1 pela medição dos vizinhos (20/10/2026).
+_c24 = re.search(r"option channel '([^']+)'", dict(radios).get("radio0", ""))
+checar(_c24 is not None and _c24.group(1) in ("1", "6", "11"),
+       f"o radio0 usa canal 1, 6 ou 11 ({_c24.group(1) if _c24 else None})")
+
 print("\nHigiene do render:")
 for rotulo, texto_render in (("network", rede), ("system", sistema)):
     checar(
