@@ -582,29 +582,8 @@
       ansible.builtin.raw: "/etc/init.d/log restart && reload_config"
       changed_when: true
 
-    # O que o IaC instala fora de /etc/config some num sysupgrade (inclusive o
-    # do 02-openwrt-upgrade.yml) se não estiver no /etc/sysupgrade.conf. Bloco
-    # marcado, reescrito inteiro a cada execução: linha manual fora dele fica.
-    # Trava em tests/gates_openwrt_upgrade.py.
     - name: Preservar no sysupgrade os arquivos que o IaC instala
-      ansible.builtin.raw: |
-        f=/etc/sysupgrade.conf
-        t="$f.iac.tmp"
-        touch "$f"
-        awk '/^# IAC-INICIO/{s=1;next} /^# IAC-FIM/{s=0;next} !s' "$f" > "$t"
-        {
-          cat "$t"
-          echo "# IAC-INICIO -- gerado pelo Ansible (02-openwrt-setup.yml), nao editar"
-        {% for p in openwrt_sysupgrade_keep %}
-          echo "{{ p }}"
-        {% endfor %}
-          echo "# IAC-FIM"
-        } > "$f"
-        rm -f "$t"
-        echo "PRESERVADOS:$(sysupgrade -l | grep -c -E '^({{ openwrt_sysupgrade_keep | map('regex_escape') | join('|') }})')"
-      register: _sysupgrade_keep
-      changed_when: true
-      failed_when: "'PRESERVADOS:' not in _sysupgrade_keep.stdout"
+      ansible.builtin.include_tasks: "../../tasks/openwrt_sysupgrade_keep.yml"
 
     - name: Exibir confirmação do OpenWrt
       ansible.builtin.debug:

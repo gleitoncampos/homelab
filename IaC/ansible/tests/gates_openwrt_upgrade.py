@@ -45,14 +45,22 @@ for env in ("prod", "dev"):
     for item in ("/etc/crontabs/root", "/etc/rc.d/S97led-health", "/root/xinfc/"):
         checar(item in keep, f"{env}: {item} é preservado")
 
+# O bloco IAC mora numa task só, chamada pelo setup e pelo upgrade: arquivo
+# novo do IaC fora do setup (o openwrt-wifi-neighbors do exporter) ficava fora
+# do bloco até o setup rodar de novo (20/10/2026).
+KEEP = "../../tasks/openwrt_sysupgrade_keep.yml"
+pres = yaml.safe_load((ANSIBLE / "tasks/openwrt_sysupgrade_keep.yml").read_text(encoding="utf-8"))
+checar(len(pres) == 1 and "IAC-INICIO" in str(pres[0].get("ansible.builtin.raw", "")),
+       "tasks/openwrt_sysupgrade_keep.yml grava o bloco IAC no /etc/sysupgrade.conf")
+r = pres[0]["ansible.builtin.raw"]
+checar("openwrt_sysupgrade_keep" in r and "IAC-FIM" in r and "awk" in r,
+       "o bloco é reescrito inteiro a partir de openwrt_sysupgrade_keep")
+checar("FALTA:" in r and "'FALTA:' in" in str(pres[0].get("failed_when", "")),
+       "falha se arquivo da lista presente no AP ficar fora do `sysupgrade -l`")
 setup = tarefas("02-openwrt-setup.yml")
-pres = [t for t in setup if "IAC-INICIO" in str(t.get("ansible.builtin.raw", ""))]
-checar(len(pres) == 1, "o setup grava o bloco IAC no /etc/sysupgrade.conf")
-if pres:
-    r = pres[0]["ansible.builtin.raw"]
-    checar("openwrt_sysupgrade_keep" in r and "IAC-FIM" in r and "awk" in r,
-           "o bloco é reescrito inteiro a partir de openwrt_sysupgrade_keep")
-    checar(not pres[0].get("tags"), "a preservação roda em toda execução completa do setup")
+inc = [t for t in setup if t.get("ansible.builtin.include_tasks") == KEEP]
+checar(len(inc) == 1, "o setup inclui a task do bloco IAC")
+checar(not (inc and inc[0].get("tags")), "a preservação roda em toda execução completa do setup")
 
 up = tarefas("02-openwrt-upgrade.yml")
 
@@ -63,7 +71,7 @@ def idx(trecho):
 
 ordem = {
     "check": idx("owut check {{ _owut_opts }} 2>&1; echo"),
-    "preserva": idx("sysupgrade -l"),
+    "preserva": idx("openwrt_sysupgrade_keep.yml"),
     "backup": idx("sysupgrade -b"),
     "download": idx("owut download"),
     "install": idx("owut install"),

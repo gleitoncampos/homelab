@@ -74,12 +74,12 @@
       ansible.builtin.meta: end_host
       when: _desatualizados | int == 0 and _de == _para
 
-    - name: Conferir que o sysupgrade preserva os arquivos do IaC
-      ansible.builtin.raw: "sysupgrade -l | grep -c -E '^(/usr/bin/led-health|/etc/crontabs/root)$'"
-      register: _preserva
-      changed_when: false
-      check_mode: false
-      failed_when: (_preserva.stdout | trim | int) < 2
+    # Reescreve o bloco antes do backup e do install, e falha se algum arquivo
+    # do IaC presente no AP ficar fora do `sysupgrade -l` (20/10/2026: o
+    # openwrt-wifi-neighbors estava instalado e fora do bloco, porque só o
+    # setup gravava). Trava em tests/gates_openwrt_upgrade.py.
+    - name: Preservar no sysupgrade os arquivos que o IaC instala
+      ansible.builtin.include_tasks: "../../tasks/openwrt_sysupgrade_keep.yml"
 
     - name: Gerar o backup da configuração no AP
       ansible.builtin.raw: "sysupgrade -b /tmp/iac-config-backup.tar.gz && echo BACKUP:OK"

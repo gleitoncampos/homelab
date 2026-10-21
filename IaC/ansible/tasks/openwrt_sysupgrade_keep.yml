@@ -1,0 +1,34 @@
+---
+# Task reutilizável: grava no /etc/sysupgrade.conf do AP o bloco IAC com tudo de
+# openwrt_sysupgrade_keep. Chamada pelo 02-openwrt-setup.yml e pelo
+# 02-openwrt-upgrade.yml antes do backup e do install: arquivo novo do IaC (ex.:
+# o openwrt-wifi-neighbors do 02-openwrt-exporter, 20/10/2026) não depende de o
+# setup ter rodado depois dele para sobreviver ao upgrade.
+# O que o IaC instala fora de /etc/config some num sysupgrade (inclusive o
+# do 02-openwrt-upgrade.yml) se não estiver no /etc/sysupgrade.conf. Bloco
+# marcado, reescrito inteiro a cada execução: linha manual fora dele fica.
+# Trava em tests/gates_openwrt_upgrade.py.
+- name: Preservar no sysupgrade os arquivos que o IaC instala
+  ansible.builtin.raw: |
+    f=/etc/sysupgrade.conf
+    t="$f.iac.tmp"
+    touch "$f"
+    awk '/^# IAC-INICIO/{s=1;next} /^# IAC-FIM/{s=0;next} !s' "$f" > "$t"
+    {
+      cat "$t"
+      echo "# IAC-INICIO -- gerado pelo Ansible (tasks/openwrt_sysupgrade_keep.yml), nao editar"
+    {% for p in openwrt_sysupgrade_keep %}
+      echo "{{ p }}"
+    {% endfor %}
+      echo "# IAC-FIM"
+    } > "$f"
+    rm -f "$t"
+    echo "PRESERVADOS:$(sysupgrade -l | grep -c -E '^({{ openwrt_sysupgrade_keep | map('regex_escape') | join('|') }})')"
+    # Arquivo da lista que existe no AP e não sai no `sysupgrade -l` some no
+    # upgrade. Caminho que não existe (recurso não instalado) não conta.
+    {% for p in openwrt_sysupgrade_keep %}
+    [ ! -e "{{ p }}" ] || sysupgrade -l | grep -q -E '^{{ p | regex_escape }}' || echo "FALTA:{{ p }}"
+    {% endfor %}
+  register: _sysupgrade_keep
+  changed_when: true
+  failed_when: "'PRESERVADOS:' not in _sysupgrade_keep.stdout or 'FALTA:' in _sysupgrade_keep.stdout"
