@@ -108,6 +108,10 @@ services:
       # (20/10/2026). `_SYNC`: instala ANTES de subir, senão o dashboard
       # provisionado abre com "painel desconhecido". Versão fixada: sem ela o
       # Grafana atualiza sozinho a cada partida (`preinstall_auto_update`).
+      # ⚠️ Com o volume de /var/lib/grafana, baixa só na primeira partida ou
+      # quando a versão muda; mas se o download falhar o Grafana NÃO sobe (o
+      # _SYNC interrompe a partida). Volume perdido + sem saída para o
+      # grafana.com = monitoramento fora até a rede voltar.
       GF_PLUGINS_PREINSTALL_SYNC: "volkovlabs-echarts-panel@7.2.5"
     volumes:
       - /srv/containers/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml

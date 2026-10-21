@@ -118,6 +118,12 @@ _ech = [p for p in painel["panels"] if p.get("type") == "volkovlabs-echarts-pane
 checar(len(_ech) == 2, f"dashboard do OpenWrt tem as curvas das duas bandas ({len(_ech)})")
 checar(bool(_pin) and all(p.get("pluginVersion") == _pin.group(1) for p in _ech),
        "painéis ECharts na mesma versão do plugin instalado")
+# SSID é escrito por terceiros e o tooltip do ECharts faz innerHTML: nome cru
+# num formatter é XSS armazenado no Grafana (Hades, 20/10/2026).
+for _p in _ech:
+    _js = _p["options"]["getOption"]
+    checar("html(nome)" in _js and "${nome}" not in _js,
+           f"painel {_p['id']}: SSID só entra no tooltip com escape de HTML")
 _viz_script = set(re.findall(r"\b(wifi_neighbors?_[a-z_]+)\b",
                              (ANSIBLE / "templates/network/openwrt_wifi_neighbors.uc.j2").read_text(encoding="utf-8")))
 _viz_painel = set(re.findall(r"\b(wifi_neighbors?_[a-z_]+)\b", exprs))
