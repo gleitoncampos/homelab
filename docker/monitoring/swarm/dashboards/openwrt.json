@@ -482,7 +482,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Percentual de tempo em que os núcleos do AP não estiveram ociosos (média de todos os núcleos, janela de 5 min).",
+      "description": "Percentual de tempo em que os núcleos do AP não estiveram ociosos (média de todos os núcleos, taxa instantânea entre as duas últimas amostras).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -567,7 +567,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Memória RAM que não está disponível para novos processos. O AP tem pouca RAM (~241 MB): acima de 90% o kernel começa a matar processos.",
+      "description": "Memória RAM que não está disponível para novos processos. O AP tem pouca RAM (~241 MB): perto de 100%, sem swap, o kernel começa a matar processos para liberar memória.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -741,7 +741,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Load average de 1 min dividido pelo número de núcleos. 100% = todos os núcleos com fila cheia; acima disso há processos esperando CPU.",
+      "description": "Load average de 1 min dividido pelo número de núcleos. 100% = carga igual ao número de núcleos; acima disso há processos esperando CPU.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1566,7 +1566,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Soma dos bytes dos fluxos no conntrack do AP. Só o tráfego que o AP rastreia como host, não o da rede inteira.",
+      "description": "Soma do tráfego dos fluxos no conntrack do AP, em bits. Só o tráfego que o AP rastreia como host, não o da rede inteira.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3503,7 +3503,7 @@
           {
             "matcher": {
               "id": "byRegexp",
-              "options": "/.*Harware Corrupted - *./"
+              "options": "/.*Hardware Corrupted - *./"
             },
             "properties": [
               {
@@ -12791,7 +12791,7 @@
       ],
       "title": "Perda de portadora",
       "type": "timeseries",
-      "description": "Erros de portadora por segundo no envio: o link físico caiu ou oscilou (cabo, porta ou negociação)."
+      "description": "Erros de portadora por segundo no envio (para baixo do eixo): o link físico caiu ou oscilou (cabo, porta ou negociação)."
     },
     {
       "datasource": {
