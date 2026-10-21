@@ -344,12 +344,12 @@ _c24 = re.search(r"option channel '([^']+)'", dict(radios).get("radio0", ""))
 checar(_c24 is not None and _c24.group(1) in ("1", "6", "11"),
        f"o radio0 usa canal 1, 6 ou 11 ({_c24.group(1) if _c24 else None})")
 
-print("\nInvariante 14 — o crond do AP não inunda o log:")
+print("\nInvariante 14 — o crond do AP loga só a execução dos jobs:")
 # Abaixo de 8 o crond do busybox loga wakeup e reparse do crontab a cada
 # minuto (516 de 768 linhas do logread, 20/10/2026). 8 = uma linha por job.
 _cron = re.search(r"option cronloglevel '(\d+)'", sistema)
-checar(_cron is not None and int(_cron.group(1)) >= 8,
-       f"cronloglevel >= 8 ({_cron.group(1) if _cron else None})")
+checar(_cron is not None and int(_cron.group(1)) == 8,
+       f"cronloglevel == 8: 9 apaga o registro de execução ({_cron.group(1) if _cron else None})")
 
 print("\nHigiene do render:")
 for rotulo, texto_render in (("network", rede), ("system", sistema)):
