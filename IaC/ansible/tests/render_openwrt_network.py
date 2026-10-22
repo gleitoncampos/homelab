@@ -340,15 +340,18 @@ if _canais:
 print("\nInvariante 13 — o 2,4 GHz fica num canal que não encavala (1, 6 ou 11):")
 # Com ACS livre o rádio escolheu o 6, encavalado num vizinho a -22 dBm no
 # canal 5 (20/10/2026). Fixo no 1 ou ACS restrito a 1, 6 e 11 (22/10/2026).
+# findall + exatamente uma: o UCI fica com a última ocorrência, o search com a primeira.
 _r24 = dict(radios).get("radio0", "")
-_c24 = re.search(r"option channel '([^']+)'", _r24)
-_l24 = re.search(r"option channels '([^']+)'", _r24)
-if _c24 is not None and _c24.group(1) == "auto":
-    checar(_l24 is not None and set(_l24.group(1).split()) <= {"1", "6", "11"},
-           f"o ACS do radio0 só escolhe entre 1, 6 e 11 ({_l24.group(1) if _l24 else None})")
+_c24 = re.findall(r"option channel '([^']*)'", _r24)
+_l24 = re.findall(r"option channels '([^']*)'", _r24)
+checar(len(_c24) == 1, f"o radio0 declara `option channel` uma vez só ({_c24})")
+checar(len(_l24) <= 1, f"o radio0 declara `option channels` no máximo uma vez ({_l24})")
+if _c24 == ["auto"]:
+    _lista24 = set(_l24[0].split()) if len(_l24) == 1 else set()
+    checar(_lista24 and _lista24 <= {"1", "6", "11"},
+           f"o ACS do radio0 só escolhe entre 1, 6 e 11 ({_l24})")
 else:
-    checar(_c24 is not None and _c24.group(1) in ("1", "6", "11"),
-           f"o radio0 usa canal 1, 6 ou 11 ({_c24.group(1) if _c24 else None})")
+    checar(_c24 in (["1"], ["6"], ["11"]), f"o radio0 usa canal 1, 6 ou 11 ({_c24})")
 
 print("\nInvariante 14 — o crond do AP loga só a execução dos jobs:")
 # Abaixo de 8 o crond do busybox loga wakeup e reparse do crontab a cada
