@@ -28,7 +28,7 @@ PLAYBOOKS   := $(wildcard $(ANSIBLE_DIR)/playbooks/*.yml $(ANSIBLE_DIR)/playbook
         render-proxmox-ifaces render-openwrt-led render-openwrt-network render-openwrt-wifi-neighbors render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass render-opnsense-antiportscan render-opnsense-ssh gates-node-bootstrap gates-swarm-ct gates-pve-exporter gates-monitoring gates-nut gates-openwrt-nfc gates-openwrt-upgrade \
         gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade \
         gates-tailscale gates-vault-local gates-cpu-pinning validate-alloy render-traefik \
-        gates-repositorios
+        gates-repositorios gates-proxmox-hardening
 
 help: ## Lista os alvos
 	@echo "Alvos disponíveis:"
@@ -62,7 +62,7 @@ ssh-keys: ## Instala a chave gerada pelo bootstrap em todo host do inventário (
 test-bootstrap: ## Testa os renderizadores do bootstrap contra os consumidores reais
 	@python3 IaC/bootstrap/test_render.py
 
-check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network render-openwrt-wifi-neighbors render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass render-opnsense-antiportscan render-opnsense-ssh gates-node-bootstrap gates-swarm-ct gates-pve-exporter gates-monitoring gates-nut gates-openwrt-nfc gates-openwrt-upgrade gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade gates-tailscale gates-vault-local gates-cpu-pinning validate-alloy render-traefik gates-repositorios ## Tudo que a CI roda
+check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network render-openwrt-wifi-neighbors render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass render-opnsense-antiportscan render-opnsense-ssh gates-node-bootstrap gates-swarm-ct gates-pve-exporter gates-monitoring gates-nut gates-openwrt-nfc gates-openwrt-upgrade gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade gates-tailscale gates-vault-local gates-cpu-pinning validate-alloy render-traefik gates-repositorios gates-proxmox-hardening ## Tudo que a CI roda
 	@echo
 	@echo "✓ check completo"
 
@@ -274,6 +274,9 @@ gates-vault-local: ## Vault cifrado e senha do vault em 600, quando existirem
 
 gates-cpu-pinning: ## Afirma que o pinning da VM do firewall recusa VM com mais de 1 vCPU
 	@python3 $(ANSIBLE_DIR)/tests/gates_cpu_pinning.py
+
+gates-proxmox-hardening: ## Confere unattended-upgrades só de segurança, sysctl, export 0700, consent-text, Fail2ban e pwquality dos Proxmox
+	@python3 $(ANSIBLE_DIR)/tests/gates_proxmox_hardening.py
 
 # ⚠️ As tasks de repositório do Proxmox são uma UNIDADE: a primeira esvazia
 # /etc/apt/sources.list, as três últimas é que declaram os repositórios em

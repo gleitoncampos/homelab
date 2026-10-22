@@ -415,6 +415,15 @@
           - git
           - rsync
           - ethtool
+          # Patch de segurança do Debian entre execuções do Ansible; a origem
+          # fica presa à Debian-Security na task do 52unattended-upgrades-iac.
+          - unattended-upgrades
+          # Complexidade da senha do root@pam, o fallback da GUI e do console.
+          - libpam-pwquality
+          # Só Recommends do libcrack2. Sem o dicionário o pam_pwquality
+          # recusa TODA senha ("error loading dictionary", conferido num
+          # container trixie em 21/10/2026): explícito, não por acaso do apt.
+          - cracklib-runtime
         state: present
 
     - name: Garantir desduplicação de memória RAM em tempo real (KSM) ativa
@@ -467,15 +476,97 @@
           maxretry = 3
           findtime = 600
           bantime = 3600
+          ignoreip = {{ fail2ban_ignoreip }}
         owner: root
         group: root
         mode: '0644'
+      notify: Recarregar o Fail2ban
+
+    # Nenhum pacote do Debian traz o `filter.d/proxmox.conf`: sem ele o jail
+    # acima era descartado no boot ("Unable to read the filter 'proxmox'.
+    # Skipping...", conferido em 21/10/2026) e a 8006 nunca baniu ninguém.
+    # O pvedaemon registra o rhost como IPv4 mapeado (`::ffff:192.168.x.y`);
+    # o prefixo fica fora do <HOST> para o ban e o ignoreip verem o IPv4.
+    - name: Configurar o filtro do Fail2ban para a GUI do Proxmox
+      ansible.builtin.copy:
+        dest: /etc/fail2ban/filter.d/proxmox.conf
+        content: |
+          [Definition]
+          failregex = pvedaemon\[\d+\]: authentication failure; rhost=(?:::ffff:)?<HOST> user=\S+ msg=.*
+          ignoreregex =
+          journalmatch = _SYSTEMD_UNIT=pvedaemon.service
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Recarregar o Fail2ban
+
+    # O jail [sshd] já vem ligado pelo defaults-debian.conf do pacote; aqui só
+    # entra o ignoreip, que o pacote não tem como saber.
+    - name: Configurar o ignoreip do jail sshd do Fail2ban
+      ansible.builtin.copy:
+        dest: /etc/fail2ban/jail.d/sshd.conf
+        content: |
+          [sshd]
+          ignoreip = {{ fail2ban_ignoreip }}
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Recarregar o Fail2ban
 
     - name: Garantir serviço do Fail2ban ativo e habilitado
       ansible.builtin.systemd:
         name: fail2ban
         state: started
         enabled: true
+
+    # `#clear` descarta a lista do 50unattended-upgrades do pacote: a origem
+    # aceita é só a Debian-Security. Kernel, qemu e pve-* vêm do repositório do
+    # Proxmox e seguem no `apt dist-upgrade` deste playbook. Sem reboot
+    # automático: kernel novo espera a janela de quem opera.
+    - name: Configurar unattended-upgrades só para Debian-Security, sem reboot automático
+      ansible.builtin.copy:
+        dest: "/etc/apt/apt.conf.d/{{ item.nome }}"
+        content: "{{ item.conteudo }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - nome: 20auto-upgrades
+          conteudo: |
+            APT::Periodic::Update-Package-Lists "1";
+            APT::Periodic::Unattended-Upgrade "1";
+        - nome: 52unattended-upgrades-iac
+          conteudo: |
+            #clear Unattended-Upgrade::Origins-Pattern;
+            Unattended-Upgrade::Origins-Pattern {
+                "origin=Debian,codename=${distro_codename}-security,label=Debian-Security";
+            };
+            Unattended-Upgrade::Automatic-Reboot "false";
+      loop_control:
+        label: "{{ item.nome }}"
+
+    # `enforce_for_root`: sem ele o pam_pwquality só AVISA quando o root troca
+    # a senha, e o root@pam é justamente a conta que importa aqui. Vale na
+    # próxima troca; a senha atual não é reavaliada.
+    # O pacote não cria o diretório, mas a libpwquality lê o que houver nele.
+    - name: Criar o diretório de drop-ins do pwquality
+      ansible.builtin.file:
+        path: /etc/security/pwquality.conf.d
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Configurar a complexidade mínima de senha (pam_pwquality)
+      ansible.builtin.copy:
+        dest: /etc/security/pwquality.conf.d/50-iac.conf
+        content: |
+          minlen = 14
+          minclass = 3
+          enforce_for_root
+        owner: root
+        group: root
+        mode: '0644'
 
     - name: Desativar serviços de High Availability (HA) em nó único Proxmox (Economia de CPU/RAM)
       ansible.builtin.systemd:
@@ -650,6 +741,12 @@
           kernel.kptr_restrict = 2
           kernel.dmesg_restrict = 1
           kernel.unprivileged_bpf_disabled = 1
+          kernel.yama.ptrace_scope = 1
+          fs.protected_symlinks = 1
+          fs.protected_hardlinks = 1
+          fs.protected_fifos = 2
+          fs.protected_regular = 2
+          net.ipv4.tcp_syncookies = 1
         owner: root
         group: root
         mode: '0644'
@@ -1186,12 +1283,15 @@
       ansible.builtin.file:
         path: /var/backups/proxmox_config_exports
         state: directory
-        mode: '0755'
+        # O tar leva qemu-server/ e lxc/ (hash do cipassword, topologia,
+        # endereço PCI do passthrough): não é leitura para qualquer conta local.
+        mode: '0700'
 
     # `unarchive` extrai, não empacota: não existe módulo nativo que crie um
     # tar.gz a partir de caminhos do host.
     - name: Exportar configurações essenciais do Proxmox VE  # noqa: command-instead-of-module
       ansible.builtin.shell: |
+        umask 077
         tar -czf /var/backups/proxmox_config_exports/pve-configs-$(date +%Y%m%d_%H%M%S).tar.gz \
           /etc/pve/storage.cfg \
           /etc/pve/qemu-server/ \
@@ -1239,6 +1339,11 @@
     - name: Recarregar o sshd
       ansible.builtin.systemd:
         name: ssh
+        state: reloaded
+
+    - name: Recarregar o Fail2ban
+      ansible.builtin.systemd:
+        name: fail2ban
         state: reloaded
 
     - name: Atualizar GRUB

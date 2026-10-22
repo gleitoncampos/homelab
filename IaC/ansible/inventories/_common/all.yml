@@ -254,6 +254,17 @@ backup_schedule: "02:30"
 backup_keep_daily: 7
 backup_keep_weekly: 4
 
+# Origens que o Fail2ban dos Proxmox nunca bane (jails sshd e 8006). Aqui só o
+# loopback; o real (estação de administração) vai em
+# prod/group_vars/proxmox/99-local.yml, gitignorado.
+fail2ban_ignoreip: "127.0.0.1/8 ::1"
+
+# Banner exibido na GUI do Proxmox ANTES do login (`consent-text` do
+# datacenter.cfg; Markdown). Vazio, a linha não entra no arquivo.
+proxmox_consent_text: >-
+  **Acesso restrito à administração deste homelab.** Os acessos são
+  registrados. Mudança de configuração começa no IaC, não na GUI.
+
 # Teto do log local do nó. Não é arquivo: o log já vai para o Loki, e a cópia
 # em disco é buffer. Sem estes limites o `json-file` do Docker e o journal do
 # systemd crescem até encher o disco — medido num nó a 94%, com 3,7 GB de log

@@ -1,2 +1,7 @@
 keyboard: pt-br
 email_from: {{ proxmox_alert_email }}
+{# A GUI decodifica o consent-text com base64ToUtf8 antes do Markdown: texto
+   cru aqui vira lixo na tela de login. Vazio, a linha não entra. #}
+{% if proxmox_consent_text | default('') | length > 0 %}
+consent-text: {{ proxmox_consent_text | b64encode }}
+{% endif %}
