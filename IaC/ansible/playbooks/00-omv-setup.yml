@@ -120,6 +120,17 @@
     # administrador humano, e administrar um NAS eventualmente exige console.
     omv_admin_shell: /usr/bin/bash
 
+    # Opções do [global] do Samba (`extraoptions` do conf.service.smb). O
+    # padrão `case sensitive = auto` vira case-insensitive para cliente SMB2+
+    # sem extensão POSIX: num disco ext4, `Foo` e `foo` na mesma pasta viram um
+    # arquivo só e o segundo sobrescreve o primeiro (backup com rsync perdeu 8
+    # arquivos assim em 22/10/2026). Vale para todos os shares, inclusive os
+    # criados à mão; cliente Windows/macOS passa a ver os dois nomes.
+    omv_smb_extraoptions: |-
+      case sensitive = yes
+      preserve case = yes
+      short preserve case = yes
+
     # `omv_hostname` vem do inventário (_common/all.yml): a rota do Traefik
     # também o lê.
 
@@ -763,7 +774,7 @@
       check_mode: false
       when: omv_bin.stat.exists
 
-    - name: Ligar o Samba
+    - name: Ligar o Samba com as opções globais
       ansible.builtin.command:
         argv:
           - omv-rpc
@@ -771,10 +782,12 @@
           - admin
           - SMB
           - setSettings
-          - "{{ omv_smb.stdout | from_json | combine({'enable': true}) | to_json }}"
+          - "{{ omv_smb.stdout | from_json
+                | combine({'enable': true, 'extraoptions': omv_smb_extraoptions}) | to_json }}"
       when:
         - omv_bin.stat.exists
         - not (omv_smb.stdout | from_json).enable
+          or (omv_smb.stdout | from_json).extraoptions != omv_smb_extraoptions
       changed_when: true
 
     - name: Aplicar a configuração de usuários e do Samba
