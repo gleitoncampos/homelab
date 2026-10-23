@@ -1059,8 +1059,9 @@
     # Sem tuning de Samba em arquivo: o /etc/samba/smb.conf.d/ não existe no OMV 8
     # e o smb.conf gerado não o inclui — o arquivo nunca foi lido. O que ele
     # pedia o OMV já aplica pelo banco (conf.service.smb: usesendfile e aio
-    # ligados). Opção extra de Samba, se precisar, vai em `extraoptions` desse
-    # modelo, que o salt do OMV renderiza no [global].
+    # ligados). Opção extra de Samba vai em `omv_smb_extraoptions`, gravada no
+    # `extraoptions` desse modelo, que o salt do OMV renderiza no [global]. O
+    # play é dono do campo inteiro: o que for posto nele pela GUI some no rerun.
 
     - name: Configurar Aumento de Threads do Servidor Kernel NFS (16 Threads) em /etc/nfs.conf
       community.general.ini_file:
