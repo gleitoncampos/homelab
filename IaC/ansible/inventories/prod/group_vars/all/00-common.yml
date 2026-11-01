@@ -267,8 +267,9 @@ fail2ban_ignoreip: "127.0.0.1/8 ::1"
 # a GUI via Traefik e o job `pve`. Custo: a isenção é do IP do nó, e todo
 # container no manager sai mascarado com ele — qualquer processo ou container
 # ali (não só o Traefik) tem tentativas ilimitadas contra o root@pam na 8006,
-# até existir rate-limit no Traefik. Sem `default([])`: grupo vazio tem de
-# quebrar, não gravar o jail sem o manager.
+# até existir rate-limit no Traefik. Sem `default([])`: grupo ausente quebra
+# aqui; grupo declarado e vazio quebra no assert antes do jail, no
+# 00-proxmox-setup.yml.
 fail2ban_ignoreip_proxmox: >-
   {{ groups['homelab_managers']
      | map('extract', hostvars, 'ansible_host') | join(' ') }}

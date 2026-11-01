@@ -113,6 +113,13 @@ expr = re.search(r"^fail2ban_ignoreip_proxmox: >-\n((?:[ ]+\S.*\n)+)", COMMON, r
 expr = " ".join(expr.group(1).split()) if expr else ""
 checar(expr == "{{ groups['homelab_managers'] | map('extract', hostvars, 'ansible_host') | join(' ') }}",
        f"fail2ban_ignoreip_proxmox = ansible_host dos homelab_managers, sem default (achado: {expr!r})")
+guarda = task("Exigir o manager do Swarm na isenção do jail da 8006")
+checar((guarda.get("ansible.builtin.assert") or {}).get("that")
+       == ["fail2ban_ignoreip_proxmox | trim | length > 0"]
+       and set(guarda) <= {"name", "ansible.builtin.assert"}
+       and nomes_tasks().index("Exigir o manager do Swarm na isenção do jail da 8006")
+       < nomes_tasks().index("Configurar Fail2ban para proteção do Proxmox Web GUI (Porta 8006)"),
+       "assert de isenção não vazia roda antes de gravar o jail, sem when/ignore_errors")
 checar(sshd.lstrip().startswith("[sshd]"), "jail.d/sshd.conf é a seção [sshd]")
 conf = task("Conferir que os jails sshd e proxmox do Fail2ban estão ativos")
 checar(conf.get("ansible.builtin.command") == "fail2ban-client status {{ item }}"

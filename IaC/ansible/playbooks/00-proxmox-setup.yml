@@ -459,6 +459,17 @@
         state: restarted
         enabled: true
 
+    # Grupo `homelab_managers` declarado e vazio renderiza a isenção vazia sem
+    # erro: o jail seria gravado sem o manager, que voltaria a ser banido.
+    - name: Exigir o manager do Swarm na isenção do jail da 8006
+      ansible.builtin.assert:
+        that:
+          - fail2ban_ignoreip_proxmox | trim | length > 0
+        fail_msg: >-
+          fail2ban_ignoreip_proxmox vazia (grupo homelab_managers sem host).
+          Sem ela o jail da 8006 bane o manager, por onde passam o Traefik e o
+          prometheus-pve-exporter.
+
     - name: Configurar Fail2ban para proteção do Proxmox Web GUI (Porta 8006)
       ansible.builtin.copy:
         dest: /etc/fail2ban/jail.d/proxmox.conf
