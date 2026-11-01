@@ -131,6 +131,27 @@
       preserve case = yes
       short preserve case = yes
 
+    # Parâmetros de disco que o OMV grava por HDD (conf.system.hdparm). O
+    # `spindowntime` segue a escala do `hdparm -S`: 240 × 5 s = 20 min.
+    # `writecache: true` não é opcional: o script do OMV sempre manda
+    # `--set=wcache,...`, e o padrão do modelo (false) desligaria o cache de
+    # escrita. `apm`/`aam` 0 = off (os 4 HDDs medidos em 01/11/2026: APM
+    # `notsupported` ou já `off`).
+    omv_hdparm_alvo:
+      spindowntime: 240
+      writecache: true
+      apm: 0
+      aam: 0
+    # HDD = rotacional com link `ata-`, o mesmo link que o OMV escolhe para o
+    # `devicefile` (ele prefere ata- a wwn-). Fica de fora o disco virtual do
+    # QEMU e o SSD. Descoberto pelos facts: serial de disco não entra no repo.
+    omv_hdds: >-
+      {{ ansible_facts.devices | dict2items
+         | selectattr('value.rotational', 'equalto', '1')
+         | map(attribute='value.links.ids') | flatten
+         | select('match', '^ata-') | map('regex_replace', '^', '/dev/disk/by-id/')
+         | sort | list }}
+
     # `omv_hostname` vem do inventário (_common/all.yml): a rota do Traefik
     # também o lê.
 
@@ -798,6 +819,70 @@
       when: omv_bin.stat.exists
       changed_when: true
 
+    # Spindown dos HDDs pelo caminho do próprio OMV 8, que NÃO lê o
+    # /etc/hdparm.conf: cada disco em `conf.system.hdparm` vira um script em
+    # /etc/smartmontools/hdparm.d/ (`smartctl --set=aam,apm,standby,wcache`),
+    # rodado pela smartctl-hdparm.service no boot e no deploy do smartmontools,
+    # sem depender do smartd. O `setHdParm` grava no banco mas não marca módulo
+    # pendente: o deploy é explícito, logo abaixo.
+    - name: Ler a configuração de disco (hdparm) do OMV
+      ansible.builtin.command: omv-confdbadm read conf.system.hdparm
+      register: omv_hdparm
+      changed_when: false
+      check_mode: false
+      when: omv_bin.stat.exists
+
+    - name: Exigir HDD detectado para o spindown
+      ansible.builtin.assert:
+        that: omv_hdds | length > 0
+        fail_msg: >-
+          Nenhum HDD (rotacional com link ata-) nos facts. O spindown não teria
+          disco nenhum; conferir `ansible_facts.devices` antes de seguir.
+      when: omv_bin.stat.exists
+
+    - name: Registrar no OMV o spindown e o cache de escrita ligado de cada HDD
+      ansible.builtin.command:
+        argv:
+          - omv-rpc
+          - -u
+          - admin
+          - DiskMgmt
+          - setHdParm
+          - "{{ omv_hdparm_alvo
+                | combine({'uuid': (omv_hdparm_atual[item] | default({})).uuid
+                                   | default(mergerfs_new_object_uuid),
+                           'devicefile': item}) | to_json }}"
+      loop: "{{ omv_hdds }}"
+      register: omv_hdparm_set
+      when:
+        - omv_bin.stat.exists
+        - not ansible_check_mode
+        - item not in omv_hdparm_atual
+          or (omv_hdparm_alvo.keys() | map('extract', omv_hdparm_atual[item]) | list)
+             != (omv_hdparm_alvo.values() | list)
+      changed_when: true
+      vars:
+        omv_hdparm_atual: >-
+          {{ dict((omv_hdparm.stdout | from_json) | map(attribute='devicefile')
+                  | zip(omv_hdparm.stdout | from_json)) }}
+
+    # Task, não handler: o deploy tem de valer antes da conferência do cache
+    # de escrita logo abaixo, e um handler só rodaria no fim do play.
+    - name: Aplicar o spindown nos discos (deploy do smartmontools)  # noqa: no-handler
+      ansible.builtin.command: omv-salt deploy run smartmontools
+      when: omv_hdparm_set is changed
+      changed_when: true
+
+    - name: Conferir que o cache de escrita continua ligado nos HDDs
+      ansible.builtin.command: "hdparm -W {{ item }}"
+      loop: "{{ omv_hdds }}"
+      register: omv_wcache
+      changed_when: false
+      failed_when: omv_wcache.stdout is not search('write-caching\s*=\s*1')
+      when:
+        - omv_bin.stat.exists
+        - not ansible_check_mode
+
     # O que este play muda pelo `omv-rpc` fica marcado como pendente no OMV e
     # só chega aos arquivos no deploy. Sem este passo a lista cresce em
     # silêncio: em 15/10/2026 eram 24 módulos pendentes desde a atualização
@@ -806,8 +891,8 @@
     # própria GUI: ordena os módulos e descarta os que não têm estado de
     # deploy (`task`, `sharedfolders`), onde o `omv-salt --append-dirty` aborta.
     #
-    # ⚠️ AQUI, e não no fim do play: o salt do OMV regenera /etc/hdparm.conf
-    # (smartmontools), /etc/chrony/chrony.conf, /etc/nfs.conf e o rsyslog, que
+    # ⚠️ AQUI, e não no fim do play: o salt do OMV regenera
+    # /etc/chrony/chrony.conf, /etc/nfs.conf e o rsyslog, que
     # as tasks abaixo escrevem direto. Aplicado depois delas, desfaria o que o
     # próprio play acabou de escrever.
     - name: Ler se o OMV tem módulos pendentes
@@ -1071,16 +1156,58 @@
         value: '16'
         mode: '0644'
 
-    - name: Configurar Spin-Down de HDDs Mecânicos (20 minutos) em /etc/hdparm.conf
-      ansible.builtin.copy:
-        dest: /etc/hdparm.conf
-        content: |
-          command_line_options {
-            spindown_time = 240
-          }
-        owner: root
-        group: root
-        mode: '0644'
+    # O spindown NÃO mora aqui (ver "Registrar no OMV o spindown" acima). Até
+    # 01/11/2026 este play gravava `command_line_options {`, seção que o parser
+    # do hdparm (/usr/lib/hdparm/hdparm-functions) não reconhece: tratada como
+    # disco inexistente, o -S240 nunca chegou a nenhum disco. O arquivo volta ao
+    # do pacote: md5 contra o conffile registrado no dpkg e, divergindo,
+    # restaurado com --force-confmiss (segue a versão do pacote, sem cópia aqui).
+    # `pipefail` sem `-e`: arquivo ausente falha o md5sum, a linha sai vazia e
+    # o script segue até o dpkg-query (a decisão abaixo trata a linha faltando).
+    - name: Ler o md5 do /etc/hdparm.conf e o do conffile do pacote
+      ansible.builtin.shell: |
+        set -o pipefail
+        md5sum /etc/hdparm.conf 2>/dev/null | cut -d' ' -f1
+        dpkg-query -W -f='${Conffiles}\n' hdparm | awk '$1 == "/etc/hdparm.conf" {print $2}'
+      args:
+        executable: /bin/bash
+      register: hdparm_conf_md5
+      changed_when: false
+      check_mode: false
+
+    - name: Decidir se o /etc/hdparm.conf diverge do pacote
+      ansible.builtin.set_fact:
+        hdparm_conf_diverge: >-
+          {{ hdparm_conf_md5.stdout_lines | length != 2
+             or hdparm_conf_md5.stdout_lines | unique | length != 1 }}
+
+    - name: Remover o /etc/hdparm.conf que diverge do pacote
+      ansible.builtin.file:
+        path: /etc/hdparm.conf
+        state: absent
+      when: hdparm_conf_diverge | bool
+
+    # Também quando o arquivo falta: a leitura acima sai com uma linha só.
+    - name: Restaurar o /etc/hdparm.conf do pacote
+      ansible.builtin.command:
+        argv: [apt-get, install, -y, --reinstall, -o, "Dpkg::Options::=--force-confmiss", hdparm]
+      when:
+        - hdparm_conf_diverge | bool
+        - not ansible_check_mode
+      changed_when: true
+
+    - name: Conferir que o /etc/hdparm.conf é o do pacote
+      ansible.builtin.shell: |
+        set -euo pipefail
+        md5sum /etc/hdparm.conf | cut -d' ' -f1
+        dpkg-query -W -f='${Conffiles}\n' hdparm | awk '$1 == "/etc/hdparm.conf" {print $2}'
+      args:
+        executable: /bin/bash
+      register: hdparm_conf_md5_depois
+      changed_when: false
+      failed_when: hdparm_conf_md5_depois.stdout_lines | unique | length != 1
+                   or hdparm_conf_md5_depois.stdout_lines | length != 2
+      when: not ansible_check_mode
 
     # No usuário do Ansible, e não no root: o login de root por SSH é desligado
     # mais acima, e a chave no root não teria efeito.
