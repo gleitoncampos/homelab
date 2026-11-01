@@ -109,15 +109,27 @@ checar(ign(jail) == ["{{ fail2ban_ignoreip }} {{ fail2ban_ignoreip_proxmox }}"],
        f"jail proxmox leva o ignoreip comum + o do manager (achado: {ign(jail)})")
 checar(ign(sshd) == ["{{ fail2ban_ignoreip }}"],
        f"jail sshd leva só o ignoreip comum, sem o manager (achado: {ign(sshd)})")
-checar(re.search(r"^fail2ban_ignoreip_proxmox: >-\n\s+\{\{ groups\['homelab_managers'\]", COMMON, re.M)
-       is not None, "fail2ban_ignoreip_proxmox vem do ansible_host dos homelab_managers")
+expr = re.search(r"^fail2ban_ignoreip_proxmox: >-\n((?:[ ]+\S.*\n)+)", COMMON, re.M)
+expr = " ".join(expr.group(1).split()) if expr else ""
+checar(expr == "{{ groups['homelab_managers'] | map('extract', hostvars, 'ansible_host') | join(' ') }}",
+       f"fail2ban_ignoreip_proxmox = ansible_host dos homelab_managers, sem default (achado: {expr!r})")
 checar(sshd.lstrip().startswith("[sshd]"), "jail.d/sshd.conf é a seção [sshd]")
 conf = task("Conferir que os jails sshd e proxmox do Fail2ban estão ativos")
 checar(conf.get("ansible.builtin.command") == "fail2ban-client status {{ item }}"
        and conf.get("loop") == ["sshd", "proxmox"], "task confere sshd e proxmox no fail2ban-client")
-checar(bool(conf) and nomes_tasks().index("Recarregar o sshd agora")
-       < nomes_tasks().index("Conferir que os jails sshd e proxmox do Fail2ban estão ativos"),
-       "conferência dos jails roda depois do flush_handlers")
+efet = task("Conferir que o ignoreip efetivo do jail proxmox tem o manager")
+checar(efet.get("ansible.builtin.command") == "fail2ban-client get proxmox ignoreip"
+       and "fail2ban_ignoreip_proxmox.split()" in str(efet.get("failed_when", ""))
+       and "_f2b_ignoreip.rc != 0" in str(efet.get("failed_when", "")),
+       "task confere o manager no ignoreip efetivo e falha se o comando falhar")
+for t, nome in ((conf, "status dos jails"), (efet, "ignoreip efetivo")):
+    checar(t.get("when") == "not ansible_check_mode" and "ignore_errors" not in t
+           and (t is efet or "failed_when" not in t),
+           f"conferência '{nome}' não é desligável (when exato, sem ignore_errors/failed_when)")
+for nome in ("Conferir que os jails sshd e proxmox do Fail2ban estão ativos",
+             "Conferir que o ignoreip efetivo do jail proxmox tem o manager"):
+    checar(bool(conf) and bool(efet) and nomes_tasks().index("Recarregar o sshd agora")
+           < nomes_tasks().index(nome), f"'{nome}' roda depois do flush_handlers")
 checar("Recarregar o Fail2ban" in HANDLERS, "handler que recarrega o Fail2ban existe")
 for nome in ("Configurar Fail2ban para proteção do Proxmox Web GUI (Porta 8006)",
              "Configurar o filtro do Fail2ban para a GUI do Proxmox",

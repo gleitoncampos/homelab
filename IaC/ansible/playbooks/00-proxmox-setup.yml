@@ -1260,6 +1260,20 @@
       changed_when: false
       when: not ansible_check_mode
 
+    # O jail de pé não prova a isenção: confere no ignoreip efetivo cada
+    # endereço do manager, por linha inteira (prefixo de IP não vale).
+    - name: Conferir que o ignoreip efetivo do jail proxmox tem o manager
+      ansible.builtin.command: fail2ban-client get proxmox ignoreip
+      register: _f2b_ignoreip
+      changed_when: false
+      when: not ansible_check_mode
+      failed_when: >-
+        _f2b_ignoreip.rc != 0
+        or (fail2ban_ignoreip_proxmox.split()
+            | difference(_f2b_ignoreip.stdout_lines
+                         | map('regex_replace', '^\s*[|`]-\s*', '') | list)
+            | length > 0)
+
     # GUI e API do PVE (8006) só a partir das redes de gerência (15/10/2026).
     # Sem isto, qualquer VLAN que roteia até o hipervisor chegava ao login do
     # root@pam — a MAIN inclusive. A lista é a mesma `mgmt_allowed_cidrs` que o

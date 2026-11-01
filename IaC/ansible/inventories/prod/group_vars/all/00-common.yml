@@ -264,10 +264,13 @@ fail2ban_ignoreip: "127.0.0.1/8 ::1"
 # prometheus-pve-exporter chegam ao pvedaemon com o rhost do manager do Swarm
 # (medido em 22/10/2026: 100% do access.log da 8006). Sem isto, 3 senhas
 # erradas de qualquer pessoa pelo Traefik banem o manager por 1 h e derrubam
-# a GUI via Traefik e o job `pve`. Custo: login pelo Traefik fica sem limite
-# de tentativas até existir rate-limit no Traefik.
+# a GUI via Traefik e o job `pve`. Custo: a isenção é do IP do nó, e todo
+# container no manager sai mascarado com ele — qualquer processo ou container
+# ali (não só o Traefik) tem tentativas ilimitadas contra o root@pam na 8006,
+# até existir rate-limit no Traefik. Sem `default([])`: grupo vazio tem de
+# quebrar, não gravar o jail sem o manager.
 fail2ban_ignoreip_proxmox: >-
-  {{ groups['homelab_managers'] | default([])
+  {{ groups['homelab_managers']
      | map('extract', hostvars, 'ansible_host') | join(' ') }}
 
 # Banner exibido na GUI do Proxmox ANTES do login (`consent-text` do
