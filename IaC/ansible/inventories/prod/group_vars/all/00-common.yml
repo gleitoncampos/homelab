@@ -259,6 +259,17 @@ backup_keep_weekly: 4
 # prod/group_vars/proxmox/99-local.yml, gitignorado.
 fail2ban_ignoreip: "127.0.0.1/8 ::1"
 
+# Soma-se ao fail2ban_ignoreip só no jail da 8006 (o sshd não alarga). O PVE
+# não lê X-Forwarded-For: todo acesso pelo Traefik e o scrape do
+# prometheus-pve-exporter chegam ao pvedaemon com o rhost do manager do Swarm
+# (medido em 22/10/2026: 100% do access.log da 8006). Sem isto, 3 senhas
+# erradas de qualquer pessoa pelo Traefik banem o manager por 1 h e derrubam
+# a GUI via Traefik e o job `pve`. Custo: login pelo Traefik fica sem limite
+# de tentativas até existir rate-limit no Traefik.
+fail2ban_ignoreip_proxmox: >-
+  {{ groups['homelab_managers'] | default([])
+     | map('extract', hostvars, 'ansible_host') | join(' ') }}
+
 # Banner exibido na GUI do Proxmox ANTES do login (`consent-text` do
 # datacenter.cfg; Markdown). Vazio, a linha não entra no arquivo.
 proxmox_consent_text: >-

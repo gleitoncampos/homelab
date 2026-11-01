@@ -23,7 +23,12 @@ PB_TXT = (RAIZ / "ansible" / "playbooks" / "00-proxmox-setup.yml").read_text(enc
 DC = (RAIZ / "ansible" / "templates" / "proxmox" / "proxmox_datacenter.j2").read_text(encoding="utf-8")
 TASKS = [t for play in yaml.safe_load(PB_TXT) for t in play.get("tasks", [])]
 HANDLERS = [h["name"] for play in yaml.safe_load(PB_TXT) for h in play.get("handlers", [])]
+COMMON = (RAIZ / "ansible" / "inventories" / "_common" / "all.yml").read_text(encoding="utf-8")
 falhas = []
+
+
+def nomes_tasks():
+    return [t.get("name") for t in TASKS]
 
 
 def checar(condicao, msg):
@@ -99,9 +104,20 @@ if m:
 jail = conteudo(task("Configurar Fail2ban para proteção do Proxmox Web GUI (Porta 8006)"))
 sshd = conteudo(task("Configurar o ignoreip do jail sshd do Fail2ban"))
 checar("filter = proxmox" in jail, "jail proxmox usa o filtro proxmox")
-for nome, corpo in (("proxmox", jail), ("sshd", sshd)):
-    checar("ignoreip = {{ fail2ban_ignoreip }}" in corpo, f"jail {nome} leva o ignoreip")
+ign = lambda corpo: re.findall(r"^ignoreip = (.*)$", corpo, re.M)
+checar(ign(jail) == ["{{ fail2ban_ignoreip }} {{ fail2ban_ignoreip_proxmox }}"],
+       f"jail proxmox leva o ignoreip comum + o do manager (achado: {ign(jail)})")
+checar(ign(sshd) == ["{{ fail2ban_ignoreip }}"],
+       f"jail sshd leva só o ignoreip comum, sem o manager (achado: {ign(sshd)})")
+checar(re.search(r"^fail2ban_ignoreip_proxmox: >-\n\s+\{\{ groups\['homelab_managers'\]", COMMON, re.M)
+       is not None, "fail2ban_ignoreip_proxmox vem do ansible_host dos homelab_managers")
 checar(sshd.lstrip().startswith("[sshd]"), "jail.d/sshd.conf é a seção [sshd]")
+conf = task("Conferir que os jails sshd e proxmox do Fail2ban estão ativos")
+checar(conf.get("ansible.builtin.command") == "fail2ban-client status {{ item }}"
+       and conf.get("loop") == ["sshd", "proxmox"], "task confere sshd e proxmox no fail2ban-client")
+checar(bool(conf) and nomes_tasks().index("Recarregar o sshd agora")
+       < nomes_tasks().index("Conferir que os jails sshd e proxmox do Fail2ban estão ativos"),
+       "conferência dos jails roda depois do flush_handlers")
 checar("Recarregar o Fail2ban" in HANDLERS, "handler que recarrega o Fail2ban existe")
 for nome in ("Configurar Fail2ban para proteção do Proxmox Web GUI (Porta 8006)",
              "Configurar o filtro do Fail2ban para a GUI do Proxmox",

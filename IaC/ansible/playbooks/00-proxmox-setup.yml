@@ -476,7 +476,7 @@
           maxretry = 3
           findtime = 600
           bantime = 3600
-          ignoreip = {{ fail2ban_ignoreip }}
+          ignoreip = {{ fail2ban_ignoreip }} {{ fail2ban_ignoreip_proxmox }}
         owner: root
         group: root
         mode: '0644'
@@ -548,6 +548,10 @@
     # `enforce_for_root`: sem ele o pam_pwquality só AVISA quando o root troca
     # a senha, e o root@pam é justamente a conta que importa aqui. Vale na
     # próxima troca; a senha atual não é reavaliada.
+    # Lacuna: vale só para `passwd`/`chpasswd` no console. Troca de senha do
+    # root@pam pela GUI ou pelo `pveum` passa por fora do PAM
+    # (PVE::Auth::PAM::store_password chama `usermod -p`, conferido em
+    # 22/10/2026) e não é avaliada.
     # O pacote não cria o diretório, mas a libpwquality lê o que houver nele.
     - name: Criar o diretório de drop-ins do pwquality
       ansible.builtin.file:
@@ -1246,6 +1250,15 @@
         or 'kbdinteractiveauthentication no' not in _sshd_efetivo.stdout_lines
         or 'permitrootlogin without-password' not in _sshd_efetivo.stdout_lines
         or 'authorizedkeysfile .ssh/authorized_keys /etc/ssh/authorized_keys.d/%u' not in _sshd_efetivo.stdout_lines
+
+    # O reload do Fail2ban já rodou no flush acima. Jail com filtro ilegível é
+    # descartado em silêncio (foi assim até 21/10/2026): só o `status` prova
+    # que os dois jails estão de pé.
+    - name: Conferir que os jails sshd e proxmox do Fail2ban estão ativos
+      ansible.builtin.command: "fail2ban-client status {{ item }}"
+      loop: [sshd, proxmox]
+      changed_when: false
+      when: not ansible_check_mode
 
     # GUI e API do PVE (8006) só a partir das redes de gerência (15/10/2026).
     # Sem isto, qualquer VLAN que roteia até o hipervisor chegava ao login do
