@@ -823,8 +823,10 @@
     # /etc/hdparm.conf: cada disco em `conf.system.hdparm` vira um script em
     # /etc/smartmontools/hdparm.d/ (`smartctl --set=aam,apm,standby,wcache`),
     # rodado pela smartctl-hdparm.service no boot e no deploy do smartmontools,
-    # sem depender do smartd. O `setHdParm` grava no banco mas não marca módulo
-    # pendente: o deploy é explícito, logo abaixo.
+    # sem depender do smartd. O `setHdParm` grava no banco e o módulo
+    # `smartmontools` do OMV escuta `conf.system.hdparm` e se marca pendente: o
+    # deploy vem do `Config applyChanges` logo abaixo, e a conferência do cache
+    # de escrita, depois dele.
     - name: Ler a configuração de disco (hdparm) do OMV
       ansible.builtin.command: omv-confdbadm read conf.system.hdparm
       register: omv_hdparm
@@ -853,7 +855,6 @@
                                    | default(mergerfs_new_object_uuid),
                            'devicefile': item}) | to_json }}"
       loop: "{{ omv_hdds }}"
-      register: omv_hdparm_set
       when:
         - omv_bin.stat.exists
         - not ansible_check_mode
@@ -865,23 +866,6 @@
         omv_hdparm_atual: >-
           {{ dict((omv_hdparm.stdout | from_json) | map(attribute='devicefile')
                   | zip(omv_hdparm.stdout | from_json)) }}
-
-    # Task, não handler: o deploy tem de valer antes da conferência do cache
-    # de escrita logo abaixo, e um handler só rodaria no fim do play.
-    - name: Aplicar o spindown nos discos (deploy do smartmontools)  # noqa: no-handler
-      ansible.builtin.command: omv-salt deploy run smartmontools
-      when: omv_hdparm_set is changed
-      changed_when: true
-
-    - name: Conferir que o cache de escrita continua ligado nos HDDs
-      ansible.builtin.command: "hdparm -W {{ item }}"
-      loop: "{{ omv_hdds }}"
-      register: omv_wcache
-      changed_when: false
-      failed_when: omv_wcache.stdout is not search('write-caching\s*=\s*1')
-      when:
-        - omv_bin.stat.exists
-        - not ansible_check_mode
 
     # O que este play muda pelo `omv-rpc` fica marcado como pendente no OMV e
     # só chega aos arquivos no deploy. Sem este passo a lista cresce em
@@ -915,6 +899,19 @@
       register: omv_dirty_depois
       changed_when: false
       failed_when: omv_dirty_depois.stdout | trim != 'false'
+      when:
+        - omv_bin.stat.exists
+        - not ansible_check_mode
+
+    # Depois do applyChanges, que é quem roda o script do OMV com
+    # `--set=wcache,...`: aqui um writecache errado no banco já teria desligado
+    # o cache de escrita.
+    - name: Conferir que o cache de escrita continua ligado nos HDDs
+      ansible.builtin.command: "hdparm -W {{ item }}"
+      loop: "{{ omv_hdds }}"
+      register: omv_wcache
+      changed_when: false
+      failed_when: omv_wcache.stdout is not search('write-caching\s*=\s*1')
       when:
         - omv_bin.stat.exists
         - not ansible_check_mode
@@ -1234,6 +1231,25 @@
         apply:
           tags: node_exporter
 
+    # O coletor SMART do pacote de coletores roda a cada 15 min e, com o disco
+    # acordado, manda IDENTIFY e leitura SMART (`smartctl -i -H -A`). Com o
+    # spindown em 20 min, se o firmware zera o timer de standby com isso, o
+    # disco nunca dorme. Em 30 min a coleta sempre encontra o disco ocioso já
+    # dormindo, e o `smartctl -n standby` do script pula o disco. Custo: métrica
+    # SMART só de disco acordado (já era assim) e mais espaçada. Só no NAS.
+    - name: Espaçar o coletor SMART para depois do spindown (30 min)
+      tags: node_exporter
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/prometheus-node-exporter-smartmon.timer.d/override.conf
+        content: |
+          [Timer]
+          OnUnitActiveSec=
+          OnUnitActiveSec=30min
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Recarregar o timer do coletor SMART
+
     - name: Exibir confirmação do OMV NAS Host
       ansible.builtin.debug:
         msg: >-
@@ -1250,3 +1266,12 @@
       ansible.builtin.command:
         cmd: omv-salt deploy run rsyslog
       changed_when: true
+
+    # `restarted`, não `started`: timer já ativo só relê o intervalo novo no
+    # restart. Sem `smartctl` executável a Condition do timer não casa e o
+    # systemd pula a partida sem erro (ver a nota de tasks/node_exporter.yml).
+    - name: Recarregar o timer do coletor SMART
+      ansible.builtin.systemd:
+        name: prometheus-node-exporter-smartmon.timer
+        daemon_reload: true
+        state: restarted

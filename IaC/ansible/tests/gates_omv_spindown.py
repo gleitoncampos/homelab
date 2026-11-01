@@ -79,19 +79,45 @@ checar("item not in omv_hdparm_atual" in cond
        and "(omv_hdparm_alvo.keys() | map('extract', omv_hdparm_atual[item]) | list) "
            "!= (omv_hdparm_alvo.values() | list)" in cond,
        "só grava o que diverge do banco (idempotente)")
-checar(reg.get("register") == "omv_hdparm_set", "registro guardado para disparar o deploy")
-dep = task("Aplicar o spindown nos discos (deploy do smartmontools)")
-checar(dep.get("ansible.builtin.command") == "omv-salt deploy run smartmontools"
-       and dep.get("when") == "omv_hdparm_set is changed", "deploy do smartmontools quando gravou")
 wc = task("Conferir que o cache de escrita continua ligado nos HDDs")
 checar(wc.get("ansible.builtin.command") == "hdparm -W {{ item }}" and wc.get("loop") == "{{ omv_hdds }}"
        and "search('write-caching\\s*=\\s*1')" in str(wc.get("failed_when", ""))
        and "ignore_errors" not in wc, "confere wcache=1 em cada HDD depois do deploy")
+# O deploy é do applyChanges (o módulo smartmontools se marca pendente).
+apl = task("Aplicar os módulos pendentes do OMV")
+checar("Config applyChanges" in str(apl.get("ansible.builtin.command", "")), "applyChanges é quem faz o deploy")
+checar(not any("deploy run smartmontools" in str(t.get("ansible.builtin.command", "")) for t in TASKS),
+       "sem deploy explícito do smartmontools (o applyChanges já faz)")
 ordem = ["Ler a configuração de disco (hdparm) do OMV", "Exigir HDD detectado para o spindown",
          "Registrar no OMV o spindown e o cache de escrita ligado de cada HDD",
-         "Aplicar o spindown nos discos (deploy do smartmontools)",
+         "Aplicar os módulos pendentes do OMV", "Conferir que não sobrou módulo pendente no OMV",
          "Conferir que o cache de escrita continua ligado nos HDDs"]
-checar(all(antes(a, b) for a, b in zip(ordem, ordem[1:])), "ler → exigir → gravar → deploy → conferir, nessa ordem")
+checar(all(antes(a, b) for a, b in zip(ordem, ordem[1:])),
+       "ler → exigir → gravar → applyChanges → conferir pendência → conferir wcache, nessa ordem")
+# M2: o que grava ou depende do que foi gravado não roda no --check.
+for nome, t in (("registro", reg), ("conferência do wcache", wc),
+                ("restauração do hdparm.conf", task("Restaurar o /etc/hdparm.conf do pacote")),
+                ("conferência do hdparm.conf", task("Conferir que o /etc/hdparm.conf é o do pacote"))):
+    w = t.get("when", [])
+    w = [w] if isinstance(w, str) else w
+    checar("not ansible_check_mode" in w, f"{nome} tem guarda `not ansible_check_mode`")
+
+# Coletor SMART espaçado para depois do spindown
+tim = task("Espaçar o coletor SMART para depois do spindown (30 min)")
+cp = tim.get("ansible.builtin.copy") or {}
+checar(cp.get("dest") == "/etc/systemd/system/prometheus-node-exporter-smartmon.timer.d/override.conf",
+       "drop-in no timer do coletor SMART")
+linhas = [ln.strip() for ln in str(cp.get("content", "")).splitlines() if ln.strip()]
+iv = re.fullmatch(r"OnUnitActiveSec=(\d+)min", linhas[-1]) if linhas else None
+checar(linhas[:2] == ["[Timer]", "OnUnitActiveSec="] and len(linhas) == 3 and iv is not None
+       and int(iv.group(1)) * 60 > alvo.get("spindowntime", 0) * 5,
+       f"timer zera o intervalo do pacote e coleta depois do spindown (achado: {linhas})")
+checar(tim.get("notify") == "Recarregar o timer do coletor SMART", "drop-in recarrega o timer")
+hand = [h for play in PB for h in play.get("handlers", [])
+        if h.get("name") == "Recarregar o timer do coletor SMART"]
+sd = (hand[0].get("ansible.builtin.systemd") or {}) if hand else {}
+checar(sd.get("name") == "prometheus-node-exporter-smartmon.timer" and sd.get("daemon_reload") is True
+       and sd.get("state") == "restarted", "handler faz daemon-reload e restart do timer")
 
 # /etc/hdparm.conf: só o do pacote
 for t in TASKS:
