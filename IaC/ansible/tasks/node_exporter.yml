@@ -108,6 +108,51 @@
     state: started
   when: not (ansible_check_mode and node_exporter_pacote is changed)
 
+# ⚠️ O pacote de coletores puxa o `openipmi` por `Recommends` em cadeia:
+# `prometheus-node-exporter-collectors` → `ipmitool` → `openipmi`. O init script
+# dele faz `modprobe ipmi_si` a cada boot e, em placa sem BMC, sai com 1 —
+# `openipmi.service` fica `failed` para sempre e polui o `systemctl --failed`
+# (medido nos dois hipervisores em 02/11/2026: `dmidecode -t 38` vazio,
+# `/sys/class/ipmi` vazio, `ipmi_si: Unable to find any System Interface(s)`,
+# falhando em todo boot desde a instalação deste pacote em 12/10/2026).
+#
+# Mascarar, e não remover o pacote: o `Recommends` o traria de volta em todo host
+# novo, e segurar com `state: absent` brigaria com ele a cada execução. O
+# `ipmitool` funciona sem o serviço. A condição é o hardware: host com BMC
+# (`/sys/class/ipmi` com entrada) mantém o serviço intocado.
+- name: Detectar o init script do openipmi
+  ansible.builtin.stat:
+    path: /etc/init.d/openipmi
+  register: openipmi_init
+
+- name: Detectar interface IPMI (BMC) no hardware
+  ansible.builtin.find:
+    paths: /sys/class/ipmi
+    file_type: any
+  register: openipmi_bmc
+  when: openipmi_init.stat.exists
+
+- name: Mascarar o openipmi em host sem BMC
+  ansible.builtin.systemd_service:
+    name: openipmi
+    enabled: false
+    masked: true
+    state: stopped
+  when:
+    - openipmi_init.stat.exists
+    - openipmi_bmc.matched == 0
+
+# Unit mascarada continua listada em `systemctl --failed` até o próximo boot; o
+# `reset-failed` limpa já. Idempotente, por isso sem `changed`.
+- name: Limpar o estado failed do openipmi
+  ansible.builtin.command: systemctl reset-failed openipmi.service
+  changed_when: false
+  failed_when: false
+  when:
+    - openipmi_init.stat.exists
+    - openipmi_bmc.matched == 0
+    - not ansible_check_mode
+
 # A verificação é contra a porta respondendo, e não contra o `state: started`
 # da task acima. Um serviço pode estar "ativo" e não ter conseguido abrir a
 # porta — e o sintoma disso, do outro lado, é um alvo em `up=0` no Prometheus
