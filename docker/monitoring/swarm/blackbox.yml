@@ -1,0 +1,64 @@
+# Módulos do blackbox_exporter da stack `monitoring`.
+#
+# Copiado literal (sem Jinja) pelo playbook 03-stack-monitoring.yml para
+# /srv/containers/blackbox/blackbox.yml, caminho que o compose monta. Os ALVOS
+# não moram aqui: vêm de `blackbox_alvos` no inventário e entram no
+# prometheus.yml.j2 — este arquivo diz só COMO sondar.
+modules:
+  # Internet saindo. ip4 explícito: a VLAN dos managers não tem IPv6, e sem isso
+  # o prober tenta AAAA primeiro.
+  icmp:
+    prober: icmp
+    timeout: 5s
+    icmp:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+
+  # Resolução de um nome que nunca está na DNSBL. O alvo é o SERVIDOR DNS: o
+  # Unbound da casa e um resolver externo, lado a lado — se só o da casa falha,
+  # o problema é o Unbound, não a internet. `0.0.0.0` é a resposta da DNSBL do
+  # Unbound: tratada como falha, para um nome bloqueado por engano não passar
+  # como resolvido.
+  dns_google:
+    prober: dns
+    timeout: 5s
+    dns:
+      query_name: google.com
+      query_type: A
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      valid_rcodes: [NOERROR]
+      validate_answer_rrs:
+        fail_if_none_matches_regexp: ['.*\tIN\tA\t.*']
+        fail_if_matches_regexp: ['.*\tIN\tA\t0\.0\.0\.0$']
+
+  # Serviço web que responde 2xx no fim da cadeia de redirect (o prober segue
+  # redirect para QUALQUER host; o TLS é exigido no último salto).
+  http_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      follow_redirects: true
+      fail_if_not_ssl: true
+
+  # Serviço que responde com redirect para OUTRO host. Seguir mediria o site
+  # de destino, não o endpoint; aqui o que conta é o próprio endpoint responder.
+  http_up:
+    prober: http
+    timeout: 10s
+    http:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      follow_redirects: false
+      fail_if_not_ssl: true
+      valid_status_codes: [200, 301, 302, 303, 307, 308]
+
+  # Porta aberta, sem protocolo de aplicação (endpoint de VPN).
+  tcp_connect:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false

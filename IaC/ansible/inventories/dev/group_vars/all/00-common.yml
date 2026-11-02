@@ -349,6 +349,35 @@ monitoring_sidecar_files:
     owner: "root"
     group: "root"
     mode: "0644"
+  - src: "blackbox.yml"
+    servico: "blackbox"
+    dest: "/srv/containers/blackbox/blackbox.yml"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+
+# ----------------------------------------------------------------------
+# Painel "o que está fora" — alvos do blackbox_exporter
+# ----------------------------------------------------------------------
+# Cada item vira um alvo no job `blackbox_<modulo>` do prometheus.yml.j2.
+# `modulo` é um dos módulos de docker/monitoring/swarm/blackbox.yml (icmp,
+# dns_google, http_2xx, http_up, tcp_connect); `grupo` separa o diagnóstico no
+# dashboard: `base` (a internet e o DNS da casa) e `trabalho` (os serviços).
+#
+# ⚠️ Os valores abaixo são FICTÍCIOS (RFC 5737 e example.com), de propósito: o
+# repositório é público e a lista real diz onde a pessoa trabalha e qual é a
+# VPN dela. A lista real mora em prod/group_vars/all/99-local.yml, gitignorado,
+# e substitui esta inteira.
+#
+# Alvo de DNS é o SERVIDOR (`ip:53`); o nome consultado é fixo no módulo.
+# ⚠️ Os nomes `dns-casa` (o Unbound do firewall) e `dns-externo` (resolver
+# público) são CONTRATO com o dashboard blackbox.json, que compara os dois. A
+# lista real tem de usar esses dois nomes (gate gates-monitoring).
+blackbox_alvos:
+  - { nome: "internet-a", grupo: "base", modulo: "icmp", alvo: "192.0.2.1" }
+  - { nome: "dns-casa", grupo: "base", modulo: "dns_google", alvo: "192.0.2.53:53" }
+  - { nome: "dns-externo", grupo: "base", modulo: "dns_google", alvo: "198.51.100.53:53" }
+  - { nome: "servico-exemplo", grupo: "trabalho", modulo: "http_2xx", alvo: "https://example.com" }
 
 # ----------------------------------------------------------------------
 # Nobreak (NUT — Network UPS Tools)

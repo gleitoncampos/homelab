@@ -132,6 +132,54 @@ checar(bool(_viz_painel) and _viz_painel <= _viz_script,
 checar(usadas <= metricas_script,
        f"toda métrica openwrt_* do dashboard sai do script ({sorted(usadas - metricas_script)})")
 
+# Painel "o que está fora" (blackbox_exporter).
+_bb = servicos.get("blackbox") or {}
+checar(re.fullmatch(r"quay\.io/prometheus/blackbox-exporter:v\d+\.\d+\.\d+", _bb.get("image", "")) is not None,
+       f"blackbox com tag de versão fixa (veio {_bb.get('image')!r})")
+checar("NET_RAW" in (_bb.get("cap_add") or []), "blackbox com NET_RAW declarado (o icmp não depende do conjunto padrão do engine)")
+checar("node.role == manager" in (((_bb.get("deploy") or {}).get("placement") or {}).get("constraints") or []),
+       "blackbox fixo no manager (só ele escapa do DNS forçado)")
+_bb_mount = "/srv/containers/blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro"
+checar(_bb_mount in (_bb.get("volumes") or []), "blackbox monta o arquivo de módulos somente-leitura")
+_comum = yaml.safe_load((ANSIBLE / "inventories/_common/all.yml").read_text(encoding="utf-8"))
+checar(any(f.get("src") == "blackbox.yml" and f.get("dest") == _bb_mount.split(":")[0]
+           for f in _comum.get("monitoring_sidecar_files", [])),
+       "blackbox.yml é entregue pelo playbook no caminho que o compose monta")
+_modulos = set(yaml.safe_load((REPO / "docker/monitoring/swarm/blackbox.yml").read_text(encoding="utf-8"))["modules"])
+_prom = (REPO / "docker/monitoring/swarm/prometheus.yml.j2").read_text(encoding="utf-8")
+checar('replacement: "tasks.monitoring_blackbox:9115"' in _prom, "o Prometheus raspa o blackbox pelo serviço do Swarm")
+_bb_dash = (REPO / "docker/monitoring/swarm/dashboards/blackbox.json").read_text(encoding="utf-8")
+_dash_mod = set(re.findall(r'job=\\"blackbox_([a-z0-9_]+)\\"', _bb_dash))
+_dash_nomes = set(re.findall(r'nome=\\"([a-z0-9-]+)\\"', _bb_dash))
+_dash_grupos = set(re.findall(r'grupo=\\"([a-z0-9-]+)\\"', _bb_dash))
+checar(bool(_dash_mod) and _dash_mod <= _modulos, f"todo job blackbox_* do dashboard é um módulo do blackbox.yml ({sorted(_dash_mod - _modulos)})")
+
+# Painel cego não pode parecer saudável: exporter/scrape caído tem de aparecer.
+checar('min(up{job=~\\"blackbox_.*\\"})' in _bb_dash, "dashboard do blackbox tem o stat da própria sonda (up dos jobs)")
+checar("or vector(0)" not in _bb_dash, "dashboard do blackbox não converte sonda parada em 0 verde (or vector(0))")
+
+
+def _alvos_validos(alvos, origem):
+    checar(all({"nome", "grupo", "modulo", "alvo"} <= set(a) for a in alvos), f"{origem}: todo alvo tem nome, grupo, modulo e alvo")
+    checar({a.get("modulo") for a in alvos} <= _modulos, f"{origem}: todo módulo existe no blackbox.yml")
+    checar({a.get("grupo") for a in alvos} <= _dash_grupos, f"{origem}: todo grupo é um dos do dashboard ({sorted(_dash_grupos)})")
+    checar(_dash_nomes <= {a.get("nome") for a in alvos}, f"{origem}: tem os nomes que o dashboard compara ({sorted(_dash_nomes)})")
+    nomes = [a.get("nome") for a in alvos]
+    checar(len(nomes) == len(set(nomes)), f"{origem}: nome de alvo sem duplicata")
+
+
+_padrao = _comum.get("blackbox_alvos", [])
+_alvos_validos(_padrao, "blackbox_alvos padrão")
+# O padrão é público: só RFC 5737 e example.com, nunca alvo real.
+checar(all(re.fullmatch(r"(192\.0\.2|198\.51\.100|203\.0\.113)\.\d+(:\d+)?|https://([a-z0-9-]+\.)?example\.com/?", a["alvo"])
+           for a in _padrao), "blackbox_alvos padrão só com endereço de documentação")
+# A lista real é local (gitignorada); quando existe, segue o mesmo contrato.
+_local = ANSIBLE / "inventories/prod/group_vars/all/99-local.yml"
+if _local.exists():
+    _real = (yaml.safe_load(_local.read_text(encoding="utf-8")) or {}).get("blackbox_alvos")
+    if _real is not None:
+        _alvos_validos(_real, "blackbox_alvos local")
+
 if falhas:
     sys.exit(f"\n✗ gates-monitoring: {len(falhas)} falha(s)")
 print("\n✓ gates-monitoring")

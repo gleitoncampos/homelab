@@ -50,6 +50,12 @@ CONTEXTO = {
     "nut_ups_name": "nobreak",
     "loki_retention_period": "720h",
     "loki_chunk_encoding": "gzip",
+    # Dois alvos no mesmo módulo e um em outro: prova o agrupamento por módulo.
+    "blackbox_alvos": [
+        {"nome": "net-a", "grupo": "base", "modulo": "icmp", "alvo": "192.0.2.200"},
+        {"nome": "net-b", "grupo": "base", "modulo": "icmp", "alvo": "192.0.2.201"},
+        {"nome": "web-a", "grupo": "trabalho", "modulo": "http_2xx", "alvo": "https://www.example.com"},
+    ],
 }
 
 # Em produção a variável vem do group_vars/network, que inclui o firewall:
@@ -141,6 +147,25 @@ if prom:
     checar('label_values(smartmon_device_active{role=\\"nas\\"}, instance)' in nas_dash
            and "label_values(smartmon_device_active, instance)" not in nas_dash,
            "seletor do dashboard do NAS lista só role=nas")
+
+    # Blackbox: um job por módulo, o exporter como endereço e o alvo real em
+    # `?target=`; `instance` é o nome do alvo, não o endereço.
+    bb = {j["job_name"]: j for j in prom["scrape_configs"] if j["job_name"].startswith("blackbox_")}
+    checar(sorted(bb) == ["blackbox_http_2xx", "blackbox_icmp"], f"um job por módulo do blackbox: {sorted(bb)}")
+    for job, modulo in (("blackbox_icmp", "icmp"), ("blackbox_http_2xx", "http_2xx")):
+        j = bb.get(job, {})
+        checar(j.get("metrics_path") == "/probe" and j.get("params", {}).get("module") == [modulo],
+               f"{job}: /probe com module={modulo}")
+        rel = j.get("relabel_configs", [])
+        checar({"source_labels": ["__address__"], "target_label": "__param_target"} in rel
+               and {"source_labels": ["nome"], "target_label": "instance"} in rel
+               and {"target_label": "__address__", "replacement": "tasks.monitoring_blackbox:9115"} in rel,
+               f"{job}: alvo vai em ?target=, instance = nome, raspa o exporter")
+    icmp = bb.get("blackbox_icmp", {}).get("static_configs", [])
+    checar([(sc["targets"], sc["labels"]) for sc in icmp] == [
+        (["192.0.2.200"], {"nome": "net-a", "grupo": "base"}),
+        (["192.0.2.201"], {"nome": "net-b", "grupo": "base"}),
+    ], "cada alvo do blackbox leva os rótulos nome e grupo")
 
     rotulos = re.findall(r"replacement:\s*(\S+)", prom_txt)
     checar(

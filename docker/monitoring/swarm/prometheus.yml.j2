@@ -178,3 +178,33 @@ vez de as duas divergirem em silêncio. #}
       - target_label: instance
         replacement: "{{ nut_ups_name | upper }}"
 {% endif %}
+
+  # Painel "o que está fora": um job por módulo do blackbox_exporter
+  # (docker/monitoring/swarm/blackbox.yml), alvos de `blackbox_alvos`. O
+  # Prometheus raspa o EXPORTER; o alvo real vai em `?target=`. `instance`
+  # vira o `nome` do alvo, e não a URL/IP — o painel não precisa expor
+  # endereço, e trocar o endereço não quebra o histórico.
+{% if blackbox_alvos is defined %}
+{% for modulo in blackbox_alvos | map(attribute='modulo') | unique | sort %}
+  - job_name: blackbox_{{ modulo }}
+    scrape_interval: 30s
+    scrape_timeout: 15s
+    metrics_path: /probe
+    params:
+      module: ["{{ modulo }}"]
+    static_configs:
+{% for a in blackbox_alvos | selectattr('modulo', 'equalto', modulo) %}
+      - targets: ["{{ a.alvo }}"]
+        labels:
+          nome: "{{ a.nome }}"
+          grupo: "{{ a.grupo }}"
+{% endfor %}
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [nome]
+        target_label: instance
+      - target_label: __address__
+        replacement: "tasks.monitoring_blackbox:9115"
+{% endfor %}
+{% endif %}

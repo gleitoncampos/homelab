@@ -213,6 +213,37 @@ services:
     networks:
       - monitoring
 
+  # Painel "o que está fora": sonda de fora para dentro (ICMP, DNS, HTTP, TCP)
+  # contra a internet e os serviços de trabalho. Os módulos estão em
+  # blackbox.yml; os alvos, em `blackbox_alvos` no inventário.
+  blackbox:
+    image: quay.io/prometheus/blackbox-exporter:v0.29.1
+    command:
+      - "--config.file=/etc/blackbox/blackbox.yml"
+    volumes:
+      - /srv/containers/blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    # ICMP exige socket raw. A imagem roda como root (conferido na v0.29.1:
+    # `id` = uid 0); com NET_RAW explícito o módulo `icmp` não depende do
+    # conjunto de capabilities padrão do engine.
+    cap_add:
+      - NET_RAW
+    deploy:
+      # ⚠️ No manager, e não por gosto: só os managers escapam do DNS forçado
+      # do firewall (alias DNS_REDIRECT_BYPASS, gate render-opnsense-dns-bypass).
+      # Num worker, a consulta ao resolver externo seria redirecionada ao
+      # Unbound da casa e o painel deixaria de distinguir "o Unbound caiu" de
+      # "a internet caiu".
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 64M
+      restart_policy:
+        condition: any
+    networks:
+      - monitoring
+
   loki:
     image: grafana/loki:3.7.6
     volumes:
