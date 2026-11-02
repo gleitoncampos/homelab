@@ -1237,6 +1237,10 @@
     # disco nunca dorme. Em 30 min a coleta sempre encontra o disco ocioso já
     # dormindo, e o `smartctl -n standby` do script pula o disco. Custo: métrica
     # SMART só de disco acordado (já era assim) e mais espaçada. Só no NAS.
+    # ⚠️ O `OnUnitActiveSec=` vazio zera TODOS os gatilhos do timer, inclusive o
+    # `OnBootSec=0` do pacote (conferido com `systemctl show -p TimersMonotonic`
+    # em 01/11/2026). Sem redeclarar o OnBootSec, depois de um reboot o service
+    # nunca roda e o OnUnitActiveSec não tem base: a métrica some calada.
     - name: Espaçar o coletor SMART para depois do spindown (30 min)
       tags: node_exporter
       ansible.builtin.copy:
@@ -1244,6 +1248,7 @@
         content: |
           [Timer]
           OnUnitActiveSec=
+          OnBootSec=0
           OnUnitActiveSec=30min
         owner: root
         group: root

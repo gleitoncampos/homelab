@@ -109,9 +109,13 @@ checar(cp.get("dest") == "/etc/systemd/system/prometheus-node-exporter-smartmon.
        "drop-in no timer do coletor SMART")
 linhas = [ln.strip() for ln in str(cp.get("content", "")).splitlines() if ln.strip()]
 iv = re.fullmatch(r"OnUnitActiveSec=(\d+)min", linhas[-1]) if linhas else None
-checar(linhas[:2] == ["[Timer]", "OnUnitActiveSec="] and len(linhas) == 3 and iv is not None
+checar(linhas[:2] == ["[Timer]", "OnUnitActiveSec="] and len(linhas) == 4 and iv is not None
        and int(iv.group(1)) * 60 > alvo.get("spindowntime", 0) * 5,
        f"timer zera o intervalo do pacote e coleta depois do spindown (achado: {linhas})")
+# A linha vazia zera todos os gatilhos: o OnBootSec do pacote tem de voltar
+# depois dela, senão após reboot o timer nunca dispara.
+checar(len(linhas) == 4 and linhas[2] == "OnBootSec=0",
+       "OnBootSec=0 redeclarado depois da linha que zera os gatilhos")
 checar(tim.get("notify") == "Recarregar o timer do coletor SMART", "drop-in recarrega o timer")
 hand = [h for play in PB for h in play.get("handlers", [])
         if h.get("name") == "Recarregar o timer do coletor SMART"]
