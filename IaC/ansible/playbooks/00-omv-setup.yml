@@ -1239,7 +1239,7 @@
     # SMART só de disco acordado (já era assim) e mais espaçada. Só no NAS.
     # ⚠️ O `OnUnitActiveSec=` vazio zera TODOS os gatilhos do timer, inclusive o
     # `OnBootSec=0` do pacote (conferido com `systemctl show -p TimersMonotonic`
-    # em 01/11/2026). Sem redeclarar o OnBootSec, depois de um reboot o service
+    # num timer de teste, systemd 259, em 01/11/2026). Sem redeclarar o OnBootSec, depois de um reboot o service
     # nunca roda e o OnUnitActiveSec não tem base: a métrica some calada.
     - name: Espaçar o coletor SMART para depois do spindown (30 min)
       tags: node_exporter
