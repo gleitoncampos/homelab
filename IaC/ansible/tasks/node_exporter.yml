@@ -118,18 +118,26 @@
 #
 # Mascarar, e não remover o pacote: o `Recommends` o traria de volta em todo host
 # novo, e segurar com `state: absent` brigaria com ele a cada execução. O
-# `ipmitool` funciona sem o serviço. A condição é o hardware: host com BMC
-# (`/sys/class/ipmi` com entrada) mantém o serviço intocado.
+# `ipmitool` funciona sem o serviço.
+#
+# ⚠️ A condição é o SMBIOS (`dmidecode -t 38`, IPMI Device Information), e NÃO
+# `/sys/class/ipmi`: essa classe é criada pelo `ipmi_devintf`, que não tem alias
+# de autoload (`modinfo ipmi_devintf` sem `alias`, conferido no kernel do PVE em
+# 02/11/2026) — quem o carrega é o próprio init do openipmi. Num host novo com
+# BMC o diretório não existiria antes do primeiro boot com o serviço, e o play
+# mascararia justamente o host que precisa dele. `dmidecode` ausente ou com
+# erro → nada é mascarado.
 - name: Detectar o init script do openipmi
   ansible.builtin.stat:
     path: /etc/init.d/openipmi
   register: openipmi_init
 
-- name: Detectar interface IPMI (BMC) no hardware
-  ansible.builtin.find:
-    paths: /sys/class/ipmi
-    file_type: any
+- name: Detectar BMC pelo SMBIOS (tipo 38, IPMI Device Information)
+  ansible.builtin.command: dmidecode -t 38
   register: openipmi_bmc
+  changed_when: false
+  failed_when: false
+  check_mode: false
   when: openipmi_init.stat.exists
 
 - name: Mascarar o openipmi em host sem BMC
@@ -140,17 +148,32 @@
     state: stopped
   when:
     - openipmi_init.stat.exists
-    - openipmi_bmc.matched == 0
+    - openipmi_bmc.rc == 0
+    - "'DMI type 38' not in openipmi_bmc.stdout"
 
 # Unit mascarada continua listada em `systemctl --failed` até o próximo boot; o
-# `reset-failed` limpa já. Idempotente, por isso sem `changed`.
-- name: Limpar o estado failed do openipmi
-  ansible.builtin.command: systemctl reset-failed openipmi.service
+# `reset-failed` limpa já (o módulo systemd não tem is-failed nem reset-failed,
+# daí o `command` com noqa). Só roda, e só reporta `changed`, quando a unit está
+# de fato `failed`.
+- name: Ler se o openipmi está em estado failed  # noqa: command-instead-of-module
+  ansible.builtin.command: systemctl is-failed openipmi.service
+  register: openipmi_failed
   changed_when: false
   failed_when: false
+  check_mode: false
   when:
     - openipmi_init.stat.exists
-    - openipmi_bmc.matched == 0
+    - openipmi_bmc.rc == 0
+    - "'DMI type 38' not in openipmi_bmc.stdout"
+
+- name: Limpar o estado failed do openipmi  # noqa: command-instead-of-module
+  ansible.builtin.command: systemctl reset-failed openipmi.service
+  changed_when: true
+  when:
+    - openipmi_init.stat.exists
+    - openipmi_bmc.rc == 0
+    - "'DMI type 38' not in openipmi_bmc.stdout"
+    - openipmi_failed.stdout == 'failed'
     - not ansible_check_mode
 
 # A verificação é contra a porta respondendo, e não contra o `state: started`
