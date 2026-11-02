@@ -142,12 +142,15 @@
       writecache: true
       apm: 0
       aam: 0
-    # HDD = rotacional com link `ata-`, o mesmo link que o OMV escolhe para o
-    # `devicefile` (ele prefere ata- a wwn-). Fica de fora o disco virtual do
-    # QEMU e o SSD. Descoberto pelos facts: serial de disco não entra no repo.
+    # HDD = rotacional, não removível, com link `ata-`, o mesmo link que o OMV
+    # escolhe para o `devicefile` (ele prefere ata- a wwn-). Fica de fora o
+    # disco virtual do QEMU e o SSD; o `removable` tira o DVD virtual (`sr0`),
+    # que o kernel marca como rotacional e também tem link ata- (pego no
+    # --check de 01/11/2026). Descoberto pelos facts: serial não entra no repo.
     omv_hdds: >-
       {{ ansible_facts.devices | dict2items
          | selectattr('value.rotational', 'equalto', '1')
+         | selectattr('value.removable', 'equalto', '0')
          | map(attribute='value.links.ids') | flatten
          | select('match', '^ata-') | map('regex_replace', '^', '/dev/disk/by-id/')
          | sort | list }}

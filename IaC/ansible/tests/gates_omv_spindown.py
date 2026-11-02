@@ -56,6 +56,8 @@ checar(set(alvo) == {"spindowntime", "writecache", "apm", "aam"},
 # Seleção dos HDDs
 hdds = " ".join(str(VARS.get("omv_hdds", "")).split())
 checar("selectattr('value.rotational', 'equalto', '1')" in hdds, "omv_hdds filtra rotacional")
+checar("selectattr('value.removable', 'equalto', '0')" in hdds,
+       "omv_hdds tira removível (o DVD virtual é rotacional e tem link ata-)")
 checar("select('match', '^ata-')" in hdds, "omv_hdds usa o link ata- (o que o OMV grava)")
 checar(not re.search(r"ata-[A-Z0-9]", PB_TXT), "nenhum id ata- de disco escrito no play")
 guarda = task("Exigir HDD detectado para o spindown")
