@@ -56,6 +56,13 @@ scrape_configs:
         regex: {{ hostvars[host].ansible_host | regex_escape }}:9100
         target_label: instance
         replacement: "{{ host | upper }}"
+{# `role` vem do grupo do inventário: o dashboard do NAS lista só `role="nas"`.
+   Pelo `smartmon_device_active` sozinho entrava todo host com disco SATA (um
+   hipervisor aparecia no seletor do NAS, 01/11/2026). #}
+      - source_labels: [__address__]
+        regex: {{ hostvars[host].ansible_host | regex_escape }}:9100
+        target_label: role
+        replacement: "{{ 'nas' if host in (groups['omv'] | default([])) else 'hipervisor' }}"
 {% endfor %}
 
   # OpenWrt: pacote prometheus-node-exporter-lua, mesma porta 9100. Escuta só

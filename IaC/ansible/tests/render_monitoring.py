@@ -129,6 +129,18 @@ if prom:
     for host in GRUPOS["omv"] + GRUPOS["proxmox"]:
         checar(f"{ENDERECOS[host]}:9100" in node_alvos,
                f"{host} é alvo do job node_exporter")
+    # O seletor do dashboard do NAS filtra por `role`: NAS e hipervisor têm de
+    # sair com o papel do próprio grupo, casado pelo endereço de cada um.
+    papel = {r["regex"]: r["replacement"] for r in node_job["relabel_configs"]
+             if r.get("target_label") == "role"}
+    for host in GRUPOS["omv"] + GRUPOS["proxmox"]:
+        esperado = "nas" if host in GRUPOS["omv"] else "hipervisor"
+        checar(papel.get(f"{re.escape(ENDERECOS[host])}:9100") == esperado,
+               f"{host} sai com role={esperado}")
+    nas_dash = (SWARM / "dashboards" / "nas.json").read_text(encoding="utf-8")
+    checar('label_values(smartmon_device_active{role=\\"nas\\"}, instance)' in nas_dash
+           and "label_values(smartmon_device_active, instance)" not in nas_dash,
+           "seletor do dashboard do NAS lista só role=nas")
 
     rotulos = re.findall(r"replacement:\s*(\S+)", prom_txt)
     checar(
