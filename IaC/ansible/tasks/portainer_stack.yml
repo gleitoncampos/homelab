@@ -111,7 +111,7 @@
            | map(attribute='Env') | list) + [[]]) | first | default([], true)
          | rejectattr('name', 'in', stack_env | map(attribute='name') | list) | list
          + stack_env }}
-  when: stack_id
+  when: stack_id | string | length > 0
   no_log: true
 
 - name: "Obter Id do Swarm no endpoint do Portainer (apenas para criação nova) :: {{ stack_name }}"
@@ -123,7 +123,7 @@
     status_code: 200
     validate_certs: false
   register: portainer_swarm_info
-  when: not stack_id
+  when: stack_id | string | length == 0
   no_log: true
 
 - name: "Criar stack nova via repositório Git (primeiro deploy) :: {{ stack_name }}"
@@ -152,7 +152,7 @@
   until: portainer_stack_create.status == 200
   retries: 6
   delay: 10
-  when: not stack_id
+  when: stack_id | string | length == 0
   no_log: true
 
 - name: "Redeploy da stack existente (env mesclado) :: {{ stack_name }}"
@@ -196,7 +196,7 @@
   until: portainer_stack_redeploy.status == 200
   retries: 6
   delay: 10
-  when: stack_id
+  when: stack_id | string | length > 0
   no_log: true
 
 - name: "Confirmar que create ou redeploy retornou HTTP 200 :: {{ stack_name }}"
