@@ -119,6 +119,13 @@ checar(linhas[:2] == ["[Timer]", "OnUnitActiveSec="] and len(linhas) == 4 and iv
 checar(len(linhas) == 4 and linhas[2] == "OnBootSec=0",
        "OnBootSec=0 redeclarado depois da linha que zera os gatilhos")
 checar(tim.get("notify") == "Recarregar o timer do coletor SMART", "drop-in recarrega o timer")
+dird = task("Criar o diretório de drop-in do timer do coletor SMART")
+fd = dird.get("ansible.builtin.file") or {}
+checar(fd.get("path") == "/etc/systemd/system/prometheus-node-exporter-smartmon.timer.d"
+       and fd.get("state") == "directory"
+       and antes("Criar o diretório de drop-in do timer do coletor SMART",
+                 "Espaçar o coletor SMART para depois do spindown (30 min)"),
+       "diretório do drop-in criado antes do copy (o copy não cria; falhou no apply de 01/11/2026)")
 hand = [h for play in PB for h in play.get("handlers", [])
         if h.get("name") == "Recarregar o timer do coletor SMART"]
 sd = (hand[0].get("ansible.builtin.systemd") or {}) if hand else {}

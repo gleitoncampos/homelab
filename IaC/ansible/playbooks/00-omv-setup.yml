@@ -1244,6 +1244,16 @@
     # `OnBootSec=0` do pacote (conferido com `systemctl show -p TimersMonotonic`
     # num timer de teste, systemd 259, em 01/11/2026). Sem redeclarar o OnBootSec, depois de um reboot o service
     # nunca roda e o OnUnitActiveSec não tem base: a métrica some calada.
+    # O `copy` não cria o diretório do drop-in (e o --check não acusa isso).
+    - name: Criar o diretório de drop-in do timer do coletor SMART
+      tags: node_exporter
+      ansible.builtin.file:
+        path: /etc/systemd/system/prometheus-node-exporter-smartmon.timer.d
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
     - name: Espaçar o coletor SMART para depois do spindown (30 min)
       tags: node_exporter
       ansible.builtin.copy:
