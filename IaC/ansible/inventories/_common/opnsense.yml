@@ -24,6 +24,15 @@ opnsense_unbound_privateaddress: "0.0.0.0/8,10.0.0.0/8,100.64.0.0/10,169.254.0.0
 # usa este IP como alvo de latência/perda. Default público mora aqui em _common
 # (os outros 3 vivem em group_vars/network/10-defaults.yml).
 opnsense_wan_monitor_ipv4: "1.1.1.1"
+
+# Nome alternativo pelo qual a WebGUI aceita ser chamada. O OPNsense só atende
+# pelo próprio `hostname.domain` (home.arpa), por `localhost` ou por IP; qualquer
+# outro Host devolve a página "DNS Rebind attack" (authgui.inc,
+# check_security_dns_rebind). A rota do Traefik (docker/traefik/swarm/rotas.yml.j2)
+# repassa o Host da URL pública, `<opnsense_hostname>.<homelab_domain>`, e sem
+# esta entrada a GUI pelo proxy recusa o login (05/11/2026). Lista separada por
+# espaço, se um dia precisar de mais de um.
+opnsense_webgui_althostname: "{{ opnsense_hostname }}.{{ homelab_domain }}"
 opnsense_tunables:
   - uuid: cb052371-32d8-453e-b4be-a30b40a7955a
     tunable: vfs.read_max
