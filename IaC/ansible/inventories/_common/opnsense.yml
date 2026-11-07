@@ -1653,6 +1653,14 @@ opnsense_tailscale:
     - uuid: 3d0bc697-16a0-4364-9770-1b09566b8ded
       subnet: "{{ lan_network_cidr }}"
       description: LAN
+    # HOMELAB (VLAN 20), onde roda o Traefik. Sem esta rota o exit node NÃO
+    # entrega pacote à VLAN: o peer resolve o nome, o túnel responde e o HTTP
+    # morre em timeout (conferido em 06/11/2026). A origem chega com o IP do
+    # firewall na VLAN 20 (SNAT), que a `traefik_admin_cidrs` já aceita.
+    # ⚠️ Troca o último octeto do gateway por 0: vale só para prefixo /24.
+    - uuid: 0741c1f9-49f8-4a0c-bb35-dc17f5340ec2
+      subnet: "{{ (vlans | selectattr('tag', 'equalto', 20) | first).ip | regex_replace('\\.[0-9]+$', '.0') }}/{{ (vlans | selectattr('tag', 'equalto', 20) | first).subnet }}"
+      description: HOMELAB
 
 opnsense_groups:
   - uuid: 38d3ed68-080e-4ef6-b07a-4139d184979d
