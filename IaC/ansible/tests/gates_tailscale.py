@@ -51,7 +51,12 @@ CAMADA 7 — a VLAN 20 (HOMELAB) é anunciada como subnet route.
   renderizado com o Jinja do próprio inventário e comparado com o que o
   `ipaddress` calcula da VLAN de tag 20.
 
-Sai 0 só quando as sete passam.
+CAMADA 8 — o apply regenera o Tailscale e confere as rotas, no fim do play.
+  `rc.reload_all` não regenera /etc/rc.conf.d/tailscaled. Duas travas de ordem:
+  o restart é DESTACADO (`daemon`) e vem DEPOIS do sshd (falhar antes pularia
+  DNSBL, serviços e a conferência do sshd).
+
+Sai 0 só quando as oito passam.
 """
 import sys
 from pathlib import Path
@@ -293,6 +298,31 @@ else:
     else:
         print(f"  OK a rota HOMELAB renderiza `{obtido}` = rede da VLAN 20")
 
+print("\n== CAMADA 8: restart e conferência no fim do play ==")
+pb = PLAYBOOK.read_text(encoding="utf-8")
+T_SSHD = "Conferir no sshd efetivo do firewall"
+T_RESTART = "Gerar a configuração do Tailscale e reiniciá-lo, fora da sessão"
+T_CONF = "Conferir que o Tailscale anuncia as rotas declaradas"
+pos = {n: pb.find(f"- name: {n}") for n in (T_SSHD, T_RESTART, T_CONF)}
+if min(pos.values()) < 0:
+    falhas.append("falta task no 01-opnsense-setup.yml: " +
+                  ", ".join(n for n, i in pos.items() if i < 0))
+else:
+    if not (pos[T_SSHD] < pos[T_RESTART] < pos[T_CONF]):
+        falhas.append("ordem errada: sshd, restart do Tailscale e conferência devem vir "
+                      "nesta ordem, no fim do play")
+    corpo = pb[pos[T_RESTART]:pos[T_CONF]]
+    if "daemon -f -p" not in corpo or "configctl tailscale restart" not in corpo:
+        falhas.append("o restart do Tailscale não está destacado (`daemon -f -p`): "
+                      "preso à sessão SSH, corta o play")
+    if "meta: reset_connection" not in corpo or "wait_for_connection" not in corpo:
+        falhas.append("falta reconectar (reset_connection + wait_for_connection) "
+                      "entre o restart e a conferência")
+    if "from_json" not in pb[pos[T_CONF]:pos[T_CONF] + 900]:
+        falhas.append("a conferência compara texto, não o JSON de AdvertiseRoutes")
+    if not falhas:
+        print("  OK restart destacado, depois do sshd, com reconexão e conferência por JSON")
+
 if falhas:
     print()
     for f in falhas:
@@ -300,4 +330,4 @@ if falhas:
     sys.exit(1)
 
 print("\n  TAILSCALE OK (plugin declarado; partial incluído; sem chave literal; "
-      "tráfego liberado; blocklist nas duas WANs; chave de registro não exigida; VLAN 20 anunciada)")
+      "tráfego liberado; blocklist nas duas WANs; chave de registro não exigida; VLAN 20 declarada; restart e conferência no playbook)")

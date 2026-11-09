@@ -620,25 +620,6 @@
       ansible.builtin.shell: configctl template reload OPNsense/MDNSRepeater && configctl mdnsrepeater restart
       changed_when: true
 
-    # Terceiro caso: `rc.reload_all` não regenera /etc/rc.conf.d/tailscaled, e
-    # as rotas anunciadas (`--advertise-routes`) saem desse arquivo. Sem esta
-    # task, rota nova no config.xml só vale após reboot, e a GUI mostra uma
-    # rota que o tailscaled não anuncia.
-    - name: Gerar a configuração do Tailscale e reiniciá-lo
-      ansible.builtin.shell: configctl template reload OPNsense/Tailscale && configctl tailscale restart
-      changed_when: true
-
-    # O que vale é o que o tailscaled anuncia, não o que o config.xml declara.
-    - name: Conferir que o Tailscale anuncia as rotas declaradas
-      ansible.builtin.command: /usr/local/bin/tailscale debug prefs
-      register: _ts_prefs
-      until: >-
-        opnsense_tailscale.subnets | map(attribute='subnet')
-        | reject('in', _ts_prefs.stdout | default('')) | list | length == 0
-      retries: 12
-      delay: 5
-      changed_when: false
-
     # O config.xml declara a DNSBL, mas o Unbound consulta
     # /var/unbound/data/dnsbl.json, que só esta ação gera (baixa e compila as
     # listas; a GUI a dispara no "Apply"). Sem ela o firewall reinstalado
@@ -675,6 +656,50 @@
         'permitrootlogin no' not in _sshd_fw.stdout_lines
         or 'passwordauthentication no' not in _sshd_fw.stdout_lines
         or 'kbdinteractiveauthentication no' not in _sshd_fw.stdout_lines
+
+    # `rc.reload_all` não regenera /etc/rc.conf.d/tailscaled, e as rotas
+    # anunciadas (`--advertise-routes`) saem desse arquivo: sem esta etapa, rota
+    # nova no config.xml só vale após reboot, e a GUI mostra uma rota que o
+    # tailscaled não anuncia.
+    # Depois do sshd, no fim do play, pelo mesmo motivo dele: falhar aqui não
+    # pode pular DNSBL, serviços nem a conferência do sshd.
+    # ⚠️ DESTACADO da sessão, como o reload: o restart recria a `tailscale0`
+    # (interface atribuída) e, com o Tailscale da máquina de controle usando o
+    # próprio firewall como exit node, a sessão SSH passa a depender dele —
+    # preso a ela, o restart a corta e o play fica UNREACHABLE (revisão do
+    # Hades, 09/11/2026; não medido, risco por rota e prefs).
+    - name: Gerar a configuração do Tailscale e reiniciá-lo, fora da sessão
+      ansible.builtin.command: >-
+        daemon -f -p "/var/run/iac-tailscale.{{ now(fmt='%Y%m%d%H%M%S') }}.pid"
+        /bin/sh -c 'configctl template reload OPNsense/Tailscale && configctl tailscale restart'
+      changed_when: true
+
+    - name: Esperar o restart do Tailscale antes de reconectar
+      ansible.builtin.wait_for:
+        timeout: 20
+      delegate_to: localhost
+      become: false
+
+    - name: Encerrar a conexão antiga com o OPNsense
+      ansible.builtin.meta: reset_connection
+
+    - name: Esperar o OPNsense aceitar conexão nova
+      ansible.builtin.wait_for_connection:
+        timeout: 120
+
+    # O que vale é o que o tailscaled anuncia, não o que o config.xml declara.
+    # Compara o conjunto exato de AdvertiseRoutes (JSON), não substring. Em
+    # `--check` o restart não roda: comparar falharia contra o estado vivo.
+    - name: Conferir que o Tailscale anuncia as rotas declaradas
+      ansible.builtin.command: /usr/local/bin/tailscale debug prefs
+      register: _ts_prefs
+      until: >-
+        (opnsense_tailscale.subnets | map(attribute='subnet') | list)
+        | difference((_ts_prefs.stdout | default('{}', true) | from_json).AdvertiseRoutes | default([])) | length == 0
+      retries: 12
+      delay: 5
+      changed_when: false
+      when: not ansible_check_mode
 
     - name: Exibir confirmação do OPNsense
       ansible.builtin.debug:
