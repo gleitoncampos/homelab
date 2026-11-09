@@ -61,6 +61,19 @@
           (gitignorado). Ver 1.1.5 no roadmap.
         success_msg: "Identidade: {{ opnsense_hostname }}"
 
+    # A rota HOMELAB do Tailscale deriva o CIDR trocando o último octeto do
+    # gateway por 0 (`opnsense_tailscale.subnets`): fora de /24 anunciaria a
+    # rede errada, e calada.
+    - name: Abortar se a VLAN 20 (HOMELAB) não é /24
+      ansible.builtin.assert:
+        that:
+          - (vlans | selectattr('tag', 'equalto', 20) | first).subnet | int == 24
+        fail_msg: >-
+          A VLAN 20 não é /24: a rota HOMELAB do Tailscale
+          (`opnsense_tailscale.subnets`) troca o último octeto do gateway por 0
+          e só serve para /24.
+        success_msg: "VLAN 20 é /24"
+
     - name: Validar que todo objeto do OPNsense tem UUID
       ansible.builtin.assert:
         that:
@@ -606,6 +619,25 @@
     - name: Gerar a configuração do repetidor de mDNS e reiniciá-lo
       ansible.builtin.shell: configctl template reload OPNsense/MDNSRepeater && configctl mdnsrepeater restart
       changed_when: true
+
+    # Terceiro caso: `rc.reload_all` não regenera /etc/rc.conf.d/tailscaled, e
+    # as rotas anunciadas (`--advertise-routes`) saem desse arquivo. Sem esta
+    # task, rota nova no config.xml só vale após reboot, e a GUI mostra uma
+    # rota que o tailscaled não anuncia.
+    - name: Gerar a configuração do Tailscale e reiniciá-lo
+      ansible.builtin.shell: configctl template reload OPNsense/Tailscale && configctl tailscale restart
+      changed_when: true
+
+    # O que vale é o que o tailscaled anuncia, não o que o config.xml declara.
+    - name: Conferir que o Tailscale anuncia as rotas declaradas
+      ansible.builtin.command: /usr/local/bin/tailscale debug prefs
+      register: _ts_prefs
+      until: >-
+        opnsense_tailscale.subnets | map(attribute='subnet')
+        | reject('in', _ts_prefs.stdout | default('')) | list | length == 0
+      retries: 12
+      delay: 5
+      changed_when: false
 
     # O config.xml declara a DNSBL, mas o Unbound consulta
     # /var/unbound/data/dnsbl.json, que só esta ação gera (baixa e compila as

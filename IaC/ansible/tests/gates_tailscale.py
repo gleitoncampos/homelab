@@ -45,7 +45,13 @@ CAMADA 5-B — o ruído da WAN atrás de NAT é SILENCIADO, nunca LIBERADO.
   que trata o ruído tem de ser `block` com `log: 0`, e tem de vir ANTES da
   blocklist, porque com `quick` a primeira que casa decide.
 
-Sai 0 só quando as seis passam.
+CAMADA 7 — a VLAN 20 (HOMELAB) é anunciada como subnet route.
+  O exit node só entrega pacote a faixa privada ANUNCIADA: sem a rota, o peer
+  resolve o nome do Traefik e o HTTP morre em timeout (06/11/2026). O CIDR é
+  renderizado com o Jinja do próprio inventário e comparado com o que o
+  `ipaddress` calcula da VLAN de tag 20.
+
+Sai 0 só quando as sete passam.
 """
 import sys
 from pathlib import Path
@@ -259,6 +265,34 @@ else:
     else:
         print("  OK o playbook não exige a chave como segredo obrigatório")
 
+print("\n== CAMADA 7: a VLAN 20 é anunciada ==")
+import ipaddress
+import re
+
+import jinja2
+
+VLANS = ANSIBLE / "inventories" / "prod" / "group_vars" / "network" / "10-defaults.yml"
+vlans = yaml.safe_load(VLANS.read_text(encoding="utf-8"))["vlans"]
+vlan20 = next((v for v in vlans if v.get("tag") == 20), None)
+rotas = (dados.get("opnsense_tailscale") or {}).get("subnets") or []
+homelab = [r for r in rotas if r.get("description") == "HOMELAB"]
+if vlan20 is None:
+    falhas.append("a VLAN de tag 20 não existe em vlans: a rota HOMELAB não tem de onde derivar")
+elif len(homelab) != 1:
+    falhas.append(f"opnsense_tailscale.subnets tem {len(homelab)} entrada(s) HOMELAB, esperada 1: "
+                  "sem a rota o exit node não entrega pacote ao Traefik (VLAN 20)")
+else:
+    # `regex_replace` é filtro do Ansible, não do Jinja puro.
+    ambiente = jinja2.Environment(undefined=jinja2.StrictUndefined)
+    ambiente.filters["regex_replace"] = lambda v, padrao, novo: re.sub(padrao, novo, str(v))
+    obtido = ambiente.from_string(homelab[0]["subnet"]).render(vlans=vlans)
+    esperado = str(ipaddress.ip_network(f"{vlan20['ip']}/{vlan20['subnet']}", strict=False))
+    if obtido != esperado:
+        falhas.append(f"a rota HOMELAB renderiza `{obtido}`, e a VLAN 20 é `{esperado}`: "
+                      "o Tailscale anunciaria a rede errada")
+    else:
+        print(f"  OK a rota HOMELAB renderiza `{obtido}` = rede da VLAN 20")
+
 if falhas:
     print()
     for f in falhas:
@@ -266,4 +300,4 @@ if falhas:
     sys.exit(1)
 
 print("\n  TAILSCALE OK (plugin declarado; partial incluído; sem chave literal; "
-      "tráfego liberado; blocklist nas duas WANs; chave de registro não exigida)")
+      "tráfego liberado; blocklist nas duas WANs; chave de registro não exigida; VLAN 20 anunciada)")
