@@ -670,7 +670,7 @@
     # Hades, 09/11/2026; não medido, risco por rota e prefs).
     - name: Gerar a configuração do Tailscale e reiniciá-lo, fora da sessão
       ansible.builtin.command: >-
-        daemon -f -p "/var/run/iac-tailscale.{{ now(fmt='%Y%m%d%H%M%S') }}.pid"
+        daemon -f
         /bin/sh -c 'configctl template reload OPNsense/Tailscale && configctl tailscale restart'
       changed_when: true
 
@@ -688,14 +688,17 @@
         timeout: 120
 
     # O que vale é o que o tailscaled anuncia, não o que o config.xml declara.
-    # Compara o conjunto exato de AdvertiseRoutes (JSON), não substring. Em
+    # Confere que TODA rota declarada está em AdvertiseRoutes (JSON, não
+    # substring). É subconjunto, de propósito: o exit node faz o tailscaled
+    # anunciar também 0.0.0.0/0 e ::/0, que não estão em `subnets`. `null`
+    # (state novo, sem rota) retenta em vez de lançar exceção. Em
     # `--check` o restart não roda: comparar falharia contra o estado vivo.
     - name: Conferir que o Tailscale anuncia as rotas declaradas
       ansible.builtin.command: /usr/local/bin/tailscale debug prefs
       register: _ts_prefs
       until: >-
         (opnsense_tailscale.subnets | map(attribute='subnet') | list)
-        | difference((_ts_prefs.stdout | default('{}', true) | from_json).AdvertiseRoutes | default([])) | length == 0
+        | difference((_ts_prefs.stdout | default('{}', true) | from_json).AdvertiseRoutes | default([], true)) | length == 0
       retries: 12
       delay: 5
       changed_when: false

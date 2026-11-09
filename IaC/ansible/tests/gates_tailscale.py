@@ -299,29 +299,50 @@ else:
         print(f"  OK a rota HOMELAB renderiza `{obtido}` = rede da VLAN 20")
 
 print("\n== CAMADA 8: restart e conferência no fim do play ==")
-pb = PLAYBOOK.read_text(encoding="utf-8")
-T_SSHD = "Conferir no sshd efetivo do firewall"
+# Assertiva sobre o YAML PARSEADO, não sobre texto: `find("- name: ...")` casa
+# também linha comentada, e o gate ficava verde com a task fora do play.
+T_SSHD = "Conferir no sshd efetivo do firewall que root e senha estão fechados"
 T_RESTART = "Gerar a configuração do Tailscale e reiniciá-lo, fora da sessão"
+T_RECON = ("Encerrar a conexão antiga com o OPNsense", "Esperar o OPNsense aceitar conexão nova")
 T_CONF = "Conferir que o Tailscale anuncia as rotas declaradas"
-pos = {n: pb.find(f"- name: {n}") for n in (T_SSHD, T_RESTART, T_CONF)}
-if min(pos.values()) < 0:
-    falhas.append("falta task no 01-opnsense-setup.yml: " +
-                  ", ".join(n for n, i in pos.items() if i < 0))
+plays = yaml.safe_load(PLAYBOOK.read_text(encoding="utf-8"))
+tarefas = next((p.get("tasks") or [] for p in plays
+                if any(t.get("name") == T_SSHD for t in (p.get("tasks") or []))), None)
+if tarefas is None:
+    falhas.append(f"nenhum play do 01-opnsense-setup.yml tem a task `{T_SSHD}`")
 else:
-    if not (pos[T_SSHD] < pos[T_RESTART] < pos[T_CONF]):
-        falhas.append("ordem errada: sshd, restart do Tailscale e conferência devem vir "
-                      "nesta ordem, no fim do play")
-    corpo = pb[pos[T_RESTART]:pos[T_CONF]]
-    if "daemon -f -p" not in corpo or "configctl tailscale restart" not in corpo:
-        falhas.append("o restart do Tailscale não está destacado (`daemon -f -p`): "
-                      "preso à sessão SSH, corta o play")
-    if "meta: reset_connection" not in corpo or "wait_for_connection" not in corpo:
-        falhas.append("falta reconectar (reset_connection + wait_for_connection) "
-                      "entre o restart e a conferência")
-    if "from_json" not in pb[pos[T_CONF]:pos[T_CONF] + 900]:
-        falhas.append("a conferência compara texto, não o JSON de AdvertiseRoutes")
-    if not falhas:
-        print("  OK restart destacado, depois do sshd, com reconexão e conferência por JSON")
+    nomes = [t.get("name") for t in tarefas]
+    idx = lambda n: max((i for i, x in enumerate(nomes) if x == n), default=-1)
+    i_sshd, i_rst, i_cnf = idx(T_SSHD), idx(T_RESTART), idx(T_CONF)
+    faltam = [n for n, i in ((T_RESTART, i_rst), (T_CONF, i_cnf)) if i < 0]
+    if faltam:
+        falhas.append(f"falta task no play: {faltam}")
+    else:
+        rst, cnf = tarefas[i_rst], tarefas[i_cnf]
+        if not (i_sshd < i_rst < i_cnf):
+            falhas.append("ordem errada: sshd, restart do Tailscale e conferência devem "
+                          "vir nesta ordem, no fim do play")
+        cmd = str(rst.get("ansible.builtin.command", ""))
+        if "daemon -f" not in cmd or "configctl tailscale restart" not in cmd \
+                or "configctl template reload OPNsense/Tailscale" not in cmd:
+            falhas.append("o restart não é `daemon -f` com template reload + "
+                          "`configctl tailscale restart`: preso à sessão SSH, corta o play")
+        entre = tarefas[i_rst + 1:i_cnf]
+        if not any(t.get("ansible.builtin.meta") == "reset_connection" for t in entre) \
+                or not any("ansible.builtin.wait_for_connection" in t for t in entre):
+            falhas.append("falta reconectar (meta: reset_connection + wait_for_connection) "
+                          "entre o restart e a conferência")
+        when = cnf.get("when")
+        if "ansible_check_mode" not in str(when):
+            falhas.append("a conferência não tem guarda de --check: falharia em falso "
+                          "contra o estado vivo")
+        until = str(cnf.get("until", ""))
+        if "from_json" not in until or "difference" not in until \
+                or "default([], true)" not in until:
+            falhas.append("o `until` da conferência não compara AdvertiseRoutes por "
+                          "`from_json` + `difference` com `default([], true)` (null lança exceção)")
+if not falhas:
+    print("  OK restart destacado, depois do sshd, com reconexão e conferência por JSON")
 
 if falhas:
     print()
