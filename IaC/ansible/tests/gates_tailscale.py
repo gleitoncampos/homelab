@@ -312,11 +312,14 @@ if tarefas is None:
     falhas.append(f"nenhum play do 01-opnsense-setup.yml tem a task `{T_SSHD}`")
 else:
     nomes = [t.get("name") for t in tarefas]
-    idx = lambda n: max((i for i, x in enumerate(nomes) if x == n), default=-1)
-    i_sshd, i_rst, i_cnf = idx(T_SSHD), idx(T_RESTART), idx(T_CONF)
-    faltam = [n for n, i in ((T_RESTART, i_rst), (T_CONF, i_cnf)) if i < 0]
-    if faltam:
-        falhas.append(f"falta task no play: {faltam}")
+    # Cada uma das três EXATAMENTE uma vez: com `max()` sobre cópias, uma
+    # duplicata antes do sshd ou do restart passava com a ordem falsa.
+    contagem = {n: nomes.count(n) for n in (T_SSHD, T_RESTART, T_CONF)}
+    erradas = {n: c for n, c in contagem.items() if c != 1}
+    i_sshd, i_rst, i_cnf = (nomes.index(n) if contagem[n] else -1
+                            for n in (T_SSHD, T_RESTART, T_CONF))
+    if erradas:
+        falhas.append(f"cada task deve aparecer exatamente 1 vez no play: {erradas}")
     else:
         rst, cnf = tarefas[i_rst], tarefas[i_cnf]
         if not (i_sshd < i_rst < i_cnf):
@@ -332,10 +335,20 @@ else:
                 or not any("ansible.builtin.wait_for_connection" in t for t in entre):
             falhas.append("falta reconectar (meta: reset_connection + wait_for_connection) "
                           "entre o restart e a conferência")
-        when = cnf.get("when")
-        if "ansible_check_mode" not in str(when):
-            falhas.append("a conferência não tem guarda de --check: falharia em falso "
-                          "contra o estado vivo")
+        if str(cnf.get("when")).strip() != "not ansible_check_mode":
+            falhas.append("a conferência deve ter exatamente `when: not ansible_check_mode`: "
+                          "sem a guarda falharia em falso contra o estado vivo")
+        # Chaves que calam falha, ou pulam etapa, derrubam a prova sem avisar.
+        for rotulo, t in (("restart", rst), ("conferência", cnf)):
+            ruins = [k for k in ("failed_when", "ignore_errors", "ignore_unreachable") if k in t]
+            if ruins:
+                falhas.append(f"{rotulo} do Tailscale usa {ruins}: calaria a falha")
+        if "when" in rst:
+            falhas.append("o restart do Tailscale tem `when`: pularia a regeneração das rotas")
+        for t in entre:
+            if "when" in t or "ignore_errors" in t:
+                falhas.append(f"`{t.get('name', t.get('ansible.builtin.meta'))}` entre o "
+                              "restart e a conferência não pode ter when/ignore_errors")
         until = str(cnf.get("until", ""))
         if "from_json" not in until or "difference" not in until \
                 or "default([], true)" not in until:
