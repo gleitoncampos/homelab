@@ -186,22 +186,42 @@ checar(re.fullmatch(r"quay\.io/prometheuscommunity/json-exporter:v\d+\.\d+\.\d+"
        f"json_exporter com tag de versão fixa (veio {_je.get('image')!r})")
 _je_mount = "/srv/containers/json_exporter/json_exporter.yml:/config.yml:ro"
 checar(_je_mount in (_je.get("volumes") or []), "json_exporter monta o arquivo de módulos somente-leitura")
+checar(f"--config.file={_je_mount.split(':')[1]}" in (_je.get("command") or []),
+       "json_exporter lê o arquivo no mesmo caminho em que o volume o monta (--config.file)")
+for _nome, _svc in servicos.items():
+    if any(isinstance(v, str) and v.startswith("/srv/containers/") for v in (_svc.get("volumes") or [])):
+        checar("node.role == manager" in (((_svc.get("deploy") or {}).get("placement") or {}).get("constraints") or []),
+               f"{_nome}: bind em /srv/containers (disco local, entregue só nos managers) exige node.role == manager")
 checar(any(f.get("src") == "json_exporter.yml" and f.get("dest") == _je_mount.split(":")[0]
            for f in _comum.get("monitoring_sidecar_files", [])),
        "json_exporter.yml é entregue pelo playbook no caminho que o compose monta")
 checar('replacement: "tasks.monitoring_json_exporter:7979"' in _prom, "o Prometheus raspa o json_exporter pelo serviço do Swarm")
 _je_cfg = yaml.safe_load((REPO / "docker/monitoring/swarm/json_exporter.yml").read_text(encoding="utf-8"))["modules"]
 checar(set(_je_cfg) == {"status", "componentes", "cstate"}, f"módulos do json_exporter.yml ({sorted(_je_cfg)})")
-# O json_exporter acrescenta `_info` ao nome das métricas de `type: object` com valor constante.
-_je_metricas = {m["name"] + "_info" for mod in _je_cfg.values() for m in mod["metrics"]}
-_dash_metricas = set(re.findall(r"\b((?:statuspage|cstate)_[a-z_]+_info)\b", _bb_dash))
+# O json_exporter nomeia a série `<name>_<chave de values>`: derivado das chaves, não cravado.
+_je_metricas = {f"{m['name']}_{k}" for mod in _je_cfg.values() for m in mod["metrics"] for k in m["values"]}
+_dash_exprs = [t["expr"] for pn in json.loads(_bb_dash)["panels"] for t in pn.get("targets", [])]
+_dash_metricas = {m for e in _dash_exprs for m in re.findall(r'(?<!")\b((?:statuspage|cstate)_[a-z_]*[a-z])\b', e)}
 checar(bool(_dash_metricas) and _dash_metricas <= _je_metricas,
        f"toda métrica de status page do dashboard sai do json_exporter.yml ({sorted(_dash_metricas - _je_metricas)})")
+# Valor de rótulo que o dashboard compara tem de existir no enum de quem o publica.
+_enum_ind = {"none", "maintenance", "minor", "major", "critical"}
+_enum_sum = {"ok", "notice", "disrupted", "down"}
+_ind = {v for e in _dash_exprs for v in re.findall(r'indicator="([^"]*)"', e)}
+_sum = {v for e in _dash_exprs for v in re.findall(r'summary="([^"]*)"', e)}
+checar(bool(_ind) and _ind <= _enum_ind, f"indicator do dashboard dentro do enum do Statuspage ({sorted(_ind - _enum_ind)})")
+checar(bool(_sum) and _sum <= _enum_sum, f"summary do dashboard dentro do enum do cState ({sorted(_sum - _enum_sum)})")
+# Instância sem indicador conhecido (HTML 200, formato novo, alvo parado) não pode sumir do painel.
+for _job, _met in (("statuspage_status", "statuspage_status_info"), ("statuspage_cstate", "cstate_summary_info")):
+    _ex = [e for e in _dash_exprs if _met in e]
+    checar(bool(_ex) and all(f'up{{job="{_job}"}}' in e and "* 0 + 5" in e for e in _ex),
+           f"dashboard: toda expressão de {_met} tem o termo DESCONHECIDO (up do job)")
 checar('min(up{job=~\\"statuspage_.*\\"})' in _bb_dash, "dashboard tem o stat da própria sonda das status pages (up dos jobs)")
 _sufixo = {"status": "/api/v2/status.json", "componentes": "/api/v2/components.json", "cstate": "/index.json"}
 
 
 def _statuspage_validos(alvos, origem):
+    checar(len(alvos) >= 1, f"{origem}: tem ao menos um alvo (lista vazia passaria por vacuidade)")
     checar(all({"nome", "modulo", "alvo"} <= set(a) for a in alvos), f"{origem}: todo alvo tem nome, modulo e alvo")
     checar({a.get("modulo") for a in alvos} <= set(_je_cfg), f"{origem}: todo módulo existe no json_exporter.yml")
     pares = [(a.get("modulo"), a.get("nome")) for a in alvos]

@@ -254,8 +254,12 @@ services:
     volumes:
       - /srv/containers/json_exporter/json_exporter.yml:/config.yml:ro
     deploy:
-      # Sem restrição de nó, ao contrário do `blackbox`: só faz HTTPS comum e
-      # não precisa escapar do DNS forçado do firewall.
+      # ⚠️ No manager: o arquivo de módulos é entregue pelo playbook 03, que só
+      # roda nos managers, e /srv/containers é disco LOCAL. Num worker o bind
+      # aponta para um caminho que não existe e o Swarm rejeita a task. Mesmo
+      # motivo do `blackbox`, do `prometheus`, do `loki` e do `alloy`.
+      placement:
+        constraints: [node.role == manager]
       resources:
         limits:
           cpus: '0.25'

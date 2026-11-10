@@ -1035,7 +1035,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "O que a status page do próprio fornecedor declara agora. Compare com o quadro \"Trabalho\" (a sonda): fornecedor diz FORA e a sonda OK = incidente parcial dele; sonda FORA e fornecedor OK = problema daqui.",
+      "description": "O que a status page do próprio fornecedor declara agora. Compare com o quadro \"Trabalho\" (a sonda): fornecedor diz FORA e a sonda OK = incidente parcial dele; sonda FORA e fornecedor OK = problema daqui. DESCONHECIDO = a página respondeu, mas sem um indicador que o painel entenda (ou o alvo parou de responder): não é saúde.",
       "gridPos": {
         "x": 4,
         "y": 41,
@@ -1048,7 +1048,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "(max by (instance) (statuspage_status_info{indicator=\"none\"}) * 0) or (max by (instance) (statuspage_status_info{indicator=\"maintenance\"}) * 1) or (max by (instance) (statuspage_status_info{indicator=\"minor\"}) * 2) or (max by (instance) (statuspage_status_info{indicator=\"major\"}) * 3) or (max by (instance) (statuspage_status_info{indicator=\"critical\"}) * 4)",
+          "expr": "(max by (instance) (statuspage_status_info{indicator=\"critical\"}) * 4) or (max by (instance) (statuspage_status_info{indicator=\"major\"}) * 3) or (max by (instance) (statuspage_status_info{indicator=\"minor\"}) * 2) or (max by (instance) (statuspage_status_info{indicator=\"maintenance\"}) * 1) or (max by (instance) (statuspage_status_info{indicator=\"none\"}) * 0) or (max by (instance) (up{job=\"statuspage_status\"}) * 0 + 5)",
           "legendFormat": "{{instance}}",
           "refId": "A",
           "instant": true,
@@ -1059,7 +1059,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "(max by (instance) (cstate_summary_info{summary=\"ok\"}) * 0) or (max by (instance) (cstate_summary_info{summary=\"notice\"}) * 1) or (max by (instance) (cstate_summary_info{summary=\"disrupted\"}) * 3) or (max by (instance) (cstate_summary_info{summary=\"down\"}) * 4)",
+          "expr": "(max by (instance) (cstate_summary_info{summary=\"down\"}) * 4) or (max by (instance) (cstate_summary_info{summary=\"disrupted\"}) * 3) or (max by (instance) (cstate_summary_info{summary=\"notice\"}) * 1) or (max by (instance) (cstate_summary_info{summary=\"ok\"}) * 0) or (max by (instance) (up{job=\"statuspage_cstate\"}) * 0 + 5)",
           "legendFormat": "{{instance}}",
           "refId": "B",
           "instant": true,
@@ -1092,7 +1092,7 @@
                   "index": 0
                 },
                 "1": {
-                  "text": "MANUTENÇÃO",
+                  "text": "MANUTENÇÃO / AVISO",
                   "color": "blue",
                   "index": 1
                 },
@@ -1110,6 +1110,22 @@
                   "text": "FORA",
                   "color": "red",
                   "index": 4
+                },
+                "5": {
+                  "text": "DESCONHECIDO",
+                  "color": "purple",
+                  "index": 5
+                }
+              }
+            },
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "sem dado",
+                  "color": "purple",
+                  "index": 6
                 }
               }
             }
@@ -1136,6 +1152,10 @@
               {
                 "color": "red",
                 "value": 4
+              },
+              {
+                "color": "purple",
+                "value": 5
               }
             ]
           },
@@ -1165,7 +1185,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "(max by (instance) (statuspage_status_info{indicator=\"none\"}) * 0) or (max by (instance) (statuspage_status_info{indicator=\"maintenance\"}) * 1) or (max by (instance) (statuspage_status_info{indicator=\"minor\"}) * 2) or (max by (instance) (statuspage_status_info{indicator=\"major\"}) * 3) or (max by (instance) (statuspage_status_info{indicator=\"critical\"}) * 4)",
+          "expr": "(max by (instance) (statuspage_status_info{indicator=\"critical\"}) * 4) or (max by (instance) (statuspage_status_info{indicator=\"major\"}) * 3) or (max by (instance) (statuspage_status_info{indicator=\"minor\"}) * 2) or (max by (instance) (statuspage_status_info{indicator=\"maintenance\"}) * 1) or (max by (instance) (statuspage_status_info{indicator=\"none\"}) * 0) or (max by (instance) (up{job=\"statuspage_status\"}) * 0 + 5)",
           "legendFormat": "{{instance}}",
           "refId": "A",
           "instant": false,
@@ -1176,7 +1196,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "(max by (instance) (cstate_summary_info{summary=\"ok\"}) * 0) or (max by (instance) (cstate_summary_info{summary=\"notice\"}) * 1) or (max by (instance) (cstate_summary_info{summary=\"disrupted\"}) * 3) or (max by (instance) (cstate_summary_info{summary=\"down\"}) * 4)",
+          "expr": "(max by (instance) (cstate_summary_info{summary=\"down\"}) * 4) or (max by (instance) (cstate_summary_info{summary=\"disrupted\"}) * 3) or (max by (instance) (cstate_summary_info{summary=\"notice\"}) * 1) or (max by (instance) (cstate_summary_info{summary=\"ok\"}) * 0) or (max by (instance) (up{job=\"statuspage_cstate\"}) * 0 + 5)",
           "legendFormat": "{{instance}}",
           "refId": "B",
           "instant": false,
@@ -1210,7 +1230,7 @@
                   "index": 0
                 },
                 "1": {
-                  "text": "MANUTENÇÃO",
+                  "text": "MANUTENÇÃO / AVISO",
                   "color": "blue",
                   "index": 1
                 },
@@ -1228,6 +1248,22 @@
                   "text": "FORA",
                   "color": "red",
                   "index": 4
+                },
+                "5": {
+                  "text": "DESCONHECIDO",
+                  "color": "purple",
+                  "index": 5
+                }
+              }
+            },
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "sem dado",
+                  "color": "purple",
+                  "index": 6
                 }
               }
             }
@@ -1254,6 +1290,10 @@
               {
                 "color": "red",
                 "value": 4
+              },
+              {
+                "color": "purple",
+                "value": 5
               }
             ]
           },
@@ -1276,7 +1316,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Só os componentes que não estão operacionais (páginas pequenas, sem grupos, e sistemas das páginas cState). Vazio = tudo operacional.",
+      "description": "Só os componentes que não estão operacionais (páginas pequenas, sem grupos, e sistemas das páginas cState). Vazio não prova saúde se a Sonda estiver FORA.",
       "gridPos": {
         "x": 0,
         "y": 55,
@@ -1323,7 +1363,8 @@
               "Value #A": true,
               "Value #B": true,
               "job": true,
-              "__name__": true
+              "__name__": true,
+              "nome": true
             },
             "renameByName": {
               "instance": "Fornecedor",
@@ -1340,7 +1381,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "noValue": "Todos os componentes operacionais"
+          "noValue": "Nenhum componente fora do normal (confira o quadro Sonda)"
         },
         "overrides": []
       }

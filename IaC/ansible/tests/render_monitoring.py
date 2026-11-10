@@ -61,6 +61,7 @@ CONTEXTO = {
         {"nome": "forn-a", "modulo": "status", "alvo": "https://status.example.com/api/v2/status.json"},
         {"nome": "forn-b", "modulo": "status", "alvo": "https://status.example.org/api/v2/status.json"},
         {"nome": "forn-c", "modulo": "cstate", "alvo": "https://cstate.example.com/index.json"},
+        {"nome": "forn-a", "modulo": "componentes", "alvo": "https://status.example.com/api/v2/components.json"},
     ],
 }
 
@@ -175,8 +176,8 @@ if prom:
 
     # Status pages oficiais: um job por módulo do json_exporter, mesmo molde.
     sp = {j["job_name"]: j for j in prom["scrape_configs"] if j["job_name"].startswith("statuspage_")}
-    checar(sorted(sp) == ["statuspage_cstate", "statuspage_status"], f"um job por módulo do json_exporter: {sorted(sp)}")
-    for job, modulo in (("statuspage_status", "status"), ("statuspage_cstate", "cstate")):
+    checar(sorted(sp) == ["statuspage_componentes", "statuspage_cstate", "statuspage_status"], f"um job por módulo do json_exporter: {sorted(sp)}")
+    for job, modulo in (("statuspage_status", "status"), ("statuspage_componentes", "componentes"), ("statuspage_cstate", "cstate")):
         j = sp.get(job, {})
         checar(j.get("metrics_path") == "/probe" and j.get("params", {}).get("module") == [modulo],
                f"{job}: /probe com module={modulo}")
