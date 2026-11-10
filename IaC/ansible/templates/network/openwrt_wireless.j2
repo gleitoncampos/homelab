@@ -1,10 +1,9 @@
 config wifi-device 'radio0'
 	option type 'mac80211'
 	option path '{{ openwrt_radio0_path }}'
-	# ACS só entre 1, 6 e 11: fixo no 1 (20/10/2026) a ocupação ficou em 47% em
-	# 23 h, quase toda de fora (tx próprio 0,9%); em teste de 24 h (22/10/2026).
-	option channel 'auto'
-	option channels '1 6 11'
+	# Canal fixo no 1: o ACS restrito a 1, 6 e 11 também escolheu o 1 e deu 45,8%
+	# de ocupação em 42 h (09/11/2026), igual ao fixo (46,1%), quase toda de fora.
+	option channel '1'
 	option band '2g'
 	option htmode 'HT20'
 	option cell_density '0'
