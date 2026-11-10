@@ -188,8 +188,14 @@ _je_mount = "/srv/containers/json_exporter/json_exporter.yml:/config.yml:ro"
 checar(_je_mount in (_je.get("volumes") or []), "json_exporter monta o arquivo de módulos somente-leitura")
 checar(f"--config.file={_je_mount.split(':')[1]}" in (_je.get("command") or []),
        "json_exporter lê o arquivo no mesmo caminho em que o volume o monta (--config.file)")
+def _bind_local(v):
+    """Sintaxe curta (`/srv/containers/x:/y`) ou longa (`type: bind`, `source: /srv/containers/x`)."""
+    origem = v if isinstance(v, str) else (v.get("source") if isinstance(v, dict) else None)
+    return isinstance(origem, str) and origem.startswith("/srv/containers/")
+
+
 for _nome, _svc in servicos.items():
-    if any(isinstance(v, str) and v.startswith("/srv/containers/") for v in (_svc.get("volumes") or [])):
+    if any(_bind_local(v) for v in (_svc.get("volumes") or [])):
         checar("node.role == manager" in (((_svc.get("deploy") or {}).get("placement") or {}).get("constraints") or []),
                f"{_nome}: bind em /srv/containers (disco local, entregue só nos managers) exige node.role == manager")
 checar(any(f.get("src") == "json_exporter.yml" and f.get("dest") == _je_mount.split(":")[0]
@@ -201,16 +207,34 @@ checar(set(_je_cfg) == {"status", "componentes", "cstate"}, f"módulos do json_e
 # O json_exporter nomeia a série `<name>_<chave de values>`: derivado das chaves, não cravado.
 _je_metricas = {f"{m['name']}_{k}" for mod in _je_cfg.values() for m in mod["metrics"] for k in m["values"]}
 _dash_exprs = [t["expr"] for pn in json.loads(_bb_dash)["panels"] for t in pn.get("targets", [])]
-_dash_metricas = {m for e in _dash_exprs for m in re.findall(r'(?<!")\b((?:statuspage|cstate)_[a-z_]*[a-z])\b', e)}
+_dash_metricas = {m for e in _dash_exprs for m in re.findall(r'(?<!")\b((?:statuspage|cstate)_[A-Za-z0-9_]*[A-Za-z0-9])\b', e)}
 checar(bool(_dash_metricas) and _dash_metricas <= _je_metricas,
        f"toda métrica de status page do dashboard sai do json_exporter.yml ({sorted(_dash_metricas - _je_metricas)})")
+checar(_je_metricas <= _dash_metricas,
+       f"toda métrica do json_exporter.yml é usada pelo dashboard ({sorted(_je_metricas - _dash_metricas)})")
 # Valor de rótulo que o dashboard compara tem de existir no enum de quem o publica.
 _enum_ind = {"none", "maintenance", "minor", "major", "critical"}
 _enum_sum = {"ok", "notice", "disrupted", "down"}
 _ind = {v for e in _dash_exprs for v in re.findall(r'indicator="([^"]*)"', e)}
 _sum = {v for e in _dash_exprs for v in re.findall(r'summary="([^"]*)"', e)}
-checar(bool(_ind) and _ind <= _enum_ind, f"indicator do dashboard dentro do enum do Statuspage ({sorted(_ind - _enum_ind)})")
-checar(bool(_sum) and _sum <= _enum_sum, f"summary do dashboard dentro do enum do cState ({sorted(_sum - _enum_sum)})")
+checar(_ind == _enum_ind, f"o dashboard trata todo indicator do Statuspage e só eles (faltam {sorted(_enum_ind - _ind)}, sobram {sorted(_ind - _enum_ind)})")
+checar(_sum == _enum_sum, f"o dashboard trata todo summary do cState e só eles (faltam {sorted(_enum_sum - _sum)}, sobram {sorted(_sum - _enum_sum)})")
+# Mapeamento dos painéis 19 e 20: o 5 (DESCONHECIDO) nunca pode parecer saudável, e "sem dado" tem de estar mapeado.
+for _pid in (19, 20):
+    _pn = next(p for p in json.loads(_bb_dash)["panels"] if p["id"] == _pid)
+    _map = _pn["fieldConfig"]["defaults"]["mappings"]
+    _vals = next((m["options"] for m in _map if m["type"] == "value"), {})
+    checar(_vals.get("0", {}).get("color") == "green" and _vals.get("0", {}).get("text") == "OK",
+           f"painel {_pid}: severidade 0 é OK em verde")
+    checar(_vals.get("5", {}).get("color") == "purple" and _vals.get("5", {}).get("text") == "DESCONHECIDO",
+           f"painel {_pid}: severidade 5 é DESCONHECIDO em roxo, nunca verde")
+    checar(all(_vals.get(str(k), {}).get("color") not in (None, "green") for k in (1, 2, 3, 4, 5)),
+           f"painel {_pid}: nenhuma severidade acima de 0 é verde")
+    checar(any(m["type"] == "special" and m["options"].get("match") == "null" for m in _map),
+           f"painel {_pid}: `sem dado` (null) está mapeado")
+    _cores = [st["color"] for st in _pn["fieldConfig"]["defaults"]["thresholds"]["steps"]]
+    checar(_cores == ["green", "blue", "yellow", "orange", "red", "purple"],
+           f"painel {_pid}: degraus de cor do mais brando ao DESCONHECIDO ({_cores})")
 # Instância sem indicador conhecido (HTML 200, formato novo, alvo parado) não pode sumir do painel.
 for _job, _met in (("statuspage_status", "statuspage_status_info"), ("statuspage_cstate", "cstate_summary_info")):
     _ex = [e for e in _dash_exprs if _met in e]
