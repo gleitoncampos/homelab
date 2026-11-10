@@ -180,6 +180,49 @@ if _local.exists():
     if _real is not None:
         _alvos_validos(_real, "blackbox_alvos local")
 
+# Painel "o que está fora", fase 2 (json_exporter, status pages oficiais).
+_je = servicos.get("json_exporter") or {}
+checar(re.fullmatch(r"quay\.io/prometheuscommunity/json-exporter:v\d+\.\d+\.\d+", _je.get("image", "")) is not None,
+       f"json_exporter com tag de versão fixa (veio {_je.get('image')!r})")
+_je_mount = "/srv/containers/json_exporter/json_exporter.yml:/config.yml:ro"
+checar(_je_mount in (_je.get("volumes") or []), "json_exporter monta o arquivo de módulos somente-leitura")
+checar(any(f.get("src") == "json_exporter.yml" and f.get("dest") == _je_mount.split(":")[0]
+           for f in _comum.get("monitoring_sidecar_files", [])),
+       "json_exporter.yml é entregue pelo playbook no caminho que o compose monta")
+checar('replacement: "tasks.monitoring_json_exporter:7979"' in _prom, "o Prometheus raspa o json_exporter pelo serviço do Swarm")
+_je_cfg = yaml.safe_load((REPO / "docker/monitoring/swarm/json_exporter.yml").read_text(encoding="utf-8"))["modules"]
+checar(set(_je_cfg) == {"status", "componentes", "cstate"}, f"módulos do json_exporter.yml ({sorted(_je_cfg)})")
+# O json_exporter acrescenta `_info` ao nome das métricas de `type: object` com valor constante.
+_je_metricas = {m["name"] + "_info" for mod in _je_cfg.values() for m in mod["metrics"]}
+_dash_metricas = set(re.findall(r"\b((?:statuspage|cstate)_[a-z_]+_info)\b", _bb_dash))
+checar(bool(_dash_metricas) and _dash_metricas <= _je_metricas,
+       f"toda métrica de status page do dashboard sai do json_exporter.yml ({sorted(_dash_metricas - _je_metricas)})")
+checar('min(up{job=~\\"statuspage_.*\\"})' in _bb_dash, "dashboard tem o stat da própria sonda das status pages (up dos jobs)")
+_sufixo = {"status": "/api/v2/status.json", "componentes": "/api/v2/components.json", "cstate": "/index.json"}
+
+
+def _statuspage_validos(alvos, origem):
+    checar(all({"nome", "modulo", "alvo"} <= set(a) for a in alvos), f"{origem}: todo alvo tem nome, modulo e alvo")
+    checar({a.get("modulo") for a in alvos} <= set(_je_cfg), f"{origem}: todo módulo existe no json_exporter.yml")
+    pares = [(a.get("modulo"), a.get("nome")) for a in alvos]
+    checar(len(pares) == len(set(pares)), f"{origem}: nome de alvo sem duplicata dentro do módulo")
+    checar(all(a.get("alvo", "").startswith("https://") and a["alvo"].endswith(_sufixo.get(a.get("modulo"), "\0"))
+               for a in alvos),
+           f"{origem}: alvo em https e com o caminho do seu módulo (o json_exporter não segue redirect: URL final)")
+
+
+_sp_padrao = _comum.get("statuspage_alvos", [])
+_statuspage_validos(_sp_padrao, "statuspage_alvos padrão")
+checar(all(re.match(r"https://([a-z0-9-]+\.)?example\.com/", a["alvo"]) for a in _sp_padrao),
+       "statuspage_alvos padrão só com example.com")
+if _local.exists():
+    _sp_real = (yaml.safe_load(_local.read_text(encoding="utf-8")) or {}).get("statuspage_alvos")
+    if _sp_real is not None:
+        _statuspage_validos(_sp_real, "statuspage_alvos local")
+        # Componente por página só onde cabe: página com centenas de componentes usa `status`.
+        checar(len([a for a in _sp_real if a["modulo"] == "componentes"]) <= 8,
+               "statuspage_alvos local: poucos alvos no módulo `componentes` (páginas pequenas, sem grupos)")
+
 if falhas:
     sys.exit(f"\n✗ gates-monitoring: {len(falhas)} falha(s)")
 print("\n✓ gates-monitoring")

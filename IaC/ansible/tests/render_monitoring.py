@@ -56,6 +56,12 @@ CONTEXTO = {
         {"nome": "net-b", "grupo": "base", "modulo": "icmp", "alvo": "192.0.2.201"},
         {"nome": "web-a", "grupo": "trabalho", "modulo": "http_2xx", "alvo": "https://www.example.com"},
     ],
+    # Dois alvos em `status` e um em `cstate`: prova o agrupamento por módulo.
+    "statuspage_alvos": [
+        {"nome": "forn-a", "modulo": "status", "alvo": "https://status.example.com/api/v2/status.json"},
+        {"nome": "forn-b", "modulo": "status", "alvo": "https://status.example.org/api/v2/status.json"},
+        {"nome": "forn-c", "modulo": "cstate", "alvo": "https://cstate.example.com/index.json"},
+    ],
 }
 
 # Em produção a variável vem do group_vars/network, que inclui o firewall:
@@ -166,6 +172,24 @@ if prom:
         (["192.0.2.200"], {"nome": "net-a", "grupo": "base"}),
         (["192.0.2.201"], {"nome": "net-b", "grupo": "base"}),
     ], "cada alvo do blackbox leva os rótulos nome e grupo")
+
+    # Status pages oficiais: um job por módulo do json_exporter, mesmo molde.
+    sp = {j["job_name"]: j for j in prom["scrape_configs"] if j["job_name"].startswith("statuspage_")}
+    checar(sorted(sp) == ["statuspage_cstate", "statuspage_status"], f"um job por módulo do json_exporter: {sorted(sp)}")
+    for job, modulo in (("statuspage_status", "status"), ("statuspage_cstate", "cstate")):
+        j = sp.get(job, {})
+        checar(j.get("metrics_path") == "/probe" and j.get("params", {}).get("module") == [modulo],
+               f"{job}: /probe com module={modulo}")
+        rel = j.get("relabel_configs", [])
+        checar({"source_labels": ["__address__"], "target_label": "__param_target"} in rel
+               and {"source_labels": ["nome"], "target_label": "instance"} in rel
+               and {"target_label": "__address__", "replacement": "tasks.monitoring_json_exporter:7979"} in rel,
+               f"{job}: alvo vai em ?target=, instance = nome, raspa o exporter")
+    checar([(sc["targets"], sc["labels"]) for sc in sp.get("statuspage_status", {}).get("static_configs", [])] == [
+        (["https://status.example.com/api/v2/status.json"], {"nome": "forn-a"}),
+        (["https://status.example.org/api/v2/status.json"], {"nome": "forn-b"}),
+    ], "cada alvo de status page leva o rótulo nome")
+    checar(sp.get("statuspage_status", {}).get("scrape_interval") == "60s", "status pages raspadas a cada 60 s")
 
     rotulos = re.findall(r"replacement:\s*(\S+)", prom_txt)
     checar(

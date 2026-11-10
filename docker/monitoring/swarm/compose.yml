@@ -244,6 +244,27 @@ services:
     networks:
       - monitoring
 
+  # Painel "o que está fora", fase 2: lê as status pages OFICIAIS dos
+  # fornecedores (Statuspage e cState). Os módulos estão em json_exporter.yml;
+  # os alvos, em `statuspage_alvos` no inventário.
+  json_exporter:
+    image: quay.io/prometheuscommunity/json-exporter:v0.8.0
+    command:
+      - "--config.file=/config.yml"
+    volumes:
+      - /srv/containers/json_exporter/json_exporter.yml:/config.yml:ro
+    deploy:
+      # Sem restrição de nó, ao contrário do `blackbox`: só faz HTTPS comum e
+      # não precisa escapar do DNS forçado do firewall.
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 64M
+      restart_policy:
+        condition: any
+    networks:
+      - monitoring
+
   loki:
     image: grafana/loki:3.7.6
     volumes:

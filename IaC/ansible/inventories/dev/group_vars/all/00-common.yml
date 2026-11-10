@@ -355,6 +355,12 @@ monitoring_sidecar_files:
     owner: "root"
     group: "root"
     mode: "0644"
+  - src: "json_exporter.yml"
+    servico: "json_exporter"
+    dest: "/srv/containers/json_exporter/json_exporter.yml"
+    owner: "root"
+    group: "root"
+    mode: "0644"
 
 # ----------------------------------------------------------------------
 # Painel "o que está fora" — alvos do blackbox_exporter
@@ -378,6 +384,24 @@ blackbox_alvos:
   - { nome: "dns-casa", grupo: "base", modulo: "dns_google", alvo: "192.0.2.53:53" }
   - { nome: "dns-externo", grupo: "base", modulo: "dns_google", alvo: "198.51.100.53:53" }
   - { nome: "servico-exemplo", grupo: "trabalho", modulo: "http_2xx", alvo: "https://example.com" }
+
+# ----------------------------------------------------------------------
+# Painel "o que está fora", fase 2 — status pages oficiais (json_exporter)
+# ----------------------------------------------------------------------
+# Cada item vira um alvo no job `statuspage_<modulo>` do prometheus.yml.j2.
+# `modulo` é um dos módulos de docker/monitoring/swarm/json_exporter.yml:
+#   status       — Atlassian Statuspage, `/api/v2/status.json` (indicador geral)
+#   componentes  — Atlassian Statuspage, `/api/v2/components.json` (só página
+#                  SEM grupos e com poucos componentes)
+#   cstate       — cState, `/index.json`
+# `nome` vira o rótulo `instance`: trocar a URL não quebra o histórico.
+#
+# ⚠️ Alvo = URL FINAL. O json_exporter não segue redirect (302 vira `up == 0`).
+# ⚠️ Os valores abaixo são FICTÍCIOS (example.com), de propósito: a lista real
+# diz quais fornecedores a pessoa usa. Ela mora em prod/group_vars/all/
+# 99-local.yml, gitignorado, e substitui esta inteira.
+statuspage_alvos:
+  - { nome: "fornecedor-exemplo", modulo: "status", alvo: "https://status.example.com/api/v2/status.json" }
 
 # ----------------------------------------------------------------------
 # Nobreak (NUT — Network UPS Tools)

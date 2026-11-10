@@ -934,7 +934,417 @@
         },
         "showUnfilled": true
       }
+    },
+    {
+      "type": "row",
+      "title": "Status pages oficiais — o que o fornecedor diz",
+      "id": 17,
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Sonda (status pages)",
+      "id": 18,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "OK se o Prometheus está raspando todos os jobs de status page. FORA ou sem dado = os quadros abaixo estão cegos: nenhum vale.",
+      "gridPos": {
+        "x": 0,
+        "y": 41,
+        "w": 4,
+        "h": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "min(up{job=~\"statuspage_.*\"})",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "orientation": "auto",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "FORA",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "OK",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "FORA"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Fornecedores — status geral (fonte oficial)",
+      "id": 19,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "O que a status page do próprio fornecedor declara agora. Compare com o quadro \"Trabalho\" (a sonda): fornecedor diz FORA e a sonda OK = incidente parcial dele; sonda FORA e fornecedor OK = problema daqui.",
+      "gridPos": {
+        "x": 4,
+        "y": 41,
+        "w": 20,
+        "h": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "(max by (instance) (statuspage_status_info{indicator=\"none\"}) * 0) or (max by (instance) (statuspage_status_info{indicator=\"maintenance\"}) * 1) or (max by (instance) (statuspage_status_info{indicator=\"minor\"}) * 2) or (max by (instance) (statuspage_status_info{indicator=\"major\"}) * 3) or (max by (instance) (statuspage_status_info{indicator=\"critical\"}) * 4)",
+          "legendFormat": "{{instance}}",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "(max by (instance) (cstate_summary_info{summary=\"ok\"}) * 0) or (max by (instance) (cstate_summary_info{summary=\"notice\"}) * 1) or (max by (instance) (cstate_summary_info{summary=\"disrupted\"}) * 3) or (max by (instance) (cstate_summary_info{summary=\"down\"}) * 4)",
+          "legendFormat": "{{instance}}",
+          "refId": "B",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "orientation": "auto",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "OK",
+                  "color": "green",
+                  "index": 0
+                },
+                "1": {
+                  "text": "MANUTENÇÃO",
+                  "color": "blue",
+                  "index": 1
+                },
+                "2": {
+                  "text": "DEGRADADO",
+                  "color": "yellow",
+                  "index": 2
+                },
+                "3": {
+                  "text": "FORA PARCIAL",
+                  "color": "orange",
+                  "index": 3
+                },
+                "4": {
+                  "text": "FORA",
+                  "color": "red",
+                  "index": 4
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "blue",
+                "value": 1
+              },
+              {
+                "color": "yellow",
+                "value": 2
+              },
+              {
+                "color": "orange",
+                "value": 3
+              },
+              {
+                "color": "red",
+                "value": 4
+              }
+            ]
+          },
+          "noValue": "sem dado"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "state-timeline",
+      "title": "Linha do tempo do status por fornecedor",
+      "id": 20,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Histórico do indicador geral de cada status page.",
+      "gridPos": {
+        "x": 0,
+        "y": 46,
+        "w": 24,
+        "h": 9
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "(max by (instance) (statuspage_status_info{indicator=\"none\"}) * 0) or (max by (instance) (statuspage_status_info{indicator=\"maintenance\"}) * 1) or (max by (instance) (statuspage_status_info{indicator=\"minor\"}) * 2) or (max by (instance) (statuspage_status_info{indicator=\"major\"}) * 3) or (max by (instance) (statuspage_status_info{indicator=\"critical\"}) * 4)",
+          "legendFormat": "{{instance}}",
+          "refId": "A",
+          "instant": false,
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "(max by (instance) (cstate_summary_info{summary=\"ok\"}) * 0) or (max by (instance) (cstate_summary_info{summary=\"notice\"}) * 1) or (max by (instance) (cstate_summary_info{summary=\"disrupted\"}) * 3) or (max by (instance) (cstate_summary_info{summary=\"down\"}) * 4)",
+          "legendFormat": "{{instance}}",
+          "refId": "B",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "options": {
+        "mergeValues": true,
+        "showValue": "auto",
+        "alignValue": "left",
+        "rowHeight": 0.8,
+        "legend": {
+          "showLegend": false,
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "OK",
+                  "color": "green",
+                  "index": 0
+                },
+                "1": {
+                  "text": "MANUTENÇÃO",
+                  "color": "blue",
+                  "index": 1
+                },
+                "2": {
+                  "text": "DEGRADADO",
+                  "color": "yellow",
+                  "index": 2
+                },
+                "3": {
+                  "text": "FORA PARCIAL",
+                  "color": "orange",
+                  "index": 3
+                },
+                "4": {
+                  "text": "FORA",
+                  "color": "red",
+                  "index": 4
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "blue",
+                "value": 1
+              },
+              {
+                "color": "yellow",
+                "value": 2
+              },
+              {
+                "color": "orange",
+                "value": 3
+              },
+              {
+                "color": "red",
+                "value": 4
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "table",
+      "title": "Componentes fora do normal",
+      "id": 21,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Só os componentes que não estão operacionais (páginas pequenas, sem grupos, e sistemas das páginas cState). Vazio = tudo operacional.",
+      "gridPos": {
+        "x": 0,
+        "y": 55,
+        "w": 24,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "statuspage_component_info{status!=\"operational\"}",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "cstate_system_info{status!=\"ok\"}",
+          "legendFormat": "",
+          "refId": "B",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "Value #A": true,
+              "Value #B": true,
+              "job": true,
+              "__name__": true
+            },
+            "renameByName": {
+              "instance": "Fornecedor",
+              "component": "Componente",
+              "system": "Componente (cState)",
+              "status": "Estado"
+            }
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Todos os componentes operacionais"
+        },
+        "overrides": []
+      }
     }
   ],
-  "description": "Separa queda do serviço, queda da internet de casa e falha do DNS de casa. Alvos em blackbox_alvos (inventário)."
+  "description": "Separa queda do serviço, queda da internet de casa e falha do DNS de casa; abaixo, o que as status pages oficiais dos fornecedores dizem. Alvos em blackbox_alvos e statuspage_alvos (inventário)."
 }

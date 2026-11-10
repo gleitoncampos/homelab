@@ -1,0 +1,65 @@
+# Módulos do json_exporter da stack `monitoring` (painel "o que está fora",
+# fase 2: o que o FORNECEDOR diz sobre o próprio serviço).
+#
+# O playbook 03 entrega este arquivo em /srv/containers/json_exporter/
+# json_exporter.yml, caminho que o compose monta. Os ALVOS não moram aqui: vêm
+# de `statuspage_alvos` no inventário e entram no prometheus.yml.j2.
+#
+# O estado vem em TEXTO (`none`, `minor`, `operational`…). Cada métrica é uma
+# série constante em 1 (`..._info`) com o texto no RÓTULO; o painel lê o rótulo.
+#
+# ⚠️ O json_exporter NÃO segue redirect: um alvo que responde 302 vira
+# `up == 0`. O alvo tem de ser a URL FINAL (medido em 09/11/2026: a página de um
+# fornecedor respondeu 302 para outro domínio e o alvo ficou sem série).
+modules:
+  # Atlassian Statuspage, `/api/v2/status.json`: o indicador geral da página
+  # (`none`, `minor`, `major`, `critical`, `maintenance`).
+  status:
+    metrics:
+      - name: statuspage_status
+        type: object
+        help: Indicador geral de uma status page Atlassian Statuspage
+        path: '{.status}'
+        labels:
+          indicator: '{.indicator}'
+        values:
+          info: 1
+
+  # Atlassian Statuspage, `/api/v2/components.json`: um item por componente.
+  # ⚠️ `[*]` inclui os GRUPOS, e o filtro por booleano (`?(@.group==false)`)
+  # não casa nesta versão (medido: 0 séries). Só vale para página sem grupos;
+  # as páginas listadas em `statuspage_alvos` desse módulo têm 0 grupos. Página
+  # com centenas de componentes usa só `status`.
+  componentes:
+    metrics:
+      - name: statuspage_component
+        type: object
+        help: Estado de cada componente de uma status page Atlassian Statuspage
+        path: '{.components[*]}'
+        labels:
+          component: '{.name}'
+          status: '{.status}'
+        values:
+          info: 1
+
+  # cState (gerador estático de status page), `/index.json`: o estado geral
+  # (`summaryStatus`) e o de cada sistema.
+  cstate:
+    metrics:
+      - name: cstate_summary
+        type: object
+        help: Estado geral de uma status page cState
+        path: '{}'
+        labels:
+          summary: '{.summaryStatus}'
+        values:
+          info: 1
+      - name: cstate_system
+        type: object
+        help: Estado de cada sistema de uma status page cState
+        path: '{.systems[*]}'
+        labels:
+          system: '{.name}'
+          status: '{.status}'
+        values:
+          info: 1
