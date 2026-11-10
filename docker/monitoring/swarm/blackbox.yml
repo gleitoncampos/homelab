@@ -55,6 +55,19 @@ modules:
       fail_if_not_ssl: true
       valid_status_codes: [200, 301, 302, 303, 307, 308]
 
+  # API que exige chave: sem credencial ela responde 401, e isso É a API no ar
+  # (DNS, TLS e aplicação respondendo). Sem seguir redirect, para medir o próprio
+  # endpoint. 404/5xx e timeout continuam falha. A sonda nunca leva chave.
+  http_auth:
+    prober: http
+    timeout: 10s
+    http:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      follow_redirects: false
+      fail_if_not_ssl: true
+      valid_status_codes: [401]
+
   # Porta aberta, sem protocolo de aplicação (endpoint de VPN).
   tcp_connect:
     prober: tcp

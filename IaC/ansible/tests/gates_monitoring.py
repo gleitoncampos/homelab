@@ -154,6 +154,13 @@ _dash_nomes = set(re.findall(r'nome=\\"([a-z0-9-]+)\\"', _bb_dash))
 _dash_grupos = set(re.findall(r'grupo=\\"([a-z0-9-]+)\\"', _bb_dash))
 checar(bool(_dash_mod) and _dash_mod <= _modulos, f"todo job blackbox_* do dashboard é um módulo do blackbox.yml ({sorted(_dash_mod - _modulos)})")
 
+# http_auth sonda API que exige chave: 401 é "no ar", e só 401 — aceitar 404/5xx
+# faria API quebrada passar por saudável; sem fail_if_not_ssl, TLS quebrado também.
+_http_auth = (yaml.safe_load((REPO / "docker/monitoring/swarm/blackbox.yml").read_text(encoding="utf-8"))["modules"].get("http_auth") or {}).get("http") or {}
+checar(_http_auth.get("valid_status_codes") == [401], f"http_auth aceita só 401 (veio {_http_auth.get('valid_status_codes')!r})")
+checar(_http_auth.get("fail_if_not_ssl") is True and _http_auth.get("follow_redirects") is False,
+       "http_auth exige TLS e não segue redirect")
+
 # Painel cego não pode parecer saudável: exporter/scrape caído tem de aparecer.
 checar('min(up{job=~\\"blackbox_.*\\"})' in _bb_dash, "dashboard do blackbox tem o stat da própria sonda (up dos jobs)")
 checar("or vector(0)" not in _bb_dash, "dashboard do blackbox não converte sonda parada em 0 verde (or vector(0))")
