@@ -230,6 +230,11 @@ for _pid in (19, 20):
            f"painel {_pid}: severidade 5 é DESCONHECIDO em roxo, nunca verde")
     checar(all(_vals.get(str(k), {}).get("color") not in (None, "green") for k in (1, 2, 3, 4, 5)),
            f"painel {_pid}: nenhuma severidade acima de 0 é verde")
+    _esp = {"0": ("OK", "green"), "1": ("MANUTENÇÃO / AVISO", "blue"), "2": ("DEGRADADO", "yellow"),
+            "3": ("FORA PARCIAL", "orange"), "4": ("FORA", "red"), "5": ("DESCONHECIDO", "purple")}
+    checar({k: (v.get("text"), v.get("color")) for k, v in _vals.items()} == _esp,
+           f"painel {_pid}: mapeamento 0-5 exato (texto e cor)")
+    checar(len(_pn["targets"]) == 2, f"painel {_pid}: exatamente dois alvos ({len(_pn['targets'])})")
     checar(any(m["type"] == "special" and m["options"].get("match") == "null" for m in _map),
            f"painel {_pid}: `sem dado` (null) está mapeado")
     _cores = [st["color"] for st in _pn["fieldConfig"]["defaults"]["thresholds"]["steps"]]

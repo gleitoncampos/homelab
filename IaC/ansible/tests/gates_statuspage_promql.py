@@ -86,13 +86,15 @@ for pid in (19, 20):
         series, esperado = [], []
         for inst, (sel, up, sev) in casos.items():
             for sl in ([] if sel is None else (sel if isinstance(sel, list) else [sel])):
-                series.append({"series": f'{metrica}{{instance="{inst}",{sl}}}', "values": "1x6"})
-            series.append({"series": f'up{{job="{job}",instance="{inst}"}}', "values": f"{up}x6"})
+                series.append({"series": f'{metrica}{{job="{job}",instance="{inst}",nome="{inst}",{sl}}}', "values": "1x6"})
+            series.append({"series": f'up{{job="{job}",instance="{inst}",nome="{inst}"}}', "values": f"{up}x6"})
             esperado.append({"labels": f'{{instance="{inst}"}}', "value": sev})
-        # Ruído: um alvo que só existe em OUTRO job (parado, e também de pé) não pode entrar no resultado
-        # (prova o filtro `job=` do termo DESCONHECIDO; o promtool reprova amostra a mais).
-        for _i, _up in (("so_outro_job_parado", 0), ("so_outro_job_de_pe", 1)):
-            series.append({"series": f'up{{job="statuspage_componentes",instance="{_i}"}}', "values": f"{_up}x6"})
+        # Ruído: alvos que só existem em OUTRO job (parado e de pé) não podem entrar no resultado: o job irmão
+        # do `CASOS`, o de componentes e um sem relação. Prova o filtro `job=` do termo DESCONHECIDO; o
+        # promtool reprova amostra a mais. As séries levam `job` e `nome`, como no scrape real.
+        for _j in sorted(set(CASOS) - {job}) + ["statuspage_componentes", "blackbox"]:
+            for _i, _up in ((f"so_{_j}_parado", 0), (f"so_{_j}_de_pe", 1)):
+                series.append({"series": f'up{{job="{_j}",instance="{_i}",nome="{_i}"}}', "values": f"{_up}x6"})
         teste = {"evaluation_interval": "1m", "tests": [{
             "interval": "1m", "input_series": series,
             "promql_expr_test": [{"expr": exprs[0], "eval_time": "3m", "exp_samples": esperado}]}]}
