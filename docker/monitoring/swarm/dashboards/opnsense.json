@@ -932,12 +932,12 @@
               }
             ]
           },
-          "unit": "binBps"
+          "unit": "Mbits"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 5,
+        "h": 6,
         "w": 6,
         "x": 0,
         "y": 7
@@ -964,7 +964,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "irate(node_network_receive_bytes_total{job=\"$job\",device=\"$wan_interface_1\"}[1m])",
+          "expr": "irate(node_network_receive_bytes_total{job=\"$job\",device=\"igc0\"}[1m]) * 8 / 1000000",
           "intervalFactor": 1,
           "legendFormat": "In: {{ device }}",
           "metric": "node_network_receive_bytes_total",
@@ -978,7 +978,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "-irate(node_network_transmit_bytes_total{job=\"$job\",device=\"$wan_interface_1\"}[1m])",
+          "expr": "-irate(node_network_transmit_bytes_total{job=\"$job\",device=\"igc0\"}[1m]) * 8 / 1000000",
           "hide": false,
           "intervalFactor": 1,
           "legendFormat": "Out: {{ device }}",
@@ -1049,15 +1049,132 @@
               }
             ]
           },
-          "unit": "binBps"
+          "unit": "Mbits"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 6,
+        "y": 7
+      },
+      "id": 42,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "irate(node_network_receive_bytes_total{job=\"$job\",device=\"igc1\"}[1m]) * 8 / 1000000",
+          "intervalFactor": 1,
+          "legendFormat": "In: {{ device }}",
+          "metric": "node_network_receive_bytes_total",
+          "range": true,
+          "refId": "A",
+          "step": 1
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "-irate(node_network_transmit_bytes_total{job=\"$job\",device=\"igc1\"}[1m]) * 8 / 1000000",
+          "hide": false,
+          "intervalFactor": 1,
+          "legendFormat": "Out: {{ device }}",
+          "metric": "node_network_receive_bytes_total",
+          "range": true,
+          "refId": "B",
+          "step": 1
+        }
+      ],
+      "title": "WAN 2 In/Out",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 25,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "Mbits"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 5,
-        "w": 6,
-        "x": 6,
-        "y": 7
+        "w": 12,
+        "x": 0,
+        "y": 13
       },
       "id": 31,
       "options": {
@@ -1081,7 +1198,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "irate(node_network_receive_bytes_total{job=\"$job\",device=\"$lan_interface_1\"}[1m])",
+          "expr": "irate(node_network_receive_bytes_total{job=\"$job\",device=\"$lan_interface_1\"}[1m]) * 8 / 1000000",
           "intervalFactor": 1,
           "legendFormat": "In: {{ device }}",
           "metric": "node_network_receive_bytes_total",
@@ -1095,7 +1212,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "-irate(node_network_transmit_bytes_total{job=\"$job\",device=\"$lan_interface_1\"}[1m])",
+          "expr": "-irate(node_network_transmit_bytes_total{job=\"$job\",device=\"$lan_interface_1\"}[1m]) * 8 / 1000000",
           "hide": false,
           "intervalFactor": 1,
           "legendFormat": "Out: {{ device }}",
@@ -1325,7 +1442,7 @@
         "h": 6,
         "w": 6,
         "x": 0,
-        "y": 12
+        "y": 18
       },
       "id": 21,
       "options": {
@@ -1349,7 +1466,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "irate(node_network_receive_packets_total{job=\"$job\",device=\"$wan_interface_1\"}[1m])",
+          "expr": "irate(node_network_receive_packets_total{job=\"$job\",device=\"igc0\"}[1m])",
           "intervalFactor": 1,
           "legendFormat": "Receive: {{ device }}",
           "metric": "node_network_receive_bytes_total",
@@ -1363,10 +1480,10 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "irate(node_network_receive_multicast_total{job=\"$job\",device=\"$wan_interface_1\"}[1m])",
+          "expr": "irate(node_network_receive_multicast_total{job=\"$job\",device=\"igc0\"}[1m])",
           "hide": false,
           "intervalFactor": 1,
-          "legendFormat": "Multicasts: {{ device }}",
+          "legendFormat": "Rx Multicasts: {{ device }}",
           "metric": "node_network_receive_bytes_total",
           "range": true,
           "refId": "B",
@@ -1378,10 +1495,10 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "irate(node_network_receive_drop_total{job=\"$job\",device=\"$wan_interface_1\"}[1m])",
+          "expr": "irate(node_network_receive_drop_total{job=\"$job\",device=\"igc0\"}[1m])",
           "hide": false,
           "intervalFactor": 1,
-          "legendFormat": "Drops: {{ device }}",
+          "legendFormat": "Rx Drops: {{ device }}",
           "metric": "node_network_receive_bytes_total",
           "range": true,
           "refId": "C",
@@ -1393,17 +1510,76 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "irate(node_network_receive_errs_total{job=\"$job\",device=\"$wan_interface_1\"}[1m])",
+          "expr": "irate(node_network_receive_errs_total{job=\"$job\",device=\"igc0\"}[1m])",
           "hide": false,
           "intervalFactor": 1,
-          "legendFormat": "Errors: {{ device }}",
+          "legendFormat": "Rx Errors: {{ device }}",
           "metric": "node_network_receive_bytes_total",
           "range": true,
           "refId": "D",
           "step": 1
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "-irate(node_network_transmit_packets_total{job=\"$job\",device=\"igc0\"}[1m])",
+          "intervalFactor": 1,
+          "legendFormat": "Transmit: {{ device }}",
+          "metric": "node_network_receive_bytes_total",
+          "range": true,
+          "refId": "E",
+          "step": 1
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "-irate(node_network_transmit_multicast_total{job=\"$job\",device=\"igc0\"}[1m])",
+          "hide": false,
+          "intervalFactor": 1,
+          "legendFormat": "Tx Multicasts: {{ device }}",
+          "metric": "node_network_receive_bytes_total",
+          "range": true,
+          "refId": "F",
+          "step": 1
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "-irate(node_network_transmit_drop_total{job=\"$job\",device=\"igc0\"}[1m])",
+          "hide": false,
+          "intervalFactor": 1,
+          "legendFormat": "Tx Drops: {{ device }}",
+          "metric": "node_network_receive_bytes_total",
+          "range": true,
+          "refId": "G",
+          "step": 1
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "-irate(node_network_transmit_errs_total{job=\"$job\",device=\"igc0\"}[1m])",
+          "hide": false,
+          "intervalFactor": 1,
+          "legendFormat": "Tx Errors: {{ device }}",
+          "metric": "node_network_receive_bytes_total",
+          "range": true,
+          "refId": "H",
+          "step": 1
         }
       ],
-      "title": "WAN 1 Receive Packets",
+      "title": "WAN 1 Packets",
       "type": "timeseries"
     },
     {
@@ -1471,7 +1647,7 @@
         "h": 6,
         "w": 6,
         "x": 6,
-        "y": 12
+        "y": 18
       },
       "id": 33,
       "options": {
@@ -1512,7 +1688,7 @@
           "expr": "irate(node_network_receive_multicast_total{job=\"$job\",device=\"$lan_interface_1\"}[1m])",
           "hide": false,
           "intervalFactor": 1,
-          "legendFormat": "Multicasts: {{ device }}",
+          "legendFormat": "Rx Multicasts: {{ device }}",
           "metric": "node_network_receive_bytes_total",
           "range": true,
           "refId": "B",
@@ -1527,7 +1703,7 @@
           "expr": "irate(node_network_receive_drop_total{job=\"$job\",device=\"$lan_interface_1\"}[1m])",
           "hide": false,
           "intervalFactor": 1,
-          "legendFormat": "Drops: {{ device }}",
+          "legendFormat": "Rx Drops: {{ device }}",
           "metric": "node_network_receive_bytes_total",
           "range": true,
           "refId": "C",
@@ -1542,14 +1718,73 @@
           "expr": "irate(node_network_receive_errs_total{job=\"$job\",device=\"$lan_interface_1\"}[1m])",
           "hide": false,
           "intervalFactor": 1,
-          "legendFormat": "Errors: {{ device }}",
+          "legendFormat": "Rx Errors: {{ device }}",
           "metric": "node_network_receive_bytes_total",
           "range": true,
           "refId": "D",
           "step": 1
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "-irate(node_network_transmit_packets_total{job=\"$job\",device=\"$lan_interface_1\"}[1m])",
+          "intervalFactor": 1,
+          "legendFormat": "Transmit: {{ device }}",
+          "metric": "node_network_receive_bytes_total",
+          "range": true,
+          "refId": "E",
+          "step": 1
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "-irate(node_network_transmit_multicast_total{job=\"$job\",device=\"$lan_interface_1\"}[1m])",
+          "hide": false,
+          "intervalFactor": 1,
+          "legendFormat": "Tx Multicasts: {{ device }}",
+          "metric": "node_network_receive_bytes_total",
+          "range": true,
+          "refId": "F",
+          "step": 1
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "-irate(node_network_transmit_drop_total{job=\"$job\",device=\"$lan_interface_1\"}[1m])",
+          "hide": false,
+          "intervalFactor": 1,
+          "legendFormat": "Tx Drops: {{ device }}",
+          "metric": "node_network_receive_bytes_total",
+          "range": true,
+          "refId": "G",
+          "step": 1
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "-irate(node_network_transmit_errs_total{job=\"$job\",device=\"$lan_interface_1\"}[1m])",
+          "hide": false,
+          "intervalFactor": 1,
+          "legendFormat": "Tx Errors: {{ device }}",
+          "metric": "node_network_receive_bytes_total",
+          "range": true,
+          "refId": "H",
+          "step": 1
         }
       ],
-      "title": "LAN 1 Receive Packets",
+      "title": "LAN 1 Packets",
       "type": "timeseries"
     },
     {
@@ -1658,298 +1893,6 @@
         }
       ],
       "title": "CPU Usage",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 25,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "normal"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 6,
-        "x": 0,
-        "y": 18
-      },
-      "id": 29,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.2.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "irate(node_network_transmit_packets_total{job=\"$job\",device=\"$wan_interface_1\"}[1m])",
-          "intervalFactor": 1,
-          "legendFormat": "Receive: {{ device }}",
-          "metric": "node_network_receive_bytes_total",
-          "range": true,
-          "refId": "A",
-          "step": 1
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "irate(node_network_transmit_multicast_total{job=\"$job\",device=\"$wan_interface_1\"}[1m])",
-          "hide": false,
-          "intervalFactor": 1,
-          "legendFormat": "Multicasts: {{ device }}",
-          "metric": "node_network_receive_bytes_total",
-          "range": true,
-          "refId": "B",
-          "step": 1
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "irate(node_network_transmit_drop_total{job=\"$job\",device=\"$wan_interface_1\"}[1m])",
-          "hide": false,
-          "intervalFactor": 1,
-          "legendFormat": "Drops: {{ device }}",
-          "metric": "node_network_receive_bytes_total",
-          "range": true,
-          "refId": "C",
-          "step": 1
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "irate(node_network_transmit_errs_total{job=\"$job\",device=\"$wan_interface_1\"}[1m])",
-          "hide": false,
-          "intervalFactor": 1,
-          "legendFormat": "Errors: {{ device }}",
-          "metric": "node_network_receive_bytes_total",
-          "range": true,
-          "refId": "D",
-          "step": 1
-        }
-      ],
-      "title": "WAN 1 Transmit Packets",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 25,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "normal"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 6,
-        "x": 6,
-        "y": 18
-      },
-      "id": 35,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.2.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "irate(node_network_transmit_packets_total{job=\"$job\",device=\"$lan_interface_1\"}[1m])",
-          "intervalFactor": 1,
-          "legendFormat": "Receive: {{ device }}",
-          "metric": "node_network_receive_bytes_total",
-          "range": true,
-          "refId": "A",
-          "step": 1
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "irate(node_network_transmit_multicast_total{job=\"$job\",device=\"$lan_interface_1\"}[1m])",
-          "hide": false,
-          "intervalFactor": 1,
-          "legendFormat": "Multicasts: {{ device }}",
-          "metric": "node_network_receive_bytes_total",
-          "range": true,
-          "refId": "B",
-          "step": 1
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "irate(node_network_transmit_drop_total{job=\"$job\",device=\"$lan_interface_1\"}[1m])",
-          "hide": false,
-          "intervalFactor": 1,
-          "legendFormat": "Drops: {{ device }}",
-          "metric": "node_network_receive_bytes_total",
-          "range": true,
-          "refId": "C",
-          "step": 1
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "irate(node_network_transmit_errs_total{job=\"$job\",device=\"$lan_interface_1\"}[1m])",
-          "hide": false,
-          "intervalFactor": 1,
-          "legendFormat": "Errors: {{ device }}",
-          "metric": "node_network_receive_bytes_total",
-          "range": true,
-          "refId": "D",
-          "step": 1
-        }
-      ],
-      "title": "LAN 1 Transmit Packets",
       "type": "timeseries"
     },
     {
@@ -2569,29 +2512,6 @@
         },
         "refresh": 1,
         "regex": "",
-        "type": "query"
-      },
-      {
-        "current": {
-          "text": "igc0",
-          "value": "igc0"
-        },
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "definition": "label_values(device)",
-        "includeAll": false,
-        "label": "WAN Interface 1",
-        "name": "wan_interface_1",
-        "options": [],
-        "query": {
-          "qryType": 1,
-          "query": "label_values(device)",
-          "refId": "PrometheusVariableQueryEditor-VariableQuery"
-        },
-        "refresh": 1,
-        "regex": "/igc*/",
         "type": "query"
       },
       {
