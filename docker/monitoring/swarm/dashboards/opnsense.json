@@ -551,6 +551,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "Totais acumulados desde o boot, nao taxas. Forks = processos criados (fork), System Calls = pedidos dos programas ao kernel, Traps = excecoes de CPU tratadas pelo kernel (como falha de pagina). Zeram no reboot; serve para ver ordem de grandeza, nao o que acontece agora.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -661,6 +662,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "Interrupcoes de dispositivo por segundo (media de 5 min). Placa de rede, disco e outros avisam a CPU que ha trabalho; tende a subir junto com o trafego das interfaces.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -780,6 +782,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "Trocas de contexto por segundo: quantas vezes a CPU parou um processo ou thread para rodar outro. Acompanha a quantidade de processos ativos; valor alto com CPU alta indica muita disputa por CPU.",
       "fieldConfig": {
         "defaults": {
           "color": {
