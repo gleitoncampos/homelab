@@ -540,8 +540,10 @@
          `krsort`. Ate 01/09/2026 os quatro estavam em 253-255, com o par IPv6
          INVERTIDO (CLARO_DHCP6=253 contra WAN_PPPOEV6=254), e a ordem so saia
          certa porque o `defaultgw` e o PRIMEIRO digito da chave e mascarava os
-         numeros. Agora 1 = principal e 2 = contingencia nos dois protocolos, e a
-         ordem se sustenta sozinha se algum dia o `defaultgw` sair de cena.
+         numeros. Agora 1 = principal e 2 = contingencia: no IPv4 a principal e a
+         CLARO (inversao de 14/11/2026, a WAN1 PPPoE oscilava 11-12% de perda
+         e a CLARO nao), no IPv6 segue a WAN1. A ordem se sustenta sozinha se
+         algum dia o `defaultgw` sair de cena.
 
          O par `monitor_killstates_priority` ("Failback States") fica em 0 nos
          quatro — agora por ESCOLHA, nao por impedimento. Ele mata os estados do
@@ -558,7 +560,7 @@
         <interface>wan</interface>
         <ipprotocol>inet</ipprotocol>
         <gateway/>
-        <defaultgw>1</defaultgw>
+        <defaultgw>0</defaultgw>
         <fargw>0</fargw>
         <monitor_disable>0</monitor_disable>
         <monitor_noroute>0</monitor_noroute>
@@ -566,7 +568,7 @@
         <monitor_killstates_priority>0</monitor_killstates_priority>
         <monitor>{{ opnsense_wan_monitor_ipv4 }}</monitor>
         <force_down>0</force_down>
-        <priority>1</priority>
+        <priority>2</priority>
         <weight>1</weight>
         <latencylow>200</latencylow>
         <latencyhigh>1000</latencyhigh>
@@ -580,9 +582,11 @@
       {# 2ª WAN (CLARO) — 3 gateways novos, espelhando a ESTRUTURA do WAN_GW
          acima (monitor_disable=0, thresholds de latência/perda). uuids fixos
          fictícios v4, não os do firewall vivo. monitor via variável nova
-         (anycast público). defaultgw v6 = WAN_PPPOEV6 (a WAN1 é a default v6
-         também); CLARO é backup nos dois protocolos (defaultgw=0). Prioridades
-         255/254/253 escalonam para o failover dos gateway_group. #}
+         (anycast público). defaultgw v6 = WAN_PPPOEV6 (a LAN usa o prefixo
+         delegado pela WAN1 e a CLARO não delega PD: teste de 14/11/2026,
+         NoPrefixAvail). Desde 14/11/2026 CLARO_DHCP é a default v4 e a WAN1
+         (WAN_GW) é a contingência; no v6 a CLARO segue backup (defaultgw=0). Prioridades
+         1 (principal) e 2 (contingencia) escalonam o failover dos gateway_group. #}
       <gateway_item uuid="9eb7dc4b-0a81-491c-bdee-1d9aee206bdb">
         <disabled>0</disabled>
         <name>CLARO_DHCP</name>
@@ -590,7 +594,7 @@
         <interface>opt1</interface>
         <ipprotocol>inet</ipprotocol>
         <gateway/>
-        <defaultgw>0</defaultgw>
+        <defaultgw>1</defaultgw>
         <fargw>0</fargw>
         <monitor_disable>0</monitor_disable>
         <monitor_noroute>0</monitor_noroute>
@@ -598,7 +602,7 @@
         <monitor_killstates_priority>0</monitor_killstates_priority>
         <monitor>{{ opnsense_wan2_monitor_ipv4 }}</monitor>
         <force_down>0</force_down>
-        <priority>2</priority>
+        <priority>1</priority>
         <weight>1</weight>
         <latencylow>200</latencylow>
         <latencyhigh>1000</latencyhigh>

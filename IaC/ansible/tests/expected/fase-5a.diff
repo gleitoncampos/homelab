@@ -141,19 +141,19 @@
        <gateway_item uuid="f42ac827-3c2e-4237-998d-603930653b98">
          <disabled>0</disabled>
          <name>WAN_GW</name>
-@@ -2065,29 +2911,107 @@
+@@ -2063,31 +2909,109 @@
+         <interface>wan</interface>
+         <ipprotocol>inet</ipprotocol>
          <gateway/>
-         <defaultgw>1</defaultgw>
-         <fargw>0</fargw>
--        <monitor_disable>1</monitor_disable>
++        <defaultgw>0</defaultgw>
++        <fargw>0</fargw>
 +        <monitor_disable>0</monitor_disable>
-         <monitor_noroute>0</monitor_noroute>
--        <monitor_killstates>0</monitor_killstates>
++        <monitor_noroute>0</monitor_noroute>
 +        <monitor_killstates>1</monitor_killstates>
 +        <monitor_killstates_priority>0</monitor_killstates_priority>
 +        <monitor>192.0.2.9</monitor>
 +        <force_down>0</force_down>
-+        <priority>1</priority>
++        <priority>2</priority>
 +        <weight>1</weight>
 +        <latencylow>200</latencylow>
 +        <latencyhigh>1000</latencyhigh>
@@ -171,7 +171,7 @@
 +        <interface>opt1</interface>
 +        <ipprotocol>inet</ipprotocol>
 +        <gateway/>
-+        <defaultgw>0</defaultgw>
++        <defaultgw>1</defaultgw>
 +        <fargw>0</fargw>
 +        <monitor_disable>0</monitor_disable>
 +        <monitor_noroute>0</monitor_noroute>
@@ -179,7 +179,7 @@
 +        <monitor_killstates_priority>0</monitor_killstates_priority>
 +        <monitor>8.8.8.8</monitor>
 +        <force_down>0</force_down>
-+        <priority>2</priority>
++        <priority>1</priority>
 +        <weight>1</weight>
 +        <latencylow>200</latencylow>
 +        <latencyhigh>1000</latencyhigh>
@@ -197,10 +197,12 @@
 +        <interface>wan</interface>
 +        <ipprotocol>inet6</ipprotocol>
 +        <gateway/>
-+        <defaultgw>1</defaultgw>
-+        <fargw>0</fargw>
+         <defaultgw>1</defaultgw>
+         <fargw>0</fargw>
+-        <monitor_disable>1</monitor_disable>
 +        <monitor_disable>0</monitor_disable>
-+        <monitor_noroute>0</monitor_noroute>
+         <monitor_noroute>0</monitor_noroute>
+-        <monitor_killstates>0</monitor_killstates>
 +        <monitor_killstates>1</monitor_killstates>
          <monitor_killstates_priority>0</monitor_killstates_priority>
          <monitor/>
@@ -477,10 +479,10 @@
 +    <gateway_group>
 +      <name>WAN_IPV4</name>
 +      <trigger>down</trigger>
-+      <descr>Failover IPv4 (WAN -&gt; CLARO)</descr>
++      <descr>Failover IPv4 (CLARO -&gt; WAN)</descr>
 +      <ipprotocol>inet</ipprotocol>
-+      <item>WAN_GW|1</item>
-+      <item>CLARO_DHCP|2</item>
++      <item>CLARO_DHCP|1</item>
++      <item>WAN_GW|2</item>
 +    </gateway_group>
 +    <gateway_group>
 +      <name>WAN_IPV6</name>

@@ -1762,13 +1762,13 @@ opnsense_plugins:
 # nomes já aparecem em `opnsense_rules`.
 opnsense_gateway_groups:
   - name: WAN_IPV4
-    descr: "Failover IPv4 (WAN -> CLARO)"
+    descr: "Failover IPv4 (CLARO -> WAN)"
     ipprotocol: inet
     trigger: down
     membros:
-      - gateway: WAN_GW
-        tier: 1
       - gateway: CLARO_DHCP
+        tier: 1
+      - gateway: WAN_GW
         tier: 2
 
   - name: WAN_IPV6

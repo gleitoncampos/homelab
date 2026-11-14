@@ -102,9 +102,12 @@
        PRIMEIRO gateway do protocolo que nao esteja em `$skip`. Com a lista
        vazia ele devolve o WAN_GW morto, e o roteador se recusa a instalar a
        rota — daí a ausencia total.
-   Com o campo presente, WAN_GW entra em `$skip` e a CLARO assume nos dois
-   protocolos: a ordenacao de `newKey()` poe `defaultgw=1` na frente, entao a
-   WAN1 volta a ser default sozinha quando o link retorna.
+   Com o campo presente, o gateway que cai entra em `$skip` e o proximo
+   assume: a ordenacao de `newKey()` poe `defaultgw=1` na frente, entao
+   o principal volta a ser default sozinho quando o link retorna. Desde
+   14/11/2026 o principal e a CLARO no IPv4 (WAN_GW de contingencia) e a WAN1
+   no IPv6 (CLARO_DHCP6 e contingencia so no nome: a CLARO nao delega
+   PD e o prefixo dos clientes vem da WAN1, entao o v6 dela nao sai).
 
    ⚠️ O elemento e OMITIDO quando desligado, nunca escrito como 0. Os dois
    leitores discordam sobre o valor: system.inc e gateway_watcher.php usam
