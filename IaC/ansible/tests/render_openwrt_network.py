@@ -352,6 +352,9 @@ if _c24 == ["auto"]:
            f"o ACS do radio0 só escolhe entre 1, 6 e 11 ({_l24})")
 else:
     checar(_c24 in (["1"], ["6"], ["11"]), f"o radio0 usa canal 1, 6 ou 11 ({_c24})")
+# Canal 1, 6 e 11 só não encavalam a 20 MHz: a 40 MHz o 1 invade o 2 ao 5.
+_h24 = re.findall(r"option htmode '([^']*)'", _r24)
+checar(_h24 == ["HT20"], f"o radio0 usa htmode HT20 uma vez só ({_h24})")
 
 print("\nInvariante 14 — o crond do AP loga só a execução dos jobs:")
 # Abaixo de 8 o crond do busybox loga wakeup e reparse do crontab a cada
