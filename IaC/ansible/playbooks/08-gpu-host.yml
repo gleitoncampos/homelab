@@ -441,6 +441,7 @@
       ansible.builtin.file:
         path: /run/hulk-keepalive
         state: absent
+      changed_when: false
       tags: [always]
 
 - name: "08 - node1: script para acordar o hulk"
