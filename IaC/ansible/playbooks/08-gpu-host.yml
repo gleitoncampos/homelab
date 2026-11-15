@@ -432,7 +432,9 @@
       ansible.builtin.debug:
         msg: >-
           Netplan gravado em {{ gpu_netplan_arquivo }} e NÃO aplicado. Passo
-          manual: porta do switch em access VLAN 20, depois reiniciar o hulk.
+          manual, NESTA ordem: reiniciar o hulk por SSH e, durante o boot,
+          mover a porta do switch para access VLAN 20 (com a porta já movida
+          o IP de DHCP deixa de existir e o SSH não conecta para o reboot).
       when: _netplan is changed
       tags: [rede]
 
