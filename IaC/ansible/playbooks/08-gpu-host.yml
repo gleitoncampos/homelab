@@ -1,0 +1,192 @@
+---
+# =============================================================================
+# 08 - hulk: servidor de GPU sob demanda
+# =============================================================================
+# Spec: Frentes/homelab/spec-2026-11-15-hulk-gpu-sob-demanda.md (fora do repo).
+#
+# FORA do site.yml DE PROPÓSITO: host sob demanda, aplicado explicitamente.
+#   ansible-playbook playbooks/08-gpu-host.yml --limit gpu,homelab_managers
+#
+# FASES:
+#   A (hulk ainda na VLAN 30, IP do DHCP): tudo, com gpu_rede_estatica=false.
+#   B (migração para a VLAN 20): gpu_rede_estatica=true grava o netplan SEM
+#     aplicar; a mudança de porta no switch e o reboot são manuais.
+#   ⚠️ O Ansible nunca roda `netplan apply`: o IP novo cortaria a própria
+#   conexão e, com a porta ainda na VLAN 30, deixaria o hulk inalcançável.
+#
+# ⚠️ O MAC (`gpu_mac`) vive só no 99-local.yml: o hook de commit barra MAC em
+# arquivo versionado. Sem ele este play aborta.
+# =============================================================================
+
+- name: "08 - hulk: base, GPU, Docker, ferramentas e monitor de ociosidade"
+  hosts: gpu
+  become: true
+  vars:
+    gpu_netplan_arquivo: /etc/netplan/60-hulk.yaml
+    gpu_netplan_teste: /tmp/hulk-netplan-root
+  pre_tasks:
+    - name: Validar segredos do Vault exigidos por este play
+      ansible.builtin.include_tasks: "../tasks/validate_vault.yml"
+      vars:
+        required_secrets:
+          - ssh_public_key
+
+    - name: Exigir o MAC real, em minúsculas
+      ansible.builtin.assert:
+        that:
+          - gpu_mac is defined
+          - gpu_mac | lower == gpu_mac
+          - gpu_mac is match('^([0-9a-f]{2}:){5}[0-9a-f]{2}$')
+        fail_msg: >-
+          gpu_mac ausente ou fora do formato. Defina o MAC real, em minúsculas,
+          em group_vars/gpu/99-local.yml. WoL para MAC errado não dá erro: só
+          nunca acorda nada.
+        quiet: true
+
+  tasks:
+    # --------------------------------------------------------------- base --
+    - name: Atualizar o cache do APT
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      tags: [base]
+
+    - name: Instalar pacotes base
+      ansible.builtin.apt:
+        name: [ca-certificates, curl, gnupg, ufw, unattended-upgrades, python3]
+        state: present
+      tags: [base]
+
+    - name: Definir o hostname
+      ansible.builtin.hostname:
+        name: hulk
+      tags: [base]
+
+    - name: Instalar a chave pública do administrador
+      ansible.posix.authorized_key:
+        user: "{{ ansible_user }}"
+        key: "{{ ssh_public_key }}"
+      tags: [base]
+
+    - name: Fechar o SSH para login por senha
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/10-homelab.conf
+        content: |
+          PasswordAuthentication no
+          PermitRootLogin no
+          KbdInteractiveAuthentication no
+        owner: root
+        group: root
+        mode: "0644"
+      register: _sshd_conf
+      tags: [base]
+
+    - name: Recarregar o sshd  # noqa: no-handler
+      ansible.builtin.systemd:
+        name: ssh
+        state: reloaded
+      when: _sshd_conf is changed
+      tags: [base]
+
+    - name: Conferir no sshd efetivo que a senha está fechada
+      ansible.builtin.command: sshd -T
+      register: _sshd_t
+      changed_when: false
+      failed_when: "'passwordauthentication no' not in _sshd_t.stdout"
+      tags: [base]
+
+    - name: Atualizações de segurança automáticas
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        content: |
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Unattended-Upgrade "1";
+        mode: "0644"
+      tags: [base]
+
+    # --------------------------------------------------------------- rede --
+    # Valida num diretório de teste ANTES de gravar em /etc/netplan: netplan
+    # inválido gravado só estoura no próximo boot, com o hulk já sem rede.
+    - name: Criar a árvore de teste do netplan
+      ansible.builtin.file:
+        path: "{{ gpu_netplan_teste }}/etc/netplan"
+        state: directory
+        mode: "0700"
+      changed_when: false
+      tags: [rede]
+
+    - name: Renderizar o netplan estático na árvore de teste  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/gpu/netplan.yaml.j2"
+        dest: "{{ gpu_netplan_teste }}/etc/netplan/60-hulk.yaml"
+        mode: "0600"
+      changed_when: false
+      tags: [rede]
+
+    - name: Validar o netplan com netplan generate (sem aplicar)
+      ansible.builtin.command: netplan generate --root-dir {{ gpu_netplan_teste }}
+      changed_when: false
+      tags: [rede]
+
+    - name: Gravar o netplan estático do hulk  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/gpu/netplan.yaml.j2"
+        dest: "{{ gpu_netplan_arquivo }}"
+        owner: root
+        group: root
+        mode: "0600"
+      when: gpu_rede_estatica | bool
+      register: _netplan
+      tags: [rede]
+
+    - name: Impedir o cloud-init de regenerar a rede
+      ansible.builtin.copy:
+        dest: /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+        content: "network: {config: disabled}\n"
+        mode: "0644"
+      when: gpu_rede_estatica | bool
+      tags: [rede]
+
+    - name: Listar os outros arquivos de netplan (instalador e cloud-init)
+      ansible.builtin.find:
+        paths: /etc/netplan
+        patterns: "*.yaml"
+        excludes: ["60-hulk.yaml"]
+      register: _netplan_outros
+      when: gpu_rede_estatica | bool
+      tags: [rede]
+
+    - name: Remover os outros netplans (DHCP do instalador somaria ao estático)
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ _netplan_outros.files | default([]) }}"
+      loop_control:
+        label: "{{ item.path }}"
+      when: gpu_rede_estatica | bool
+      tags: [rede]
+
+    - name: Avisar que a rede foi gravada e NÃO aplicada  # noqa: no-handler
+      ansible.builtin.debug:
+        msg: >-
+          Netplan gravado em {{ gpu_netplan_arquivo }} e NÃO aplicado. Passo
+          manual: porta do switch em access VLAN 20, depois reiniciar o hulk.
+      when: _netplan is changed
+      tags: [rede]
+
+    # ----------------------------------------------------------- firewall --
+    - name: Liberar o SSH só para os clientes autorizados
+      community.general.ufw:
+        rule: allow
+        port: "22"
+        proto: tcp
+        src: "{{ item }}"
+      loop: "{{ gpu_clientes_cidrs }}"
+      tags: [base]
+
+    - name: Ativar o UFW negando entrada por padrão
+      community.general.ufw:
+        state: enabled
+        policy: deny
+        direction: incoming
+      tags: [base]

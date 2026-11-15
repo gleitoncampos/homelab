@@ -1,0 +1,20 @@
+# Gerado por Ansible (playbooks/08-gpu-host.yml). Edição manual é perdida.
+# Placa casada por MAC: o nome da interface muda entre kernel e placa.
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    lan0:
+      match:
+        macaddress: {{ gpu_mac }}
+      wakeonlan: true
+      dhcp4: false
+      dhcp6: false
+      accept-ra: false
+      addresses:
+        - {{ gpu_ip_estatico }}/{{ gpu_prefixo }}
+      routes:
+        - to: default
+          via: {{ gpu_gateway }}
+      nameservers:
+        addresses: {{ gpu_dns | to_json }}

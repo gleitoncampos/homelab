@@ -56,6 +56,54 @@ for nome, f in ferr.items():
     checar(":" in str(f.get("image", "")) and tag != "latest" and not tag.startswith("latest"),
            f"{nome}: imagem com tag fixa (achado: {f.get('image')})")
 
+# --- Playbook 08, play 1: base, SSH, rede, firewall (Tarefa 2) ---
+pb_txt = ler("playbooks/08-gpu-host.yml")
+pb = yaml.safe_load(pb_txt) if pb_txt else [{}, {}]
+play1 = pb[0]
+
+
+def achatar(tarefas):
+    for t in tarefas or []:
+        yield t
+        yield from achatar(t.get("block"))
+
+
+t1 = list(achatar(play1.get("tasks")))
+nomes1 = [t.get("name", "") for t in t1]
+
+
+def tarefa(nome):
+    achadas = [t for t in t1 if t.get("name") == nome]
+    checar(len(achadas) == 1, f"task '{nome}' existe uma vez")
+    return achadas[0] if achadas else {}
+
+
+checar(play1.get("hosts") == "gpu", "play 1 mira só o grupo gpu")
+pre = str(play1.get("pre_tasks"))
+checar("validate_vault.yml" in pre and "ssh_public_key" in pre, "exige ssh_public_key do vault")
+checar("gpu_mac is defined" in pre, "aborta se gpu_mac não estiver definido (vive no 99-local.yml)")
+
+rede = tarefa("Gravar o netplan estático do hulk")
+checar("gpu_rede_estatica" in str(rede.get("when")), "netplan estático só quando gpu_rede_estatica")
+checar("netplan apply" not in pb_txt.replace("`netplan apply`", ""),
+       "o Ansible nunca roda netplan apply (cortaria a própria conexão)")
+checar("netplan generate" in pb_txt, "valida o netplan com netplan generate")
+tpl = ler("templates/gpu/netplan.yaml.j2")
+checar("wakeonlan: true" in tpl, "netplan liga o wakeonlan na placa")
+checar("dhcp4: false" in tpl and "accept-ra: false" in tpl, "sem DHCP e sem RA (IPv6 fora de escopo)")
+checar("macaddress: {{ gpu_mac }}" in tpl, "casa a placa por MAC (nome da interface é instável)")
+checar("set-name" not in tpl, "sem renomear interface")
+ssh = tarefa("Fechar o SSH para login por senha")
+checar("PasswordAuthentication no" in str(ssh), "SSH sem senha")
+checar(any("sshd -T" in str(t) for t in t1), "confere o sshd efetivo, não só o arquivo")
+checar(any("unattended-upgrades" in str(t) for t in t1), "unattended-upgrades presente")
+ufw22 = [t for t in t1 if (t.get("community.general.ufw") or {}).get("port") == "22"]
+checar(len(ufw22) == 1 and "src" in ufw22[0]["community.general.ufw"], "SSH liberado só por origem (src)")
+i_ufw_on = next((i for i, t in enumerate(t1)
+                 if (t.get("community.general.ufw") or {}).get("state") == "enabled"), -1)
+i_ufw_22 = next((i for i, t in enumerate(t1) if ufw22 and t is ufw22[0]), -1)
+checar(i_ufw_22 != -1 and i_ufw_on > i_ufw_22, "UFW só liga depois de liberar o SSH (senão tranca o próprio acesso)")
+
 # --- novos blocos entram aqui (uma tarefa por bloco) ---
 
 if falhas:
