@@ -17,6 +17,11 @@ node2 ansible_host=<IP-DO-WORKER-1> ansible_user=nuvidio
 [omv]
 # omv ansible_host=<IP-DO-OMV> ansible_user=root
 
+# Servidor de GPU sob demanda. FORA de [homelab:children] de propósito:
+# o 01-bootstrap-os e o Swarm não se aplicam a ele (playbooks/08-gpu-host.yml).
+[gpu]
+hulk ansible_host=<IP-DO-HULK> ansible_user=<USUARIO-DO-INSTALADOR>
+
 [homelab:children]
 homelab_managers
 homelab_workers

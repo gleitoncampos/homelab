@@ -1,0 +1,44 @@
+---
+# hulk — servidor de GPU sob demanda. CAMADA VERSIONADA.
+#
+# ⚠️ IP e driver deste arquivo são FICTÍCIOS de propósito, e o MAC NÃO TEM
+# valor aqui (o hook de commit barra MAC em arquivo versionado). Os reais vivem
+# no `99-local.yml` ao lado (gitignorado), que carrega depois e sobrescreve.
+# O playbook 08 aborta se `gpu_mac` faltar: um WoL para o MAC errado não dá
+# erro, só nunca acorda nada.
+#
+# O hulk fica FORA do grupo `homelab` de propósito: o 01-bootstrap-os (UFW do
+# Swarm, Syncthing, pastas das stacks) e o 02 (cluster) não se aplicam a ele.
+
+# gpu_mac: definir em 99-local.yml, em minúsculas, seis pares separados por dois-pontos
+gpu_ip_estatico: "192.0.2.12"         # fictício (faixa de documentação)
+gpu_prefixo: 24
+gpu_gateway: "192.0.2.1"
+gpu_dns: ["192.0.2.1"]
+gpu_wol_broadcast: "192.0.2.255"
+
+# ⚠️ false = o netplan estático não é gravado. Vira true na fase B (migração
+# VLAN 30 → 20), com o cabo já pronto para a VLAN 20: gravar o IP novo enquanto
+# a porta ainda está na VLAN 30 deixa o hulk inalcançável no próximo boot.
+gpu_rede_estatica: false
+
+# Blackwell (RTX 5060 Ti) exige o módulo open, versão 570 ou superior. O valor
+# real sai de `ubuntu-drivers list` no hulk.
+gpu_driver_pkg: "nvidia-driver-570-open"
+
+# Quem pode falar com o SSH e com as portas das ferramentas: o Swarm (VLAN 20)
+# e a estação de administração na MAIN. Docker publica porta por DNAT e fura o
+# UFW — por isso há também regras na DOCKER-USER.
+gpu_clientes_cidrs:
+  - "192.0.2.0/24"
+
+gpu_dir: "/srv/containers/gpu"
+
+# Tag fixa de propósito: `latest` muda sob o hulk entre um boot e outro.
+gpu_ferramentas:
+  ollama:
+    image: "ollama/ollama:0.0.0"      # tag real definida ao montar as ferramentas
+    porta: 11434
+  whisper:
+    image: "ghcr.io/speaches-ai/speaches:0.0.0-cuda"   # idem
+    porta: 8000

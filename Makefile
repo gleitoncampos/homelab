@@ -28,7 +28,7 @@ PLAYBOOKS   := $(wildcard $(ANSIBLE_DIR)/playbooks/*.yml $(ANSIBLE_DIR)/playbook
         render-proxmox-ifaces render-openwrt-led render-openwrt-network render-openwrt-wifi-neighbors render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass render-opnsense-antiportscan render-opnsense-ipv6 render-opnsense-ssh gates-node-bootstrap gates-swarm-ct gates-pve-exporter gates-monitoring gates-statuspage-promql gates-nut gates-openwrt-nfc gates-openwrt-upgrade \
         gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade \
         gates-tailscale gates-vault-local gates-cpu-pinning validate-alloy render-traefik \
-        gates-repositorios gates-proxmox-hardening gates-omv-spindown gates-openipmi
+        gates-repositorios gates-proxmox-hardening gates-omv-spindown gates-openipmi gates-gpu-host
 
 help: ## Lista os alvos
 	@echo "Alvos disponíveis:"
@@ -62,7 +62,7 @@ ssh-keys: ## Instala a chave gerada pelo bootstrap em todo host do inventário (
 test-bootstrap: ## Testa os renderizadores do bootstrap contra os consumidores reais
 	@python3 IaC/bootstrap/test_render.py
 
-check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network render-openwrt-wifi-neighbors render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass render-opnsense-antiportscan render-opnsense-ipv6 render-opnsense-ssh gates-node-bootstrap gates-swarm-ct gates-pve-exporter gates-monitoring gates-statuspage-promql gates-nut gates-openwrt-nfc gates-openwrt-upgrade gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade gates-tailscale gates-vault-local gates-cpu-pinning validate-alloy render-traefik gates-repositorios gates-proxmox-hardening gates-omv-spindown gates-openipmi ## Tudo que a CI roda
+check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network render-openwrt-wifi-neighbors render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass render-opnsense-antiportscan render-opnsense-ipv6 render-opnsense-ssh gates-node-bootstrap gates-swarm-ct gates-pve-exporter gates-monitoring gates-statuspage-promql gates-nut gates-openwrt-nfc gates-openwrt-upgrade gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade gates-tailscale gates-vault-local gates-cpu-pinning validate-alloy render-traefik gates-repositorios gates-proxmox-hardening gates-omv-spindown gates-openipmi gates-gpu-host ## Tudo que a CI roda
 	@echo
 	@echo "✓ check completo"
 
@@ -301,6 +301,9 @@ gates-omv-spindown: ## Confere o spindown dos HDDs do NAS pelo OMV (setHdParm), 
 
 gates-openipmi: ## Confere que o openipmi é mascarado só em host sem BMC, sem remover o pacote
 	@python3 $(ANSIBLE_DIR)/tests/gates_openipmi.py
+
+gates-gpu-host: ## Confere o hulk: fora do grupo homelab, rede só gravada, 30 amostras de ociosidade, imagem com tag fixa
+	@python3 $(ANSIBLE_DIR)/tests/gates_gpu_host.py
 
 # ⚠️ A configuração do Alloy NÃO é YAML e nenhum linter deste repositório a
 # enxergava. O arquivo versionado carregava um erro de sintaxe — uma vírgula
