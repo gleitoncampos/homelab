@@ -82,13 +82,13 @@ checar(play1.get("hosts") == "gpu", "play 1 mira só o grupo gpu")
 pre = str(play1.get("pre_tasks"))
 checar("validate_vault.yml" in pre and "ssh_public_key" in pre, "exige ssh_public_key do vault")
 checar("gpu_mac is defined" in pre, "aborta se gpu_mac não estiver definido (vive no 99-local.yml)")
-checar("ansible_facts" in pre and "gpu_mac in _macs_do_host" in pre, "o MAC tem de ser de uma placa do próprio hulk (fatos)")
+checar("gpu_mac == ansible_facts.default_ipv4.macaddress" in pre, "o MAC é o da placa em uso (rota padrão), não o de qualquer placa do host")
 checar(all("always" in (t.get("tags") or []) for t in play1.get("pre_tasks", [])),
        "toda pre_task com tag always (senão --tags rede pula o assert do MAC)")
-checar(any((t.get("ansible.builtin.file") or {}).get("path") == "/run/hulk-keepalive"
+checar(any((t.get("ansible.builtin.file") or {}).get("path") == "/run/hulk-keepalive.ansible"
            and (t.get("ansible.builtin.file") or {}).get("state") == "touch" for t in play1.get("pre_tasks", [])),
        "pre_task segura o desligamento (lock) durante a execução")
-checar(any((t.get("ansible.builtin.file") or {}).get("path") == "/run/hulk-keepalive"
+checar(any((t.get("ansible.builtin.file") or {}).get("path") == "/run/hulk-keepalive.ansible"
            and (t.get("ansible.builtin.file") or {}).get("state") == "absent" for t in play1.get("post_tasks", [])),
        "post_task libera o lock")
 
@@ -239,6 +239,85 @@ t2 = list(achatar(play2.get("tasks")))
 checar(any("hulk-wake" in str(t) for t in t2), "play 2 instala o hulk-wake")
 checar(any("wakeonlan" in str(t.get("ansible.builtin.apt", "")) for t in t2), "play 2 instala o wakeonlan")
 checar("'hulk' in groups['gpu']" in str(play2.get("pre_tasks")), "play 2 aborta se o hulk não está no inventário")
+
+# --- Endurecimento pós-revisão do Hades (2ª rodada): conteúdo e comportamento, não só presença ---
+import subprocess
+import tempfile
+import textwrap
+
+pre_assert = next((t for t in play1.get("pre_tasks", []) if "ansible.builtin.assert" in t and "gpu_mac" in str(t)), {})
+that = (pre_assert.get("ansible.builtin.assert") or {}).get("that") or []
+checar(any("gpu_mac | lower == gpu_mac" == x for x in that) and any("is match(" in x for x in that)
+       and "gpu_mac is defined" in that, "assert do MAC: lista `that` completa (formato, minúsculas, definido)")
+checar(pre_assert.get("ignore_errors") is None and "or true" not in str(pre_assert), "assert do MAC sem ignore_errors nem `or true`")
+
+dock_assert = next((t for t in t1 if "ansible.builtin.assert" in t and "_drops" in str(t)), {})
+that_d = (dock_assert.get("ansible.builtin.assert") or {}).get("that") or []
+checar(any("_drops | length == gpu_ferramentas | length" in x for x in that_d)
+       and any("_rets | length ==" in x for x in that_d)
+       and any("_linhas.index(_drops[0]) > _linhas.index(_rets[-1])" in x for x in that_d),
+       "assert da DOCKER-USER: contagem de DROP, de RETURN e ordem, as três")
+
+sudo_c = (tarefa("Sudo sem senha para o usuário de automação").get("ansible.builtin.copy") or {}).get("content", "")
+checar(re.fullmatch(r"\{\{ ansible_user \}\} ALL=\(ALL\) NOPASSWD:ALL\n", sudo_c) is not None,
+       "sudoers é UMA linha exata para o ansible_user (nada de %grupo nem comentário)")
+
+for nome_critico in ("Baixar as imagens das ferramentas", "Recriar o lock depois do reboot do driver"):
+    checar("when" not in tarefa(nome_critico), f"'{nome_critico}' sem `when` (task crítica não pode ser neutralizada)")
+checar(all("when" not in t for t in play1.get("pre_tasks", []) if "file" in str(t) and "keepalive" in str(t))
+       and all("when" not in t for t in play1.get("post_tasks", [])), "lock de pre/post_tasks sem `when`")
+ufw_reload = tarefa("Recarregar o UFW para valer a DOCKER-USER")
+checar(ufw_reload.get("when") == "_after_gpu is changed" and "ufw reload" in str(ufw_reload.get("ansible.builtin.command")),
+       "ufw reload condicionado só à mudança do bloco")
+checar(nomes1.index("Recriar o lock depois do reboot do driver") > nomes1.index("Reiniciar para carregar o driver"),
+       "o lock é recriado DEPOIS do reboot (que apaga o /run)")
+checar(nomes1.index("Recriar o lock depois do reboot do driver") < nomes1.index("Baixar as imagens das ferramentas"),
+       "e antes do pré-pull de GBs")
+checar("link-local: []" in tpl and _lan0.get("link-local") == [],
+       "a placa sem IPv6 link-local: o Ubuntu não aparece na MAIN nem por IPv6")
+
+# Monitor: tráfego de rede conta como atividade; locks do chamador e do playbook
+if script.is_file():
+    checar(idle.decidir(0.0, 1.0, 29, False, True) == (0, False), "tráfego de rede zera o contador (pull de modelo longo)")
+    checar(idle.decidir(0.0, 1.0, 5, False, False) == (6, False), "sem rede o contador segue")
+    checar(isinstance(idle.ler_rede(), int) and idle.REDE_MIN >= 1024 * 1024, "ler_rede devolve bytes; limiar de rede >= 1 MiB por amostra")
+    with tempfile.TemporaryDirectory() as tmp:
+        (Path(tmp) / "hulk-keepalive").write_text("")
+        (Path(tmp) / "hulk-keepalive.ansible").write_text("")
+        agora = _t.time()
+        checar(idle.algum_lock_valido(f"{tmp}/hulk-keepalive*", agora) is True, "o glob enxerga o lock do chamador e o do playbook")
+        os.remove(Path(tmp) / "hulk-keepalive")
+        checar(idle.algum_lock_valido(f"{tmp}/hulk-keepalive*", agora) is True, "o lock do playbook sozinho segura o desligamento")
+        os.remove(Path(tmp) / "hulk-keepalive.ansible")
+        checar(idle.algum_lock_valido(f"{tmp}/hulk-keepalive*", agora) is False, "sem nenhum lock, não segura")
+
+# hulk-wake: COMPORTAMENTO com nc e wakeonlan simulados (rc 0/2/3/4, reenvio, sem WoL se já no ar)
+def rodar_wake(nc_ok, wol_ok, env_extra=None):
+    with tempfile.TemporaryDirectory() as tmp:
+        bin_ = Path(tmp) / "bin"
+        bin_.mkdir()
+        log = Path(tmp) / "wol.log"
+        (bin_ / "nc").write_text("#!/bin/sh\nexit %d\n" % (0 if nc_ok else 1))
+        (bin_ / "wakeonlan").write_text('#!/bin/sh\necho x >> "%s"\nexit %d\n' % (log, 0 if wol_ok else 1))
+        for b in ("nc", "wakeonlan"):
+            (bin_ / b).chmod(0o755)
+        envj = jinja2.Environment(keep_trailing_newline=True)
+        txt = envj.from_string(wake).render(hostvars={"hulk": {
+            "gpu_mac": ":".join(["0a"] * 6), "gpu_ip_estatico": "192.0.2.12", "gpu_wol_broadcast": "192.0.2.255"}})
+        sh = Path(tmp) / "hulk-wake"
+        sh.write_text(txt)
+        env = {"PATH": f"{bin_}:/usr/bin:/bin", **(env_extra or {})}
+        r = subprocess.run(["bash", str(sh)], env=env, capture_output=True, text=True, timeout=60)
+        return r.returncode, (len(log.read_text().split()) if log.exists() else 0)
+
+rc, n = rodar_wake(True, True)
+checar((rc, n) == (0, 0), f"hulk já no ar: exit 0 e NENHUM WoL enviado (achado: rc={rc}, envios={n})")
+rc, n = rodar_wake(False, False)
+checar(rc == 4, f"WoL que falha ao enviar: exit 4 (achado: rc={rc})")
+rc, n = rodar_wake(False, True, {"HULK_ESPERA": "6", "HULK_REENVIO": "1"})
+checar(rc == 3 and n >= 2, f"não acorda: exit 3 no prazo e WoL REENVIADO (achado: rc={rc}, envios={n})")
+rc, n = rodar_wake(False, True, {"HULK_ESPERA": "abc"})
+checar(rc == 2 and n == 0, f"espera inválida: exit 2 antes de enviar qualquer WoL (achado: rc={rc}, envios={n})")
 
 # --- novos blocos entram aqui (uma tarefa por bloco) ---
 

@@ -5,6 +5,7 @@ Ocioso = utilização da GPU < GPU_MAX e da CPU < CPU_MAX. Memória não conta.
 Fail-safe: GPU ilegível, CPU sem amostra anterior ou lock de keepalive zeram o
 contador — nunca desligam. Chamado pelo hulk-idle.timer (systemd).
 """
+import glob
 import json
 import os
 import subprocess
@@ -16,8 +17,11 @@ GPU_MAX = 5.0
 CPU_MAX = 10.0
 AMOSTRAS = int(os.environ.get("HULK_AMOSTRAS", "30"))
 ESTADO = Path(os.environ.get("HULK_ESTADO", "/var/lib/hulk-idle/estado.json"))
-LOCK = Path(os.environ.get("HULK_LOCK", "/run/hulk-keepalive"))
+LOCK_GLOB = os.environ.get("HULK_LOCK_GLOB", "/run/hulk-keepalive*")
 LOCK_TTL = int(os.environ.get("HULK_LOCK_TTL", str(4 * 3600)))
+# Tráfego por amostra (~1 min) a partir do qual o hulk NÃO está ocioso: download
+# de modelo (ollama pull, speaches) tem CPU e GPU baixas e roda por mais de 30 min.
+REDE_MIN = int(os.environ.get("HULK_REDE_MIN_BYTES", str(2 * 1024 * 1024)))
 
 
 def lock_valido(caminho, agora, ttl=LOCK_TTL):
@@ -28,12 +32,30 @@ def lock_valido(caminho, agora, ttl=LOCK_TTL):
         return False
 
 
-def decidir(gpu, cpu, contador, lock):
-    """(gpu%, cpu%, contador atual, lock existe) -> (novo contador, desligar?)."""
-    if lock or gpu is None or cpu is None or gpu >= GPU_MAX or cpu >= CPU_MAX:
+def decidir(gpu, cpu, contador, lock, rede_ativa=False):
+    """(gpu%, cpu%, contador atual, lock existe, rede ativa) -> (novo contador, desligar?)."""
+    if lock or rede_ativa or gpu is None or cpu is None or gpu >= GPU_MAX or cpu >= CPU_MAX:
         return 0, False
     contador += 1
     return contador, contador >= AMOSTRAS
+
+
+def algum_lock_valido(padrao, agora, ttl=LOCK_TTL):
+    """Há algum lock (do chamador ou do playbook) dentro do TTL?"""
+    return any(lock_valido(Path(c), agora, ttl) for c in glob.glob(padrao))
+
+
+def ler_rede():
+    """Bytes (rx+tx) das interfaces reais; ignora loopback e as virtuais do Docker."""
+    total = 0
+    for linha in Path("/proc/net/dev").read_text().splitlines()[2:]:
+        nome, _, resto = linha.partition(":")
+        nome = nome.strip()
+        if nome == "lo" or nome.startswith(("docker", "br-", "veth")):
+            continue
+        campos = resto.split()
+        total += int(campos[0]) + int(campos[8])
+    return total
 
 
 def ler_cpu():
@@ -64,12 +86,14 @@ def main():
     if "total" in estado and total > estado["total"]:
         cpu = 100.0 * (1 - (ocioso - estado["ocioso"]) / (total - estado["total"]))
     gpu = ler_gpu()
-    lock = lock_valido(LOCK, time.time())
-    contador, desligar = decidir(gpu, cpu, estado.get("contador", 0), lock)
+    lock = algum_lock_valido(LOCK_GLOB, time.time())
+    rede = ler_rede()
+    rede_ativa = "rede" in estado and rede >= estado["rede"] and rede - estado["rede"] >= REDE_MIN
+    contador, desligar = decidir(gpu, cpu, estado.get("contador", 0), lock, rede_ativa)
     ESTADO.parent.mkdir(parents=True, exist_ok=True)
-    ESTADO.write_text(json.dumps({"total": total, "ocioso": ocioso, "contador": contador}))
+    ESTADO.write_text(json.dumps({"total": total, "ocioso": ocioso, "rede": rede, "contador": contador}))
     print(f"gpu={gpu} cpu={cpu if cpu is None else round(cpu, 1)} "
-          f"ocioso_seguido={contador}/{AMOSTRAS} lock={lock}", flush=True)
+          f"ocioso_seguido={contador}/{AMOSTRAS} lock={lock} rede_ativa={rede_ativa}", flush=True)
     if desligar:
         print("ocioso pelo tempo limite: desligando", flush=True)
         if os.environ.get("HULK_DRY") == "1":

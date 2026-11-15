@@ -26,8 +26,10 @@
     gpu_netplan_arquivo: /etc/netplan/60-hulk.yaml
     gpu_netplan_teste: /tmp/hulk-netplan-root
   pre_tasks:
-    # `always`: sem a tag, `--tags rede` (a rodada que grava o netplan) pulava
-    # o assert do MAC e o vault.
+    # `always` nas tasks deste play: sem a tag, `--tags rede` (a rodada que
+    # grava o netplan) pulava o assert do MAC. A tag NÃO desce para as tasks do
+    # `include_tasks` do vault: com `--tags rede` o vault é pulado, e tudo bem,
+    # porque o bloco de rede não usa segredo.
     - name: Validar segredos do Vault exigidos por este play
       ansible.builtin.include_tasks: "../tasks/validate_vault.yml"
       vars:
@@ -35,19 +37,17 @@
           - ssh_public_key
       tags: [always]
 
-    - name: Exigir o MAC real, em minúsculas, e que ele seja de uma placa do hulk
-      vars:
-        _macs_do_host: >-
-          {{ ansible_facts.interfaces | map('replace', '-', '_') | map('extract', ansible_facts)
-             | selectattr('macaddress', 'defined') | map(attribute='macaddress') | list }}
+    - name: Exigir o MAC real, em minúsculas, da placa que está em uso (rota padrão)
       ansible.builtin.assert:
         that:
           - gpu_mac is defined
           - gpu_mac | lower == gpu_mac
           - gpu_mac is match('^([0-9a-f]{2}:){5}[0-9a-f]{2}$')
-          - gpu_mac in _macs_do_host
+          - gpu_mac == ansible_facts.default_ipv4.macaddress
         fail_msg: >-
-          gpu_mac ausente, fora do formato ou de nenhuma placa deste host.
+          gpu_mac ausente, fora do formato ou diferente da placa da rota padrão
+          (uma placa Wi-Fi ou uma segunda placa também casariam, e o netplan
+          casaria a errada). A vlan20 herda o MAC da placa, então vale nas duas fases.
           Defina o MAC real, em minúsculas, em group_vars/gpu/99-local.yml.
           WoL para MAC errado não dá erro: só nunca acorda nada, e um MAC
           errado no netplan deixa o hulk sem interface casada no reboot.
@@ -55,12 +55,15 @@
       tags: [always]
 
     # O monitor de ociosidade desligaria o hulk no meio de um dpkg ou de um
-    # `docker pull` (rede, CPU e GPU baixas). O lock vive em /run (tmpfs): se
-    # a execução falhar, ele fica até o próximo boot — falha fechada, sem
-    # desligamento. O monitor ainda o ignora depois de 4 h (TTL).
+    # `docker pull`. O lock do PLAYBOOK é `.ansible`, distinto do lock do
+    # chamador (`/run/hulk-keepalive`): rodar o playbook durante a sessão de
+    # alguém não libera o desligamento dele. O monitor honra os dois (glob).
+    # /run é tmpfs: o reboot do driver o apaga, então ele é recriado logo após.
+    # Se a execução falhar, fica até o próximo boot (falha fechada) e expira
+    # em 4 h (TTL).
     - name: Segurar o desligamento por ociosidade durante a execução
       ansible.builtin.file:
-        path: /run/hulk-keepalive
+        path: /run/hulk-keepalive.ansible
         state: touch
         mode: "0644"
       changed_when: false
@@ -168,6 +171,16 @@
       ansible.builtin.reboot:
         reboot_timeout: 600
       when: _driver is changed
+      tags: [gpu]
+
+    # /run é tmpfs: o reboot acima apagou o lock do pre_task, e daqui em diante
+    # vêm o timer de ociosidade e o `docker pull` de GBs.
+    - name: Recriar o lock depois do reboot do driver
+      ansible.builtin.file:
+        path: /run/hulk-keepalive.ansible
+        state: touch
+        mode: "0644"
+      changed_when: false
       tags: [gpu]
 
     - name: Conferir que o nvidia-smi enxerga a GPU
@@ -442,7 +455,7 @@
   post_tasks:
     - name: Liberar o desligamento por ociosidade
       ansible.builtin.file:
-        path: /run/hulk-keepalive
+        path: /run/hulk-keepalive.ansible
         state: absent
       changed_when: false
       tags: [always]

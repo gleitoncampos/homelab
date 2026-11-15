@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Gerado por Ansible (08-gpu-host.yml). Acorda o hulk e espera o SSH.
-# exit 0 = no ar; exit 3 = não acordou no prazo; exit 4 = falha ao enviar o WoL.
+# exit 0 = no ar; exit 2 = parâmetro inválido; exit 3 = não acordou no prazo;
+# exit 4 = falha ao enviar o WoL.
 #
 # ⚠️ Contrato do chamador: o monitor de ociosidade desliga o hulk após 30 min
 # parado, e "já está no ar" não zera esse relógio. Primeiro comando depois do
@@ -13,6 +14,8 @@ MAC="{{ hostvars['hulk'].gpu_mac }}"
 IP="{{ hostvars['hulk'].gpu_ip_estatico }}"
 BCAST="{{ hostvars['hulk'].gpu_wol_broadcast }}"
 LIMITE="${HULK_ESPERA:-180}"
+REENVIO="${HULK_REENVIO:-30}"
+[[ "$LIMITE" =~ ^[0-9]+$ && "$REENVIO" =~ ^[0-9]+$ ]] || { echo "HULK_ESPERA e HULK_REENVIO são inteiros (s)" >&2; exit 2; }
 
 enviar() {
   wakeonlan -i "$BCAST" "$MAC" >/dev/null || { echo "falha ao enviar o pacote mágico" >&2; exit 4; }
@@ -25,7 +28,7 @@ fi
 
 enviar
 fim=$((SECONDS + LIMITE))
-proximo=$((SECONDS + 30))
+proximo=$((SECONDS + REENVIO))
 until nc -z -w2 "$IP" 22 >/dev/null 2>&1; do
   if (( SECONDS >= fim )); then
     echo "hulk não acordou em ${LIMITE}s" >&2
@@ -33,7 +36,7 @@ until nc -z -w2 "$IP" 22 >/dev/null 2>&1; do
   fi
   if (( SECONDS >= proximo )); then
     enviar
-    proximo=$((SECONDS + 30))
+    proximo=$((SECONDS + REENVIO))
   fi
   sleep 5
 done
