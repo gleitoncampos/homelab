@@ -445,9 +445,12 @@ def verifica_politica_gera_regras(raiz, vlans):
         # Só as regras de REDE: a origem é a própria interface. As de
         # exceção têm origem de host e são conferidas à parte — misturá-las
         # aqui faria a exceção contar como liberação de rede.
+        # Só IPv4: esta é a matriz v4; as regras `inet6` (DECISÃO 021) são
+        # conferidas por `render_opnsense_ipv6.py`.
         def alvos(acao, porta=""):
             return {r.findtext("destination_net") for r in minhas
                     if r.findtext("action") == acao
+                    and r.findtext("ipprotocol") == "inet"
                     and r.findtext("source_net") == eu
                     and (r.findtext("destination_port") or "") == porta}
 

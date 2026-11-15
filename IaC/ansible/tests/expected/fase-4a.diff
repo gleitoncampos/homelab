@@ -78,7 +78,7 @@
              <source_not>0</source_not>
              <source_port/>
              <destination_net>any</destination_net>
-@@ -1505,6 +1805,1014 @@
+@@ -1505,6 +1805,1182 @@
              <shaper2/>
              <description/>
            </rule>
@@ -437,7 +437,7 @@
 +            <source_port/>
 +            <destination_net>any</destination_net>
 +            <destination_not>0</destination_not>
-+            <destination_port>53,853</destination_port>
++            <destination_port>53</destination_port>
 +            <divert-to/>
 +            <gateway/>
 +            <replyto/>
@@ -472,7 +472,63 @@
 +            <tos/>
 +            <shaper1/>
 +            <shaper2/>
-+            <description>MGMT &gt; IPv6 bloqueia DNS e DoT/DoQ externo</description>
++            <description>MGMT &gt; IPv6 bloqueia DNS externo</description>
++          </rule>
++          <rule uuid="6819a5fe-970c-5fe9-9084-201fbad17bbd">
++            <enabled>1</enabled>
++            <statetype>keep</statetype>
++            <state-policy/>
++            <sequence>47</sequence>
++            <action>block</action>
++            <quick>1</quick>
++            <interfacenot>0</interfacenot>
++            <interface>vlan10</interface>
++            <direction>in</direction>
++            <ipprotocol>inet6</ipprotocol>
++            <protocol>tcp/udp</protocol>
++            <icmptype/>
++            <icmp6type/>
++            <source_net>vlan10</source_net>
++            <source_not>0</source_not>
++            <source_port/>
++            <destination_net>any</destination_net>
++            <destination_not>0</destination_not>
++            <destination_port>DoQ_Ports</destination_port>
++            <divert-to/>
++            <gateway/>
++            <replyto/>
++            <disablereplyto>0</disablereplyto>
++            <log>1</log>
++            <allowopts>0</allowopts>
++            <nosync>0</nosync>
++            <nopfsync>0</nopfsync>
++            <statetimeout/>
++            <udp-first/>
++            <udp-multiple/>
++            <udp-single/>
++            <max-src-nodes/>
++            <max-src-states/>
++            <max-src-conn/>
++            <max/>
++            <max-src-conn-rate/>
++            <max-src-conn-rates/>
++            <overload/>
++            <adaptivestart/>
++            <adaptiveend/>
++            <prio/>
++            <set-prio/>
++            <set-prio-low/>
++            <tag/>
++            <tagged/>
++            <tcpflags1/>
++            <tcpflags2/>
++            <tcpflags_any>0</tcpflags_any>
++            <categories/>
++            <sched/>
++            <tos/>
++            <shaper1/>
++            <shaper2/>
++            <description>MGMT &gt; IPv6 bloqueia DoT/DoQ externo</description>
 +          </rule>
 +          <rule uuid="70f6635e-9d09-5a13-af6c-fa438fefde8f">
 +            <enabled>1</enabled>
@@ -978,26 +1034,26 @@
 +            <shaper2/>
 +            <description>HOMELAB &gt; IPv6 bloqueia gerencia do firewall</description>
 +          </rule>
-+          <rule uuid="ebb20d42-43c5-55db-90a8-7da6d438f341">
++          <rule uuid="12c805d7-91c1-53ff-8611-153e1ade1831">
 +            <enabled>1</enabled>
 +            <statetype>keep</statetype>
 +            <state-policy/>
-+            <sequence>47</sequence>
++            <sequence>45</sequence>
 +            <action>block</action>
 +            <quick>1</quick>
 +            <interfacenot>0</interfacenot>
 +            <interface>vlan20</interface>
 +            <direction>in</direction>
 +            <ipprotocol>inet6</ipprotocol>
-+            <protocol>tcp/udp</protocol>
++            <protocol>tcp</protocol>
 +            <icmptype/>
 +            <icmp6type/>
 +            <source_net>vlan20</source_net>
 +            <source_not>0</source_not>
 +            <source_port/>
-+            <destination_net>any</destination_net>
++            <destination_net>opt1</destination_net>
 +            <destination_not>0</destination_not>
-+            <destination_port>53,853</destination_port>
++            <destination_port>Management_Ports</destination_port>
 +            <divert-to/>
 +            <gateway/>
 +            <replyto/>
@@ -1032,7 +1088,119 @@
 +            <tos/>
 +            <shaper1/>
 +            <shaper2/>
-+            <description>HOMELAB &gt; IPv6 bloqueia DNS e DoT/DoQ externo</description>
++            <description>HOMELAB &gt; IPv6 bloqueia gerencia do modem da CLARO</description>
++          </rule>
++          <rule uuid="ebb20d42-43c5-55db-90a8-7da6d438f341">
++            <enabled>1</enabled>
++            <statetype>keep</statetype>
++            <state-policy/>
++            <sequence>47</sequence>
++            <action>block</action>
++            <quick>1</quick>
++            <interfacenot>0</interfacenot>
++            <interface>vlan20</interface>
++            <direction>in</direction>
++            <ipprotocol>inet6</ipprotocol>
++            <protocol>tcp/udp</protocol>
++            <icmptype/>
++            <icmp6type/>
++            <source_net>vlan20</source_net>
++            <source_not>0</source_not>
++            <source_port/>
++            <destination_net>any</destination_net>
++            <destination_not>0</destination_not>
++            <destination_port>53</destination_port>
++            <divert-to/>
++            <gateway/>
++            <replyto/>
++            <disablereplyto>0</disablereplyto>
++            <log>1</log>
++            <allowopts>0</allowopts>
++            <nosync>0</nosync>
++            <nopfsync>0</nopfsync>
++            <statetimeout/>
++            <udp-first/>
++            <udp-multiple/>
++            <udp-single/>
++            <max-src-nodes/>
++            <max-src-states/>
++            <max-src-conn/>
++            <max/>
++            <max-src-conn-rate/>
++            <max-src-conn-rates/>
++            <overload/>
++            <adaptivestart/>
++            <adaptiveend/>
++            <prio/>
++            <set-prio/>
++            <set-prio-low/>
++            <tag/>
++            <tagged/>
++            <tcpflags1/>
++            <tcpflags2/>
++            <tcpflags_any>0</tcpflags_any>
++            <categories/>
++            <sched/>
++            <tos/>
++            <shaper1/>
++            <shaper2/>
++            <description>HOMELAB &gt; IPv6 bloqueia DNS externo</description>
++          </rule>
++          <rule uuid="19e9f471-84bc-5f82-b4c5-5ac4eeecdcac">
++            <enabled>1</enabled>
++            <statetype>keep</statetype>
++            <state-policy/>
++            <sequence>47</sequence>
++            <action>block</action>
++            <quick>1</quick>
++            <interfacenot>0</interfacenot>
++            <interface>vlan20</interface>
++            <direction>in</direction>
++            <ipprotocol>inet6</ipprotocol>
++            <protocol>tcp/udp</protocol>
++            <icmptype/>
++            <icmp6type/>
++            <source_net>vlan20</source_net>
++            <source_not>0</source_not>
++            <source_port/>
++            <destination_net>any</destination_net>
++            <destination_not>0</destination_not>
++            <destination_port>DoQ_Ports</destination_port>
++            <divert-to/>
++            <gateway/>
++            <replyto/>
++            <disablereplyto>0</disablereplyto>
++            <log>1</log>
++            <allowopts>0</allowopts>
++            <nosync>0</nosync>
++            <nopfsync>0</nopfsync>
++            <statetimeout/>
++            <udp-first/>
++            <udp-multiple/>
++            <udp-single/>
++            <max-src-nodes/>
++            <max-src-states/>
++            <max-src-conn/>
++            <max/>
++            <max-src-conn-rate/>
++            <max-src-conn-rates/>
++            <overload/>
++            <adaptivestart/>
++            <adaptiveend/>
++            <prio/>
++            <set-prio/>
++            <set-prio-low/>
++            <tag/>
++            <tagged/>
++            <tcpflags1/>
++            <tcpflags2/>
++            <tcpflags_any>0</tcpflags_any>
++            <categories/>
++            <sched/>
++            <tos/>
++            <shaper1/>
++            <shaper2/>
++            <description>HOMELAB &gt; IPv6 bloqueia DoT/DoQ externo</description>
 +          </rule>
 +          <rule uuid="273dbffe-50a3-55fe-9f53-4554dcdcca0f">
 +            <enabled>1</enabled>

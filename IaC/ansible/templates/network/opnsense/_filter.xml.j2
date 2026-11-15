@@ -195,15 +195,15 @@
      Sem o bloco de DNS abaixo, v6 seria o desvio do DNS forçado.
 
      41  pass   DNS (53) no próprio firewall
-     45  block  gerência do firewall                     (se !gerencia)
-     47  block  DNS (53) e DoT/DoQ (853) para qualquer outro destino
-     50  block  cada outra VLAN que também tenha v6 (o GUA é público: sem
-                esta regra o `any` de 60 alcançaria a outra VLAN)
+     45  block  gerência do firewall e do modem da CLARO (se !gerencia)
+     47  block  DNS (53) e DoT/DoQ (DoQ_Ports) para qualquer outro destino
+     50  block  a `lan` e cada outra VLAN que também tenha v6 (o GUA é
+                público: sem isto o `any` de 60 alcançaria essas redes)
      60  pass   qualquer destino                         (se internet: true)
 
-     Não cobertos em v6 (existem em v4): bloqueio de SMTP e cryptomining em
-     IoT/visitantes, anti-portscan (55). Quem ligar v6 em IoT ou GUEST
-     precisa das gêmeas antes. #}
+     Não cobertos em v6 (existem em v4): cryptomining (Mining_Ports, vale em
+     TODAS as VLANs, inclusive a 20), SMTP em IoT/visitantes e anti-portscan
+     (55). Quem ligar v6 em IoT ou GUEST precisa das gêmeas antes. #}
 {{ regra_politica(eu ~ ':v6:pass-dns-self', 41, 'pass', eu, '(self)', '53',
                   vlan.name ~ ' > IPv6 DNS no firewall', ipprot='inet6',
                   proto='tcp/udp') }}
@@ -212,10 +212,26 @@
                   'Management_Ports',
                   vlan.name ~ ' > IPv6 bloqueia gerencia do firewall',
                   ipprot='inet6') }}
+{#   O /64 da CLARO (opt1) é rede privada de gerência do modem: o v4 a cobre
+     por REDES_PRIVADAS, que é só v4. #}
+{{ regra_politica(eu ~ ':v6:block-gerencia-claro', 45, 'block', eu, 'opt1',
+                  'Management_Ports',
+                  vlan.name ~ ' > IPv6 bloqueia gerencia do modem da CLARO',
+                  ipprot='inet6') }}
 {% endif %}
-{{ regra_politica(eu ~ ':v6:block-dns-externo', 47, 'block', eu, 'any',
-                  '53,853', vlan.name ~ ' > IPv6 bloqueia DNS e DoT/DoQ externo',
+{{ regra_politica(eu ~ ':v6:block-dns-externo', 47, 'block', eu, 'any', '53',
+                  vlan.name ~ ' > IPv6 bloqueia DNS externo',
                   ipprot='inet6', proto='tcp/udp') }}
+{{ regra_politica(eu ~ ':v6:block-dot-doq-externo', 47, 'block', eu, 'any',
+                  'DoQ_Ports', vlan.name ~ ' > IPv6 bloqueia DoT/DoQ externo',
+                  ipprot='inet6', proto='tcp/udp') }}
+{#   A `lan` tem track6 (GUA do PD, prefix-id 0) e não é VLAN: sem este bloqueio
+     o `any` de 60 alcançaria o /64 da LAN em qualquer porta, o que o v4 proíbe
+     (50 `block-lab:lan`). Sai junto com o v6 da LAN (P8). #}
+{% if 'lan' not in permitidas %}
+{{ regra_politica(eu ~ ':v6:block-lab:lan', 50, 'block', eu, 'lan', '',
+                  vlan.name ~ ' > IPv6 bloqueia lan', ipprot='inet6') }}
+{% endif %}
 {% for outra in vlans if outra.tag != vlan.tag and outra.ipv6_prefix_id is defined %}
 {{ regra_politica(eu ~ ':v6:block-lab:vlan' ~ outra.tag, 50, 'block', eu,
                   'vlan' ~ outra.tag, '', vlan.name ~ ' > IPv6 bloqueia ' ~ outra.name,

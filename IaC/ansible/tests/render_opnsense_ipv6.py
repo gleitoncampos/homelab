@@ -33,13 +33,19 @@ def campo(r, nome):
 
 
 fixture = yaml.safe_load((RAIZ / "tests/fixtures/opnsense.yml").read_text(encoding="utf-8"))
+checar({v["tag"] for v in fixture["vlans"] if "ipv6_prefix_id" in v} == {10, 20},
+       "a fixture tem v6 nas VLANs 10 e 20 (ramos do gerador)")
+# As duas da fixture têm `alcanca: [lan]`; falta uma que NÃO alcance a lan
+# (é o caso de prod: a 20 só alcança a 40), senão o bloqueio v6 da lan não é
+# exercido. E uma SEM v6 prova o opt-in.
+fixture["vlans"] += [
+    {"tag": 50, "name": "COMV6", "descr": "v6 sem lan", "ip": "198.51.50.1", "subnet": 24,
+     "dhcp_enabled": False, "ipv6_prefix_id": 50,
+     "politica": {"internet": True, "alcanca": [], "gerencia": False}},
+    {"tag": 40, "name": "SEMV6", "descr": "sem v6", "ip": "198.51.40.1", "subnet": 24,
+     "dhcp_enabled": False, "politica": {"internet": True, "alcanca": [], "gerencia": False}},
+]
 com_v6 = {v["tag"]: v for v in fixture["vlans"] if "ipv6_prefix_id" in v}
-# Uma VLAN SEM v6 prova o opt-in; a fixture não traz, então entra aqui.
-fixture["vlans"].append({
-    "tag": 40, "name": "SEMV6", "descr": "sem v6", "ip": "198.51.40.1", "subnet": 24,
-    "dhcp_enabled": False, "politica": {"internet": True, "alcanca": [], "gerencia": False},
-})
-checar(set(com_v6) == {10, 20}, "a fixture tem v6 nas VLANs 10 e 20 (ramos do gerador)")
 
 with tempfile.TemporaryDirectory() as tmp:
     fx = Path(tmp) / "fixture.yml"
@@ -57,7 +63,7 @@ with tempfile.TemporaryDirectory() as tmp:
     raiz = ET.parse(saida).getroot()
 
 ifaces = raiz.find("interfaces")
-for tag in (10, 20, 40):
+for tag in (10, 20, 40, 50):
     el = ifaces.find(f"vlan{tag}")
     if tag in com_v6:
         checar(campo(el, "ipaddrv6") == "track6" and campo(el, "track6-interface") == "wan"
@@ -74,15 +80,20 @@ def v6(tag):
 
 
 checar(not v6(40), "vlan40 (sem v6): nenhuma regra inet6 de política")
-for tag in (10, 20):
+for tag in (10, 20, 50):
     eu = f"vlan{tag}"
     minhas = v6(tag)
     dns_self = [x for x in minhas if campo(x, "action") == "pass" and campo(x, "destination_net") == "(self)"
                 and campo(x, "destination_port") == "53" and campo(x, "protocol") == "tcp/udp"]
     checar(len(dns_self) == 1, f"{eu}: passagem do DNS (53) no próprio firewall")
     dns_ext = [x for x in minhas if campo(x, "action") == "block" and campo(x, "destination_net") == "any"
-               and campo(x, "destination_port") == "53,853" and campo(x, "protocol") == "tcp/udp"]
-    checar(len(dns_ext) == 1, f"{eu}: bloqueio de DNS/DoT/DoQ externo")
+               and campo(x, "destination_port") == "53" and campo(x, "protocol") == "tcp/udp"]
+    checar(len(dns_ext) == 1, f"{eu}: bloqueio de DNS (53) externo")
+    dot_doq = [x for x in minhas if campo(x, "action") == "block" and campo(x, "destination_net") == "any"
+               and campo(x, "destination_port") == "DoQ_Ports" and campo(x, "protocol") == "tcp/udp"]
+    checar(len(dot_doq) == 1, f"{eu}: bloqueio de DoT/DoQ externo por alias (porta com vírgula é recusada pelo OPNsense)")
+    checar(not any("," in campo(x, "destination_port") for x in minhas),
+           f"{eu}: nenhuma regra v6 com lista de portas separada por vírgula")
     saida_geral = [x for x in minhas if campo(x, "action") == "pass" and campo(x, "destination_net") == "any"
                    and campo(x, "protocol") == "any"]
     pol = next(v for v in fixture["vlans"] if v["tag"] == tag)["politica"]
@@ -92,18 +103,23 @@ for tag in (10, 20):
                 and campo(x, "destination_port") == "Management_Ports"]
     checar(len(gerencia) == (0 if pol["gerencia"] else 1),
            f"{eu}: bloqueio da gerência do firewall {'ausente (gerencia: true)' if pol['gerencia'] else 'presente'}")
-    outras = [x for x in minhas if campo(x, "action") == "block" and campo(x, "destination_net").startswith("vlan")]
-    esperado = sorted(f"vlan{t}" for t in com_v6 if t != tag)
+    claro = [x for x in minhas if campo(x, "action") == "block" and campo(x, "destination_net") == "opt1"
+             and campo(x, "destination_port") == "Management_Ports"]
+    checar(len(claro) == (0 if pol["gerencia"] else 1),
+           f"{eu}: bloqueio da gerência do modem da CLARO (opt1) {'ausente (gerencia: true)' if pol['gerencia'] else 'presente'}")
+    outras = [x for x in minhas if campo(x, "action") == "block"
+              and (campo(x, "destination_net").startswith("vlan") or campo(x, "destination_net") == "lan")]
+    esperado = sorted((["lan"] if "lan" not in pol["alcanca"] else []) + [f"vlan{t}" for t in com_v6 if t != tag])
     checar(sorted(campo(x, "destination_net") for x in outras) == esperado,
-           f"{eu}: bloqueia as outras VLANs com v6 ({', '.join(esperado)})")
+           f"{eu}: bloqueia a lan e as outras VLANs com v6 ({', '.join(esperado)})")
     if dns_self and dns_ext:
-        checar(int(campo(dns_self[0], "sequence")) < int(campo(dns_ext[0], "sequence")),
+        checar(int(campo(dns_self[0], "sequence")) < min(int(campo(x, "sequence")) for x in dns_ext + dot_doq),
                f"{eu}: DNS no firewall passa ANTES de fechar o externo")
     if saida_geral:
         s_out = int(campo(saida_geral[0], "sequence"))
-        checar(int(campo(dns_ext[0], "sequence")) < s_out, f"{eu}: DNS externo fechado ANTES da saída")
-        checar(bool(outras) and max(int(campo(x, "sequence")) for x in outras) < s_out,
-               f"{eu}: bloqueio das outras VLANs vem ANTES da saída (GUA é público)")
+        fechos = dns_ext + dot_doq + outras + claro
+        checar(bool(fechos) and max(int(campo(x, "sequence")) for x in fechos) < s_out,
+               f"{eu}: todos os bloqueios vêm ANTES da saída (GUA é público)")
 
 # NAT66
 ob = raiz.find("nat/outbound")
