@@ -108,6 +108,21 @@ checar("wakeonlan: true" in tpl, "netplan liga o wakeonlan na placa")
 checar("dhcp4: false" in tpl and "accept-ra: false" in tpl, "sem DHCP e sem RA (IPv6 fora de escopo)")
 checar("macaddress: {{ gpu_mac }}" in tpl, "casa a placa por MAC (nome da interface é instável)")
 checar("set-name" not in tpl, "sem renomear interface")
+import json as _json
+import jinja2
+_env = jinja2.Environment(keep_trailing_newline=True)
+_env.filters["to_json"] = _json.dumps
+_rend = yaml.safe_load(_env.from_string(tpl).render(
+    gpu_mac=":".join(["0a"] * 6), gpu_ip_estatico="192.0.2.12", gpu_prefixo=24,
+    gpu_gateway="192.0.2.1", gpu_dns=["192.0.2.1"], gpu_vlan_id=20))["network"]
+_lan0 = _rend["ethernets"]["lan0"]
+_v = _rend.get("vlans", {}).get("vlan20", {})
+checar("addresses" not in _lan0 and _lan0.get("dhcp4") is False,
+       "placa sem IP e sem DHCP: o Ubuntu não pode aparecer na MAIN (a porta é híbrida)")
+checar(_v.get("id") == 20 and _v.get("link") == "lan0", "vlan20 (id 20) em cima da placa lan0")
+checar(_v.get("addresses") == ["192.0.2.12/24"] and _v.get("routes", [{}])[0].get("via") == "192.0.2.1",
+       "IP, rota e gateway ficam na subinterface de VLAN")
+checar(d.get("gpu_vlan_id") == 20, "gpu_vlan_id = 20")
 ssh = tarefa("Fechar o SSH para login por senha")
 checar("PasswordAuthentication no" in str(ssh), "SSH sem senha")
 checar(any("sshd -T" in str(t) for t in t1), "confere o sshd efetivo, não só o arquivo")

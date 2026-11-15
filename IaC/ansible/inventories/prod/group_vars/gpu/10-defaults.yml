@@ -13,6 +13,7 @@
 # gpu_mac: definir em 99-local.yml, em minúsculas, seis pares separados por dois-pontos
 gpu_ip_estatico: "192.0.2.12"         # fictício (faixa de documentação)
 gpu_prefixo: 24
+gpu_vlan_id: 20                       # VLAN do Ubuntu; a porta do switch é híbrida (30 untagged + esta tagged)
 gpu_gateway: "192.0.2.1"
 gpu_dns: ["192.0.2.1"]
 gpu_wol_broadcast: "192.0.2.255"

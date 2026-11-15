@@ -10,7 +10,8 @@
 # FASES:
 #   A (hulk ainda na VLAN 30, IP do DHCP): tudo, com gpu_rede_estatica=false.
 #   B (migração para a VLAN 20): gpu_rede_estatica=true grava o netplan SEM
-#     aplicar; a mudança de porta no switch e o reboot são manuais.
+#     aplicar; o reboot é manual e a VLAN 20 no switch (porta híbrida: 30
+#     untagged para o Windows do mesmo PC, 20 tagged para o Ubuntu) também.
 #   ⚠️ O Ansible nunca roda `netplan apply`: o IP novo cortaria a própria
 #   conexão e, com a porta ainda na VLAN 30, deixaria o hulk inalcançável.
 #
@@ -431,10 +432,10 @@
     - name: Avisar que a rede foi gravada e NÃO aplicada  # noqa: no-handler
       ansible.builtin.debug:
         msg: >-
-          Netplan gravado em {{ gpu_netplan_arquivo }} e NÃO aplicado. Passo
-          manual, NESTA ordem: reiniciar o hulk por SSH e, durante o boot,
-          mover a porta do switch para access VLAN 20 (com a porta já movida
-          o IP de DHCP deixa de existir e o SSH não conecta para o reboot).
+          Netplan gravado em {{ gpu_netplan_arquivo }} e NÃO aplicado. Antes do
+          reboot, a VLAN {{ gpu_vlan_id }} tem de existir no switch com as portas do
+          uplink do hipervisor e a do hulk TAGGED (a porta do hulk continua untagged na
+          VLAN 30, por causa do Windows). Sem isso o hulk sobe sem rede.
       when: _netplan is changed
       tags: [rede]
 
