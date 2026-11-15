@@ -99,6 +99,7 @@ vlans:
     descr: "Gerenciamento"
     ip: "198.51.100.1"
     subnet: 24
+    ipv6_prefix_id: 10
     # As duas fixtures cobrem os dois lados de cada ramo do gerador. Esta
     # alcança a `lan` e bloqueia a outra VLAN: precisa das DUAS coisas ao
     # mesmo tempo, senão as checagens de ORDEM (liberação antes de bloqueio,
@@ -122,6 +123,7 @@ vlans:
     descr: "Servidores"
     ip: "203.0.113.1"
     subnet: 24
+    ipv6_prefix_id: 20
     # A fixture precisa de UMA VLAN com DHCP e uma SEM: as duas metades do
     # `if vlan.dhcp_enabled` de config.xml.j2 (Kea). Sem isto o laço nunca emite
     # nada e o render aprova um template que poderia estar quebrado.

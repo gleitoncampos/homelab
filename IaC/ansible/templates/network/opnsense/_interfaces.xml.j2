@@ -96,11 +96,13 @@
        O device `vtnet0.<tag>` é o mesmo que a seção <vlans> de config.xml.j2
        cria; as duas leem `parent_interface`, então não podem divergir.
 
-       Sem IPv6 nesta fase: `track6` exige um `track6-prefix-id` único por
-       interface e um prefixo delegado que a WAN ainda não distribui para seis
-       redes. IPv4 primeiro, IPv6 quando a delegação estiver resolvida — meia
-       pilha configurada é pior que nenhuma, porque o cliente prefere IPv6 e
-       falha no escuro. #}
+       IPv6 é opt-in por VLAN: só quem tem `ipv6_prefix_id` recebe `track6`
+       (prefixo delegado da WAN1, /56 = ids 0–255; o id é único por interface
+       e igual à tag, por convenção). Sem a chave, a VLAN segue só IPv4 —
+       meia pilha configurada é pior que nenhuma, porque o cliente prefere
+       IPv6 e falha no escuro; por isso a chave liga as regras v6 de
+       `_filter.xml.j2` junto com o endereço. O RA sai sozinho do radvd para
+       interface `track6` (modo automático do OPNsense). DECISÃO 021. #}
 {% for vlan in vlans %}
     <vlan{{ vlan.tag }}>
       <if>{{ parent_interface | default("vtnet0") }}_vlan{{ vlan.tag }}</if>
@@ -109,6 +111,11 @@
       <spoofmac/>
       <ipaddr>{{ vlan.ip }}</ipaddr>
       <subnet>{{ vlan.subnet }}</subnet>
+{% if vlan.ipv6_prefix_id is defined %}
+      <ipaddrv6>track6</ipaddrv6>
+      <track6-interface>wan</track6-interface>
+      <track6-prefix-id>{{ vlan.ipv6_prefix_id }}</track6-prefix-id>
+{% endif %}
     </vlan{{ vlan.tag }}>
 {% endfor %}
   </interfaces>

@@ -62,7 +62,7 @@
   e NÃO de sorteio: UUID é identidade neste config, e um novo a cada render
   faria o OPNsense ver regra nova toda vez.
 #}
-{% macro regra_politica(chave, seq, acao, iface, destino, porta, descricao, origem=none, limite=none) %}
+{% macro regra_politica(chave, seq, acao, iface, destino, porta, descricao, origem=none, limite=none, ipprot='inet', proto=none) %}
           <rule uuid="{{ ('politica:' ~ chave) | to_uuid }}">
             <enabled>1</enabled>
             <statetype>keep</statetype>
@@ -73,8 +73,8 @@
             <interfacenot>0</interfacenot>
             <interface>{{ iface }}</interface>
             <direction>in</direction>
-            <ipprotocol>inet</ipprotocol>
-            <protocol>{{ 'tcp' if (porta or limite) else 'any' }}</protocol>
+            <ipprotocol>{{ ipprot }}</ipprotocol>
+            <protocol>{{ proto if proto else ('tcp' if (porta or limite) else 'any') }}</protocol>
             <icmptype/>
             <icmp6type/>
             <source_net>{{ origem | default(iface, true) }}</source_net>
@@ -187,6 +187,45 @@
 {{ regra_politica(eu ~ ':block-lab:' ~ destino, 50, 'block', eu, destino, '',
                   vlan.name ~ ' > bloqueia ' ~ destino) }}
 {% endfor %}
+{% if vlan.ipv6_prefix_id is defined %}
+{#   IPv6 desta VLAN (DECISÃO 021). Espelho enxuto do v4, e conservador:
+     lab-para-lab em v6 NÃO é liberado (`alcanca` vale só para v4); o
+     firewall é o único destino interno aceito; resolvedor externo em v6 é
+     fechado, porque o redirecionamento de DNS (`_nat.xml.j2`) é só v4.
+     Sem o bloco de DNS abaixo, v6 seria o desvio do DNS forçado.
+
+     41  pass   DNS (53) no próprio firewall
+     45  block  gerência do firewall                     (se !gerencia)
+     47  block  DNS (53) e DoT/DoQ (853) para qualquer outro destino
+     50  block  cada outra VLAN que também tenha v6 (o GUA é público: sem
+                esta regra o `any` de 60 alcançaria a outra VLAN)
+     60  pass   qualquer destino                         (se internet: true)
+
+     Não cobertos em v6 (existem em v4): bloqueio de SMTP e cryptomining em
+     IoT/visitantes, anti-portscan (55). Quem ligar v6 em IoT ou GUEST
+     precisa das gêmeas antes. #}
+{{ regra_politica(eu ~ ':v6:pass-dns-self', 41, 'pass', eu, '(self)', '53',
+                  vlan.name ~ ' > IPv6 DNS no firewall', ipprot='inet6',
+                  proto='tcp/udp') }}
+{% if not pol.gerencia %}
+{{ regra_politica(eu ~ ':v6:block-gerencia-self', 45, 'block', eu, '(self)',
+                  'Management_Ports',
+                  vlan.name ~ ' > IPv6 bloqueia gerencia do firewall',
+                  ipprot='inet6') }}
+{% endif %}
+{{ regra_politica(eu ~ ':v6:block-dns-externo', 47, 'block', eu, 'any',
+                  '53,853', vlan.name ~ ' > IPv6 bloqueia DNS e DoT/DoQ externo',
+                  ipprot='inet6', proto='tcp/udp') }}
+{% for outra in vlans if outra.tag != vlan.tag and outra.ipv6_prefix_id is defined %}
+{{ regra_politica(eu ~ ':v6:block-lab:vlan' ~ outra.tag, 50, 'block', eu,
+                  'vlan' ~ outra.tag, '', vlan.name ~ ' > IPv6 bloqueia ' ~ outra.name,
+                  ipprot='inet6') }}
+{% endfor %}
+{% if pol.internet %}
+{{ regra_politica(eu ~ ':v6:pass-internet', 60, 'pass', eu, 'any', '',
+                  vlan.name ~ ' > IPv6 internet', ipprot='inet6') }}
+{% endif %}
+{% endif %}
 {% if pol.internet %}
 {#   Anti-portscan (55): passagem TCP com limite de taxa, ANTES da saída geral
      e DEPOIS dos bloqueios ao lab (50) — o `quick` desta regra não pode

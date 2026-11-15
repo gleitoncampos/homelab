@@ -158,6 +158,8 @@ vlans:
     descr: "Servidores, Docker Swarm & Storage NAS"
     ip: "198.18.20.1"
     subnet: 24
+    # IPv6 piloto (DECISÃO 021): prefixo delegado da WAN1, id = tag.
+    ipv6_prefix_id: 20
     dhcp_enabled: false
     # ---- política de passagem ----
     # Servidor RESPONDE, não inicia — para rede de USUÁRIO. Tráfego entre

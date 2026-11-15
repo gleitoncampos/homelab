@@ -7,7 +7,7 @@
        <type/>
        <subscription/>
        <reboot/>
-@@ -423,52 +404,44 @@
+@@ -423,61 +404,131 @@
        <blockpriv>1</blockpriv>
        <blockbogons>1</blockbogons>
        <ipaddr>pppoe</ipaddr>
@@ -82,6 +82,9 @@
 +      <spoofmac/>
 +      <ipaddr>198.51.100.1</ipaddr>
 +      <subnet>24</subnet>
++      <ipaddrv6>track6</ipaddrv6>
++      <track6-interface>wan</track6-interface>
++      <track6-prefix-id>10</track6-prefix-id>
 +    </vlan10>
 +    <vlan20>
 +      <if>vtnet0_vlan20</if>
@@ -90,8 +93,94 @@
 +      <spoofmac/>
 +      <ipaddr>203.0.113.1</ipaddr>
 +      <subnet>24</subnet>
++      <ipaddrv6>track6</ipaddrv6>
++      <track6-interface>wan</track6-interface>
++      <track6-prefix-id>20</track6-prefix-id>
 +    </vlan20>
 +  </interfaces>
    <nat>
      <outbound>
-       <mode>automatic</mode>
+-      <mode>automatic</mode>
++      <mode>hybrid</mode>
++      <rule>
++        <interface>opt1</interface>
++        <ipprotocol>inet6</ipprotocol>
++        <source>
++          <network>lan</network>
++        </source>
++        <destination>
++          <any>1</any>
++        </destination>
++        <target/>
++        <natport/>
++        <poolopts/>
++        <descr>NAT66 lan &gt; CLARO</descr>
++        <created>
++          <username>ansible</username>
++          <time>0</time>
++          <description>Provisionado via Ansible</description>
++        </created>
++        <updated>
++          <username>ansible</username>
++          <time>0</time>
++          <description>Provisionado via Ansible</description>
++        </updated>
++      </rule>
++      <rule>
++        <interface>opt1</interface>
++        <ipprotocol>inet6</ipprotocol>
++        <source>
++          <network>vlan10</network>
++        </source>
++        <destination>
++          <any>1</any>
++        </destination>
++        <target/>
++        <natport/>
++        <poolopts/>
++        <descr>NAT66 vlan10 &gt; CLARO</descr>
++        <created>
++          <username>ansible</username>
++          <time>0</time>
++          <description>Provisionado via Ansible</description>
++        </created>
++        <updated>
++          <username>ansible</username>
++          <time>0</time>
++          <description>Provisionado via Ansible</description>
++        </updated>
++      </rule>
++      <rule>
++        <interface>opt1</interface>
++        <ipprotocol>inet6</ipprotocol>
++        <source>
++          <network>vlan20</network>
++        </source>
++        <destination>
++          <any>1</any>
++        </destination>
++        <target/>
++        <natport/>
++        <poolopts/>
++        <descr>NAT66 vlan20 &gt; CLARO</descr>
++        <created>
++          <username>ansible</username>
++          <time>0</time>
++          <description>Provisionado via Ansible</description>
++        </created>
++        <updated>
++          <username>ansible</username>
++          <time>0</time>
++          <description>Provisionado via Ansible</description>
++        </updated>
++      </rule>
+     </outbound>
+     <rule uuid="a1000000-0000-4000-8000-00000000d015">
+       <sequence>100</sequence>
+       <disabled>0</disabled>
+       <nordr>0</nordr>
+-      <interface>lan</interface>
++      <interface>lan,vlan10,vlan20</interface>
+       <ipprotocol>inet</ipprotocol>
+       <protocol>tcp/udp</protocol>
+       <source>

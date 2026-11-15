@@ -38,7 +38,48 @@
 #}
   <nat>
     <outbound>
-      <mode>automatic</mode>
+{#  NAT66 na CLARO (DECISÃO 021). O prefixo das redes vem da WAN1 (PD) e a
+    CLARO não delega nada: o v6 que sai pela `igc1` (opt1) precisa ser
+    traduzido para o endereço dela, senão a Claro descarta a origem. Pela
+    WAN1 (`pppoe0`) sai nativo, sem tradução (ela nem tem endereço próprio).
+
+    `hybrid`: as regras automáticas do v4 ficam; a regra manual vem antes.
+    Origem = a REDE da interface (`vlanN`), não um prefixo fixo, para
+    sobreviver à renumeração do PD. A `lan` entra enquanto ela tiver track6
+    (_interfaces.xml.j2): com o default v6 na CLARO, o único vizinho v6 da
+    LAN ficaria sem rota; sai junto com o v6 da LAN (P8).
+    `target` vazio = endereço da interface. #}
+      <mode>hybrid</mode>
+{% set origens_nat66 = ['lan'] %}
+{% for v in vlans if v.ipv6_prefix_id is defined %}
+{% set _ = origens_nat66.append('vlan' ~ v.tag) %}
+{% endfor %}
+{% for origem in origens_nat66 %}
+      <rule>
+        <interface>opt1</interface>
+        <ipprotocol>inet6</ipprotocol>
+        <source>
+          <network>{{ origem }}</network>
+        </source>
+        <destination>
+          <any>1</any>
+        </destination>
+        <target/>
+        <natport/>
+        <poolopts/>
+        <descr>NAT66 {{ origem }} &gt; CLARO</descr>
+        <created>
+          <username>ansible</username>
+          <time>0</time>
+          <description>Provisionado via Ansible</description>
+        </created>
+        <updated>
+          <username>ansible</username>
+          <time>0</time>
+          <description>Provisionado via Ansible</description>
+        </updated>
+      </rule>
+{% endfor %}
     </outbound>
     <rule uuid="{{ opnsense_dns_redirect_uuid | default('a1000000-0000-4000-8000-00000000d015') }}">
       <sequence>100</sequence>

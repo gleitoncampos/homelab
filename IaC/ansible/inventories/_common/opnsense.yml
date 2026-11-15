@@ -1772,11 +1772,11 @@ opnsense_gateway_groups:
         tier: 2
 
   - name: WAN_IPV6
-    descr: "Failover IPv6 (WAN -> CLARO)"
+    descr: "Failover IPv6 (CLARO -> WAN)"
     ipprotocol: inet6
     trigger: down
     membros:
-      - gateway: WAN_PPPOEV6
-        tier: 1
       - gateway: CLARO_DHCP6
+        tier: 1
+      - gateway: WAN_PPPOEV6
         tier: 2

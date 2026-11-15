@@ -1,4 +1,4 @@
-@@ -1225,6 +1223,118 @@
+@@ -1225,6 +1301,118 @@
              <sched/>
              <description>Bloquear trafego de Cryptomining e Stratum Pools</description>
            </rule>
@@ -117,7 +117,7 @@
            <rule uuid="ffec6963-1b39-4078-80a4-c866447be8f7">
              <enabled>1</enabled>
              <statetype>keep</statetype>
-@@ -1281,6 +1391,62 @@
+@@ -1281,6 +1469,62 @@
              <shaper2/>
              <description>Bloqueio Global de Conexao para IPs de Servidores DoH Conhecidos</description>
            </rule>
