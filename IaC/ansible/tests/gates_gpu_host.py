@@ -50,11 +50,20 @@ versao = re.search(r"nvidia-driver-(\d+)-open", str(d.get("gpu_driver_pkg", ""))
 checar(versao is not None and int(versao.group(1)) >= 570, "driver >= 570 (Blackwell)")
 checar(d.get("gpu_dir") == "/srv/containers/gpu", "gpu_dir = /srv/containers/gpu")
 ferr = d.get("gpu_ferramentas", {})
-checar(set(ferr) == {"ollama", "whisper"}, f"ferramentas: ollama e whisper (achado: {sorted(ferr)})")
+checar(set(ferr) == {"ollama", "whispercpp", "speaches", "whisperasr"}, f"ferramentas: ollama, whispercpp, speaches e whisperasr (achado: {sorted(ferr)})")
 for nome, f in ferr.items():
     tag = str(f.get("image", "")).rsplit(":", 1)[-1]
     checar(":" in str(f.get("image", "")) and tag != "latest" and not tag.startswith("latest"),
            f"{nome}: imagem com tag fixa (achado: {f.get('image')})")
+    checar(isinstance(f.get("pre_pull"), bool), f"{nome}: pre_pull explícito (true/false)")
+    checar(isinstance(f.get("porta"), int) and isinstance(f.get("porta_container"), int) and f.get("dados"),
+           f"{nome}: porta, porta_container e pasta de dados definidas")
+checar(len({f["porta"] for f in ferr.values()}) == len(ferr), "portas publicadas distintas entre as ferramentas")
+checar([n for n, f in ferr.items() if f.get("pre_pull")] == ["ollama"],
+       "só o ollama baixa no apply: o disco do hulk (~38 GB) não comporta as imagens de todas")
+wcpp = ferr.get("whispercpp", {}).get("image", "")
+checar(re.search(r":main-cuda-[0-9a-f]{40}$", wcpp) is not None,
+       "whisper.cpp fixado na tag por commit (`main-cuda-<sha>`), não na `main-cuda` flutuante")
 
 # --- Playbook 08, play 1: base, SSH, rede, firewall (Tarefa 2) ---
 pb_txt = ler("playbooks/08-gpu-host.yml")
@@ -203,7 +212,7 @@ if script.is_file():
         checar(idle.lock_valido(lk, _t.time()) is False, "lock com mais de 4 h expira (não prende o hulk ligado)")
 
 # --- Ferramentas e portas (Tarefa 5) ---
-for nome in ("ollama", "whisper"):
+for nome in ("ollama", "whispercpp", "speaches", "whisperasr"):
     txt = ler(f"templates/gpu/{nome}.compose.yml.j2")
     c = yaml.safe_load(re.sub(r"\{\{[^}]*\}\}", "x", txt)) if txt else {}
     svc_c = (c.get("services") or {}).get(nome, {})
@@ -212,7 +221,23 @@ for nome in ("ollama", "whisper"):
     checar(dev[0].get("driver") == "nvidia" and "gpu" in dev[0].get("capabilities", []), f"{nome}: reserva a GPU")
     checar("{{ gpu_ip_estatico }}:" in txt, f"{nome}: porta publicada só no IP do hulk, não em 0.0.0.0")
     checar("latest" not in txt, f"{nome}: sem latest no template")
+wc_txt = ler("templates/gpu/whispercpp.compose.yml.j2")
+wc = yaml.safe_load(re.sub(r"\{\{[^}]*\}\}", "x", wc_txt))["services"]["whispercpp"]
+cmd = wc.get("command")
+checar(isinstance(cmd, list) and len(cmd) == 1 and isinstance(cmd[0], str),
+       "whisper.cpp: command é UMA string em lista de um item (o ENTRYPOINT da imagem é `bash -c`)")
+cmd_s = " ".join(str(cmd[0]).split()) if isinstance(cmd, list) and cmd else ""
+for flag in ("whisper-server", "--inference-path /v1/audio/transcriptions", "--model /models/ggml-large-v3-turbo.bin",
+             "--beam-size 5", "--best-of 5", "--threads 4", "--vad-model /models/ggml-silero-v5.1.2.bin", "--vad"):
+    checar(flag in cmd_s, f"whisper.cpp: flag `{flag}` (mesmo modelo e decodificação do Vibe)")
+checar(any(v.endswith(":/models:ro") for v in wc.get("volumes", [])), "whisper.cpp: modelos montados somente leitura")
 checar(any(".compose.yml.j2" in str(t) and "gpu_dir" in str(t) for t in t1), "playbook copia os compose para gpu_dir")
+pull = tarefa("Baixar as imagens das ferramentas")
+checar("pre_pull" in str(pull.get("loop")), "o pré-pull só roda nas ferramentas com pre_pull: true")
+checar("gpu_ferramentas | list" in str(tarefa("Copiar o compose de cada ferramenta para gpu_dir").get("loop")),
+       "um compose por ferramenta do dicionário, sem lista paralela escrita à mão")
+checar(tarefa("Remover a pasta da ferramenta antiga (whisper, hoje speaches)").get("ansible.builtin.file", {}).get("state") == "absent",
+       "remove a pasta do `whisper` antigo (virou speaches)")
 regras = ler("templates/gpu/ufw_docker_user.rules.j2")
 checar("gpu_clientes_cidrs" in regras and "-j RETURN" in regras and "-j DROP" in regras,
        "DOCKER-USER: RETURN para clientes, DROP para o resto")

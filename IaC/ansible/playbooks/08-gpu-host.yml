@@ -307,14 +307,22 @@
       tags: [idle]
 
     # -------------------------------------------------------- ferramentas --
+    # `whisper` virou `speaches` (15/11/2026): sem isto o compose velho fica no
+    # disco apontando para uma chave que não existe mais.
+    - name: Remover a pasta da ferramenta antiga (whisper, hoje speaches)
+      ansible.builtin.file:
+        path: "{{ gpu_dir }}/whisper"
+        state: absent
+      tags: [tools]
+
     - name: Criar as pastas das ferramentas
       ansible.builtin.file:
-        path: "{{ gpu_dir }}/{{ item.0 }}/{{ item.1 }}"
+        path: "{{ gpu_dir }}/{{ item.key }}/{{ item.value.dados }}"
         state: directory
         mode: "0755"
-      loop:
-        - [ollama, dados]
-        - [whisper, modelos]
+      loop: "{{ gpu_ferramentas | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
       tags: [tools]
 
     - name: Copiar o compose de cada ferramenta para gpu_dir  # noqa: no-relative-paths
@@ -322,7 +330,7 @@
         src: "{{ playbook_dir }}/../templates/gpu/{{ item }}.compose.yml.j2"
         dest: "{{ gpu_dir }}/{{ item }}/compose.yml"
         mode: "0644"
-      loop: [ollama, whisper]
+      loop: "{{ gpu_ferramentas | list }}"
       tags: [tools]
 
     - name: Gravar as regras DOCKER-USER das ferramentas
@@ -342,10 +350,11 @@
       tags: [tools]
 
     # Sem pré-pull o primeiro `docker compose up` baixa GBs com CPU e GPU
-    # ociosas, e o monitor desligaria o hulk no meio.
+    # ociosas, e o monitor desligaria o hulk no meio. Só as ferramentas com
+    # `pre_pull: true`: o disco do hulk (~38 GB) não comporta todas as imagens.
     - name: Baixar as imagens das ferramentas
       ansible.builtin.command: docker pull {{ item.value.image }}
-      loop: "{{ gpu_ferramentas | dict2items }}"
+      loop: "{{ gpu_ferramentas | dict2items | selectattr('value.pre_pull') | list }}"
       loop_control:
         label: "{{ item.key }}"
       register: _pull

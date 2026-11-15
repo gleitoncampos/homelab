@@ -1,0 +1,18 @@
+# Gerado por Ansible (08-gpu-host.yml). Sobe sob demanda: `docker compose up -d`.
+# API compatível com a da OpenAI. O modelo baixa do Hugging Face no 1º uso:
+#   POST /v1/models/deepdml/faster-whisper-large-v3-turbo-ct2  (e depois model=<esse id>)
+services:
+  speaches:
+    image: {{ gpu_ferramentas.speaches.image }}
+    restart: "no"
+    ports:
+      - "{{ gpu_ip_estatico }}:{{ gpu_ferramentas.speaches.porta }}:{{ gpu_ferramentas.speaches.porta_container }}"
+    volumes:
+      - {{ gpu_dir }}/speaches/modelos:/home/ubuntu/.cache/huggingface/hub
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
