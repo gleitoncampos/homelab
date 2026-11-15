@@ -233,6 +233,7 @@ checar("HULK_ESPERA:-180" in wake and "exit 3" in wake, "espera 180 s e sai com 
 checar("exit 4" in wake and "hostvars['hulk'].gpu_ip_estatico" in wake,
        "falha do WoL sai 4 (não 3) e o IP é o final (gpu_ip_estatico), não o do DHCP da fase A")
 checar("hulk-keepalive" in wake, "documenta o contrato do lock para o chamador")
+checar("export LC_ALL=C" in wake and "22 >/dev/null 2>&1" in wake, "saída limpa: sem aviso de locale do perl e sem eco do nc")
 checar("nc -z" in wake and "exit 0" in wake, "já ligado: sai 0 sem reenviar")
 t2 = list(achatar(play2.get("tasks")))
 checar(any("hulk-wake" in str(t) for t in t2), "play 2 instala o hulk-wake")

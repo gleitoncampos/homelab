@@ -7,6 +7,8 @@
 # hulk-wake: `ssh hulk touch /run/hulk-keepalive`; no fim do trabalho, `rm -f`.
 # O lock vale por 4 h (TTL), então esquecê-lo não prende o hulk ligado.
 set -euo pipefail
+# O wakeonlan é Perl e reclama de locale que o node1 não tem (o SSH leva o do cliente).
+export LC_ALL=C
 MAC="{{ hostvars['hulk'].gpu_mac }}"
 IP="{{ hostvars['hulk'].gpu_ip_estatico }}"
 BCAST="{{ hostvars['hulk'].gpu_wol_broadcast }}"
@@ -16,7 +18,7 @@ enviar() {
   wakeonlan -i "$BCAST" "$MAC" >/dev/null || { echo "falha ao enviar o pacote mágico" >&2; exit 4; }
 }
 
-if nc -z -w2 "$IP" 22; then
+if nc -z -w2 "$IP" 22 >/dev/null 2>&1; then
   echo "hulk já está no ar"
   exit 0
 fi
@@ -24,7 +26,7 @@ fi
 enviar
 fim=$((SECONDS + LIMITE))
 proximo=$((SECONDS + 30))
-until nc -z -w2 "$IP" 22; do
+until nc -z -w2 "$IP" 22 >/dev/null 2>&1; do
   if (( SECONDS >= fim )); then
     echo "hulk não acordou em ${LIMITE}s" >&2
     exit 3
