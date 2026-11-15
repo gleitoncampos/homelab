@@ -190,3 +190,110 @@
         policy: deny
         direction: incoming
       tags: [base]
+
+    # ---------------------------------------------------------------- GPU --
+    - name: Instalar o driver NVIDIA open
+      ansible.builtin.apt:
+        name: "{{ gpu_driver_pkg }}"
+        state: present
+      register: _driver
+      tags: [gpu]
+
+    - name: Reiniciar para carregar o driver  # noqa: no-handler
+      ansible.builtin.reboot:
+        reboot_timeout: 600
+      when: _driver is changed
+      tags: [gpu]
+
+    - name: Conferir que o nvidia-smi enxerga a GPU
+      ansible.builtin.command: nvidia-smi --query-gpu=name --format=csv,noheader
+      register: _smi
+      changed_when: false
+      failed_when: "'5060' not in _smi.stdout"
+      tags: [gpu]
+
+    # ------------------------------------------------------------- Docker --
+    - name: Instalar Docker e Compose do Ubuntu
+      ansible.builtin.apt:
+        name: [docker.io, docker-compose-v2]
+        state: present
+      tags: [docker]
+
+    - name: Colocar o usuário no grupo docker
+      ansible.builtin.user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: true
+      tags: [docker]
+
+    - name: Garantir o diretório de chaves do APT
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+      tags: [docker]
+
+    - name: Baixar a chave do repositório do nvidia-container-toolkit
+      ansible.builtin.get_url:
+        url: https://nvidia.github.io/libnvidia-container/gpgkey
+        dest: /etc/apt/keyrings/nvidia-container-toolkit.asc
+        mode: "0644"
+      tags: [docker]
+
+    - name: Declarar o repositório do nvidia-container-toolkit
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/nvidia-container-toolkit.sources
+        content: |
+          Types: deb
+          URIs: https://nvidia.github.io/libnvidia-container/stable/deb/amd64
+          Suites: /
+          Signed-By: /etc/apt/keyrings/nvidia-container-toolkit.asc
+        mode: "0644"
+      register: _repo_nv
+      tags: [docker]
+
+    - name: Atualizar o cache depois do repositório novo  # noqa: no-handler
+      ansible.builtin.apt:
+        update_cache: true
+      when: _repo_nv is changed
+      tags: [docker]
+
+    - name: Instalar o nvidia-container-toolkit
+      ansible.builtin.apt:
+        name: nvidia-container-toolkit
+        state: present
+      tags: [docker]
+
+    - name: Registrar o runtime nvidia no Docker
+      ansible.builtin.shell: |
+        set -e
+        grep -q '"nvidia"' /etc/docker/daemon.json 2>/dev/null && exit 0
+        nvidia-ctk runtime configure --runtime=docker
+        echo MUDOU
+      args:
+        executable: /bin/bash
+      register: _nvctk
+      changed_when: "'MUDOU' in _nvctk.stdout"
+      tags: [docker]
+
+    - name: Reiniciar o Docker  # noqa: no-handler
+      ansible.builtin.systemd:
+        name: docker
+        state: restarted
+      when: _nvctk is changed
+      tags: [docker]
+
+    - name: Garantir o Docker ativo (o daemon sobe no boot; as stacks não, são restart "no")
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+      tags: [docker]
+
+    - name: Provar a GPU dentro de um container
+      ansible.builtin.command: >-
+        docker run --rm --gpus all ubuntu:24.04 nvidia-smi --query-gpu=name --format=csv,noheader
+      register: _smi_ct
+      changed_when: false
+      failed_when: "'5060' not in _smi_ct.stdout"
+      tags: [docker]

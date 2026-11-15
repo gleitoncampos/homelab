@@ -104,6 +104,26 @@ i_ufw_on = next((i for i, t in enumerate(t1)
 i_ufw_22 = next((i for i, t in enumerate(t1) if ufw22 and t is ufw22[0]), -1)
 checar(i_ufw_22 != -1 and i_ufw_on > i_ufw_22, "UFW só liga depois de liberar o SSH (senão tranca o próprio acesso)")
 
+# --- GPU, toolkit e Docker (Tarefa 3) ---
+drv = tarefa("Instalar o driver NVIDIA open")
+checar("gpu_driver_pkg" in str((drv.get("ansible.builtin.apt") or {}).get("name")), "driver vem de gpu_driver_pkg")
+checar("nvidia-driver-" not in pb_txt.replace("gpu_driver_pkg", ""),
+       "nenhum nome de driver literal no playbook (versão só em variável)")
+checar("Instalar o driver NVIDIA open" in nomes1 and "Reiniciar para carregar o driver" in nomes1
+       and nomes1.index("Instalar o driver NVIDIA open") < nomes1.index("Reiniciar para carregar o driver"),
+       "reboot depois do driver")
+reb = tarefa("Reiniciar para carregar o driver")
+checar("_driver" in str(reb.get("when")), "reboot só se o driver mudou")
+checar(any("nvidia-smi" in str(t.get("ansible.builtin.command", "")) for t in t1), "confere nvidia-smi no host")
+checar("signed-by" in pb_txt.lower() and "nvidia.github.io/libnvidia-container" in pb_txt,
+       "repo do nvidia-container-toolkit com chave assinada (Signed-By)")
+checar("Registrar o runtime nvidia no Docker" in nomes1 and "Reiniciar o Docker" in nomes1
+       and nomes1.index("Registrar o runtime nvidia no Docker") < nomes1.index("Reiniciar o Docker"),
+       "runtime registrado antes do restart do Docker")
+prova = tarefa("Provar a GPU dentro de um container")
+checar("--gpus all" in str(prova) and "nvidia-smi" in str(prova), "prova a GPU em container, não só no host")
+checar(any("docker" in str(t.get("ansible.builtin.user", "")) for t in t1), "usuário no grupo docker")
+
 # --- novos blocos entram aqui (uma tarefa por bloco) ---
 
 if falhas:
