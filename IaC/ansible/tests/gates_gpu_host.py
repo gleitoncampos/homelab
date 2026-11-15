@@ -124,6 +124,32 @@ prova = tarefa("Provar a GPU dentro de um container")
 checar("--gpus all" in str(prova) and "nvidia-smi" in str(prova), "prova a GPU em container, não só no host")
 checar(any("docker" in str(t.get("ansible.builtin.user", "")) for t in t1), "usuário no grupo docker")
 
+# --- Monitor de ociosidade (Tarefa 4) ---
+script = RAIZ / "files" / "gpu" / "hulk-idle-check.py"
+checar(script.is_file(), "existe files/gpu/hulk-idle-check.py")
+if script.is_file():
+    spec = importlib.util.spec_from_file_location("hulk_idle", script)
+    idle = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(idle)
+    checar((idle.GPU_MAX, idle.CPU_MAX) == (5.0, 10.0), "limiares: GPU < 5 e CPU < 10")
+    checar(idle.AMOSTRAS == 30, "30 amostras (1/min = 30 min)")
+    c = 0
+    for _ in range(29):
+        c, off = idle.decidir(0.0, 1.0, c, False)
+    checar(c == 29 and off is False, "29 amostras ociosas NÃO desligam")
+    c, off = idle.decidir(0.0, 1.0, c, False)
+    checar(off is True, "a 30ª amostra seguida desliga")
+    checar(idle.decidir(5.0, 1.0, 20, False) == (0, False), "GPU em 5% zera o contador (limite é estrito)")
+    checar(idle.decidir(0.0, 10.0, 20, False) == (0, False), "CPU em 10% zera o contador")
+    checar(idle.decidir(0.0, 1.0, 29, True) == (0, False), "lock de keepalive zera e não desliga")
+    checar(idle.decidir(None, 1.0, 29, False) == (0, False), "GPU ilegível: fail-safe, não desliga")
+    checar(idle.decidir(0.0, None, 29, False) == (0, False), "CPU sem amostra anterior: não desliga")
+svc = ler("templates/gpu/hulk-idle.service.j2")
+tmr = ler("templates/gpu/hulk-idle.timer.j2")
+checar("Type=oneshot" in svc and "StateDirectory=hulk-idle" in svc, "service oneshot com StateDirectory")
+checar("OnUnitActiveSec=1min" in tmr and "OnBootSec=1min" in tmr, "timer a cada 1 min, primeira em 1 min do boot")
+checar(any("hulk-idle.timer" in str(t) for t in t1), "playbook habilita o timer")
+
 # --- novos blocos entram aqui (uma tarefa por bloco) ---
 
 if falhas:

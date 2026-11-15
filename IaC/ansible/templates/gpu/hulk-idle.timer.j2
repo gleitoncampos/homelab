@@ -1,0 +1,10 @@
+[Unit]
+Description=hulk: amostra de ociosidade a cada minuto
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target
