@@ -9,6 +9,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 GPU_MAX = 5.0
@@ -16,6 +17,15 @@ CPU_MAX = 10.0
 AMOSTRAS = int(os.environ.get("HULK_AMOSTRAS", "30"))
 ESTADO = Path(os.environ.get("HULK_ESTADO", "/var/lib/hulk-idle/estado.json"))
 LOCK = Path(os.environ.get("HULK_LOCK", "/run/hulk-keepalive"))
+LOCK_TTL = int(os.environ.get("HULK_LOCK_TTL", str(4 * 3600)))
+
+
+def lock_valido(caminho, agora, ttl=LOCK_TTL):
+    """Lock de keepalive vale por `ttl` s desde o mtime: lock esquecido não prende o hulk ligado."""
+    try:
+        return agora - caminho.stat().st_mtime < ttl
+    except OSError:
+        return False
 
 
 def decidir(gpu, cpu, contador, lock):
@@ -54,11 +64,12 @@ def main():
     if "total" in estado and total > estado["total"]:
         cpu = 100.0 * (1 - (ocioso - estado["ocioso"]) / (total - estado["total"]))
     gpu = ler_gpu()
-    contador, desligar = decidir(gpu, cpu, estado.get("contador", 0), LOCK.exists())
+    lock = lock_valido(LOCK, time.time())
+    contador, desligar = decidir(gpu, cpu, estado.get("contador", 0), lock)
     ESTADO.parent.mkdir(parents=True, exist_ok=True)
     ESTADO.write_text(json.dumps({"total": total, "ocioso": ocioso, "contador": contador}))
     print(f"gpu={gpu} cpu={cpu if cpu is None else round(cpu, 1)} "
-          f"ocioso_seguido={contador}/{AMOSTRAS} lock={LOCK.exists()}", flush=True)
+          f"ocioso_seguido={contador}/{AMOSTRAS} lock={lock}", flush=True)
     if desligar:
         print("ocioso pelo tempo limite: desligando", flush=True)
         if os.environ.get("HULK_DRY") == "1":

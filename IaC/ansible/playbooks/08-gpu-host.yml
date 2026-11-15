@@ -25,23 +25,45 @@
     gpu_netplan_arquivo: /etc/netplan/60-hulk.yaml
     gpu_netplan_teste: /tmp/hulk-netplan-root
   pre_tasks:
+    # `always`: sem a tag, `--tags rede` (a rodada que grava o netplan) pulava
+    # o assert do MAC e o vault.
     - name: Validar segredos do Vault exigidos por este play
       ansible.builtin.include_tasks: "../tasks/validate_vault.yml"
       vars:
         required_secrets:
           - ssh_public_key
+      tags: [always]
 
-    - name: Exigir o MAC real, em minúsculas
+    - name: Exigir o MAC real, em minúsculas, e que ele seja de uma placa do hulk
+      vars:
+        _macs_do_host: >-
+          {{ ansible_facts.interfaces | map('replace', '-', '_') | map('extract', ansible_facts)
+             | selectattr('macaddress', 'defined') | map(attribute='macaddress') | list }}
       ansible.builtin.assert:
         that:
           - gpu_mac is defined
           - gpu_mac | lower == gpu_mac
           - gpu_mac is match('^([0-9a-f]{2}:){5}[0-9a-f]{2}$')
+          - gpu_mac in _macs_do_host
         fail_msg: >-
-          gpu_mac ausente ou fora do formato. Defina o MAC real, em minúsculas,
-          em group_vars/gpu/99-local.yml. WoL para MAC errado não dá erro: só
-          nunca acorda nada.
+          gpu_mac ausente, fora do formato ou de nenhuma placa deste host.
+          Defina o MAC real, em minúsculas, em group_vars/gpu/99-local.yml.
+          WoL para MAC errado não dá erro: só nunca acorda nada, e um MAC
+          errado no netplan deixa o hulk sem interface casada no reboot.
         quiet: true
+      tags: [always]
+
+    # O monitor de ociosidade desligaria o hulk no meio de um dpkg ou de um
+    # `docker pull` (rede, CPU e GPU baixas). O lock vive em /run (tmpfs): se
+    # a execução falhar, ele fica até o próximo boot — falha fechada, sem
+    # desligamento. O monitor ainda o ignora depois de 4 h (TTL).
+    - name: Segurar o desligamento por ociosidade durante a execução
+      ansible.builtin.file:
+        path: /run/hulk-keepalive
+        state: touch
+        mode: "0644"
+      changed_when: false
+      tags: [always]
 
   tasks:
     # --------------------------------------------------------------- base --
@@ -115,76 +137,6 @@
           APT::Periodic::Unattended-Upgrade "1";
         mode: "0644"
       tags: [base]
-
-    # --------------------------------------------------------------- rede --
-    # Valida num diretório de teste ANTES de gravar em /etc/netplan: netplan
-    # inválido gravado só estoura no próximo boot, com o hulk já sem rede.
-    - name: Criar a árvore de teste do netplan
-      ansible.builtin.file:
-        path: "{{ gpu_netplan_teste }}/etc/netplan"
-        state: directory
-        mode: "0700"
-      changed_when: false
-      tags: [rede]
-
-    - name: Renderizar o netplan estático na árvore de teste  # noqa: no-relative-paths
-      ansible.builtin.template:
-        src: "{{ playbook_dir }}/../templates/gpu/netplan.yaml.j2"
-        dest: "{{ gpu_netplan_teste }}/etc/netplan/60-hulk.yaml"
-        mode: "0600"
-      changed_when: false
-      tags: [rede]
-
-    - name: Validar o netplan com netplan generate (sem aplicar)
-      ansible.builtin.command: netplan generate --root-dir {{ gpu_netplan_teste }}
-      changed_when: false
-      tags: [rede]
-
-    - name: Gravar o netplan estático do hulk  # noqa: no-relative-paths
-      ansible.builtin.template:
-        src: "{{ playbook_dir }}/../templates/gpu/netplan.yaml.j2"
-        dest: "{{ gpu_netplan_arquivo }}"
-        owner: root
-        group: root
-        mode: "0600"
-      when: gpu_rede_estatica | bool
-      register: _netplan
-      tags: [rede]
-
-    - name: Impedir o cloud-init de regenerar a rede
-      ansible.builtin.copy:
-        dest: /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
-        content: "network: {config: disabled}\n"
-        mode: "0644"
-      when: gpu_rede_estatica | bool
-      tags: [rede]
-
-    - name: Listar os outros arquivos de netplan (instalador e cloud-init)
-      ansible.builtin.find:
-        paths: /etc/netplan
-        patterns: "*.yaml"
-        excludes: ["60-hulk.yaml"]
-      register: _netplan_outros
-      when: gpu_rede_estatica | bool
-      tags: [rede]
-
-    - name: Remover os outros netplans (DHCP do instalador somaria ao estático)
-      ansible.builtin.file:
-        path: "{{ item.path }}"
-        state: absent
-      loop: "{{ _netplan_outros.files | default([]) }}"
-      loop_control:
-        label: "{{ item.path }}"
-      when: gpu_rede_estatica | bool
-      tags: [rede]
-
-    - name: Avisar que a rede foi gravada e NÃO aplicada  # noqa: no-handler
-      ansible.builtin.debug:
-        msg: >-
-          Netplan gravado em {{ gpu_netplan_arquivo }} e NÃO aplicado. Passo
-          manual: porta do switch em access VLAN 20, depois reiniciar o hulk.
-      when: _netplan is changed
-      tags: [rede]
 
     # ----------------------------------------------------------- firewall --
     - name: Liberar o SSH só para os clientes autorizados
@@ -374,6 +326,122 @@
       when: _after_gpu is changed
       changed_when: true
       tags: [tools]
+
+    # Sem pré-pull o primeiro `docker compose up` baixa GBs com CPU e GPU
+    # ociosas, e o monitor desligaria o hulk no meio.
+    - name: Baixar as imagens das ferramentas
+      ansible.builtin.command: docker pull {{ item.value.image }}
+      loop: "{{ gpu_ferramentas | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      register: _pull
+      changed_when: "'Downloaded newer image' in _pull.stdout"
+      tags: [tools]
+
+    # `ufw reload` sai 0 mesmo quando o after.rules tem linha que o
+    # iptables-restore recusa: o bloco some calado e as portas, sem
+    # autenticação, ficam abertas. A conferência é na chain carregada.
+    - name: Ler a chain DOCKER-USER carregada
+      ansible.builtin.command: iptables -S DOCKER-USER
+      register: _docker_user
+      changed_when: false
+      tags: [tools]
+
+    - name: Conferir a DOCKER-USER carregada (RETURN dos clientes antes de todo DROP)
+      vars:
+        _linhas: "{{ _docker_user.stdout_lines | select('match', '^-A DOCKER-USER') | list }}"
+        _drops: "{{ _linhas | select('search', '-j DROP$') | list }}"
+        _rets: "{{ _linhas | select('search', '-j RETURN$') | list }}"
+      ansible.builtin.assert:
+        that:
+          - _drops | length == gpu_ferramentas | length
+          - _rets | length == (gpu_clientes_cidrs | length) * (gpu_ferramentas | length)
+          - _linhas.index(_drops[0]) > _linhas.index(_rets[-1])
+        fail_msg: >-
+          DOCKER-USER carregada fora do esperado ({{ _rets | length }} RETURN,
+          {{ _drops | length }} DROP). Confira `iptables -S DOCKER-USER` e o
+          bloco homelab gpu no /etc/ufw/after.rules.
+        quiet: true
+      tags: [tools]
+
+    # --------------------------------------------------------------- rede --
+    # ⚠️ Fica DEPOIS do reboot do driver de propósito: gravar o IP da VLAN 20 e
+    # reiniciar com a porta ainda na VLAN 30 deixa o hulk sem rede (só console).
+    # Valida num diretório de teste ANTES de gravar em /etc/netplan: netplan
+    # inválido gravado só estoura no próximo boot, com o hulk já sem rede.
+    - name: Criar a árvore de teste do netplan
+      ansible.builtin.file:
+        path: "{{ gpu_netplan_teste }}/etc/netplan"
+        state: directory
+        mode: "0700"
+      changed_when: false
+      tags: [rede]
+
+    - name: Renderizar o netplan estático na árvore de teste  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/gpu/netplan.yaml.j2"
+        dest: "{{ gpu_netplan_teste }}/etc/netplan/60-hulk.yaml"
+        mode: "0600"
+      changed_when: false
+      tags: [rede]
+
+    - name: Validar o netplan com netplan generate (sem aplicar)
+      ansible.builtin.command: netplan generate --root-dir {{ gpu_netplan_teste }}
+      changed_when: false
+      tags: [rede]
+
+    - name: Gravar o netplan estático do hulk  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/gpu/netplan.yaml.j2"
+        dest: "{{ gpu_netplan_arquivo }}"
+        owner: root
+        group: root
+        mode: "0600"
+      when: gpu_rede_estatica | bool
+      register: _netplan
+      tags: [rede]
+
+    - name: Impedir o cloud-init de regenerar a rede
+      ansible.builtin.copy:
+        dest: /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+        content: "network: {config: disabled}\n"
+        mode: "0644"
+      when: gpu_rede_estatica | bool
+      tags: [rede]
+
+    - name: Listar os outros arquivos de netplan (instalador e cloud-init)
+      ansible.builtin.find:
+        paths: /etc/netplan
+        patterns: "*.yaml"
+        excludes: ["60-hulk.yaml"]
+      register: _netplan_outros
+      when: gpu_rede_estatica | bool
+      tags: [rede]
+
+    - name: Remover os outros netplans (DHCP do instalador somaria ao estático)
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ _netplan_outros.files | default([]) }}"
+      loop_control:
+        label: "{{ item.path }}"
+      when: gpu_rede_estatica | bool
+      tags: [rede]
+
+    - name: Avisar que a rede foi gravada e NÃO aplicada  # noqa: no-handler
+      ansible.builtin.debug:
+        msg: >-
+          Netplan gravado em {{ gpu_netplan_arquivo }} e NÃO aplicado. Passo
+          manual: porta do switch em access VLAN 20, depois reiniciar o hulk.
+      when: _netplan is changed
+      tags: [rede]
+
+  post_tasks:
+    - name: Liberar o desligamento por ociosidade
+      ansible.builtin.file:
+        path: /run/hulk-keepalive
+        state: absent
+      tags: [always]
 
 - name: "08 - node1: script para acordar o hulk"
   hosts: homelab_managers[0]

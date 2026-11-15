@@ -82,9 +82,24 @@ checar(play1.get("hosts") == "gpu", "play 1 mira só o grupo gpu")
 pre = str(play1.get("pre_tasks"))
 checar("validate_vault.yml" in pre and "ssh_public_key" in pre, "exige ssh_public_key do vault")
 checar("gpu_mac is defined" in pre, "aborta se gpu_mac não estiver definido (vive no 99-local.yml)")
+checar("ansible_facts" in pre and "gpu_mac in _macs_do_host" in pre, "o MAC tem de ser de uma placa do próprio hulk (fatos)")
+checar(all("always" in (t.get("tags") or []) for t in play1.get("pre_tasks", [])),
+       "toda pre_task com tag always (senão --tags rede pula o assert do MAC)")
+checar(any((t.get("ansible.builtin.file") or {}).get("path") == "/run/hulk-keepalive"
+           and (t.get("ansible.builtin.file") or {}).get("state") == "touch" for t in play1.get("pre_tasks", [])),
+       "pre_task segura o desligamento (lock) durante a execução")
+checar(any((t.get("ansible.builtin.file") or {}).get("path") == "/run/hulk-keepalive"
+           and (t.get("ansible.builtin.file") or {}).get("state") == "absent" for t in play1.get("post_tasks", [])),
+       "post_task libera o lock")
 
-rede = tarefa("Gravar o netplan estático do hulk")
-checar("gpu_rede_estatica" in str(rede.get("when")), "netplan estático só quando gpu_rede_estatica")
+REDE_GRAVA = ["Gravar o netplan estático do hulk", "Impedir o cloud-init de regenerar a rede",
+              "Listar os outros arquivos de netplan (instalador e cloud-init)",
+              "Remover os outros netplans (DHCP do instalador somaria ao estático)"]
+for nome_rede in REDE_GRAVA:
+    checar("gpu_rede_estatica" in str(tarefa(nome_rede).get("when")),
+           f"'{nome_rede[:45]}' só com gpu_rede_estatica (na fase A apagaria o netplan DHCP)")
+checar(nomes1.index("Gravar o netplan estático do hulk") > nomes1.index("Reiniciar para carregar o driver") if "Reiniciar para carregar o driver" in nomes1 else False,
+       "rede só depois do reboot do driver (senão reinicia com o IP novo na porta errada)")
 checar("netplan apply" not in pb_txt.replace("`netplan apply`", ""),
        "o Ansible nunca roda netplan apply (cortaria a própria conexão)")
 checar("netplan generate" in pb_txt, "valida o netplan com netplan generate")
@@ -99,6 +114,8 @@ checar(any("sshd -T" in str(t) for t in t1), "confere o sshd efetivo, não só o
 checar(any("unattended-upgrades" in str(t) for t in t1), "unattended-upgrades presente")
 sudoers = tarefa("Sudo sem senha para o usuário de automação")
 sc = sudoers.get("ansible.builtin.copy") or {}
+checar("NOPASSWD" in str(sc.get("content")) and "ansible_user" in str(sc.get("content")),
+       "sudoers só para o ansible_user")
 checar("visudo -cf" in str(sc.get("validate")) and sc.get("mode") == "0440",
        "sudoers validado por visudo e em 0440 (sudoers inválido tranca o sudo)")
 ufw22 = [t for t in t1 if (t.get("community.general.ufw") or {}).get("port") == "22"]
@@ -119,8 +136,10 @@ checar("Instalar o driver NVIDIA open" in nomes1 and "Reiniciar para carregar o 
 reb = tarefa("Reiniciar para carregar o driver")
 checar("_driver" in str(reb.get("when")), "reboot só se o driver mudou")
 checar(any("nvidia-smi" in str(t.get("ansible.builtin.command", "")) for t in t1), "confere nvidia-smi no host")
-checar("signed-by" in pb_txt.lower() and "nvidia.github.io/libnvidia-container" in pb_txt,
-       "repo do nvidia-container-toolkit com chave assinada (Signed-By)")
+repo_nv = tarefa("Declarar o repositório do nvidia-container-toolkit")
+conteudo_repo = str((repo_nv.get("ansible.builtin.copy") or {}).get("content"))
+checar("Signed-By:" in conteudo_repo and "nvidia.github.io/libnvidia-container" in conteudo_repo,
+       "repo do nvidia-container-toolkit com chave assinada (Signed-By no conteúdo da task)")
 checar("Registrar o runtime nvidia no Docker" in nomes1 and "Reiniciar o Docker" in nomes1
        and nomes1.index("Registrar o runtime nvidia no Docker") < nomes1.index("Reiniciar o Docker"),
        "runtime registrado antes do restart do Docker")
@@ -152,7 +171,21 @@ svc = ler("templates/gpu/hulk-idle.service.j2")
 tmr = ler("templates/gpu/hulk-idle.timer.j2")
 checar("Type=oneshot" in svc and "StateDirectory=hulk-idle" in svc, "service oneshot com StateDirectory")
 checar("OnUnitActiveSec=1min" in tmr and "OnBootSec=1min" in tmr, "timer a cada 1 min, primeira em 1 min do boot")
-checar(any("hulk-idle.timer" in str(t) for t in t1), "playbook habilita o timer")
+hab = tarefa("Habilitar e iniciar o timer de ociosidade").get("ansible.builtin.systemd") or {}
+checar(hab.get("name") == "hulk-idle.timer" and hab.get("state") == "started" and hab.get("enabled") is True,
+       "task habilita E inicia o timer (a de instalação não conta)")
+checar(idle.lock_valido.__name__ == "lock_valido" if script.is_file() else False, "monitor tem lock_valido")
+if script.is_file():
+    import os
+    import tempfile
+    import time as _t
+    with tempfile.TemporaryDirectory() as tmp:
+        lk = Path(tmp) / "lock"
+        checar(idle.lock_valido(lk, _t.time()) is False, "sem arquivo: sem lock")
+        lk.write_text("")
+        checar(idle.lock_valido(lk, _t.time()) is True, "lock recente segura o desligamento")
+        os.utime(lk, (_t.time() - 5 * 3600, _t.time() - 5 * 3600))
+        checar(idle.lock_valido(lk, _t.time()) is False, "lock com mais de 4 h expira (não prende o hulk ligado)")
 
 # --- Ferramentas e portas (Tarefa 5) ---
 for nome in ("ollama", "whisper"):
@@ -168,9 +201,13 @@ checar(any(".compose.yml.j2" in str(t) and "gpu_dir" in str(t) for t in t1), "pl
 regras = ler("templates/gpu/ufw_docker_user.rules.j2")
 checar("gpu_clientes_cidrs" in regras and "-j RETURN" in regras and "-j DROP" in regras,
        "DOCKER-USER: RETURN para clientes, DROP para o resto")
-checar("-j RETURN" in regras and "-j DROP" in regras and regras.index("-j RETURN") < regras.index("-j DROP"),
+checar("-j RETURN" in regras and "-j DROP" in regras and regras.rindex("-j RETURN") < regras.index("-j DROP"),
        "todo RETURN antes do DROP")
 checar("ufw reload" in pb_txt, "recarrega o UFW para valer a DOCKER-USER")
+checar("porta_container" in regras, "DOCKER-USER usa a porta do container (pós-DNAT), não a publicada")
+checar(any("iptables -S DOCKER-USER" in str(t) for t in t1) and any("_docker_user" in str(t.get("vars")) and "ansible.builtin.assert" in t for t in t1),
+       "confere a chain DOCKER-USER carregada (ufw reload sai 0 com o bloco perdido)")
+checar(any("docker pull" in str(t.get("ansible.builtin.command", "")) for t in t1), "pré-pull das imagens (senão o 1º up baixa GBs ocioso)")
 
 # --- Play 2: hulk-wake no node1 (Tarefa 6) ---
 play2 = pb[1] if len(pb) > 1 else {}
@@ -178,6 +215,9 @@ checar(play2.get("hosts") == "homelab_managers[0]", "play 2 mira só o primeiro 
 wake = ler("templates/gpu/hulk-wake.sh.j2")
 checar("wakeonlan -i" in wake and "{{ hostvars['hulk'].gpu_mac }}" in wake, "envia o pacote mágico ao MAC do hulk")
 checar("HULK_ESPERA:-180" in wake and "exit 3" in wake, "espera 180 s e sai com 3, sem retry infinito")
+checar("exit 4" in wake and "hostvars['hulk'].gpu_ip_estatico" in wake,
+       "falha do WoL sai 4 (não 3) e o IP é o final (gpu_ip_estatico), não o do DHCP da fase A")
+checar("hulk-keepalive" in wake, "documenta o contrato do lock para o chamador")
 checar("nc -z" in wake and "exit 0" in wake, "já ligado: sai 0 sem reenviar")
 t2 = list(achatar(play2.get("tasks")))
 checar(any("hulk-wake" in str(t) for t in t2), "play 2 instala o hulk-wake")

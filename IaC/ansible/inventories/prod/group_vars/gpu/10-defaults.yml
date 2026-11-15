@@ -38,7 +38,9 @@ gpu_dir: "/srv/containers/gpu"
 gpu_ferramentas:
   ollama:
     image: "ollama/ollama:0.40.16"
-    porta: 11434
+    porta: 11434              # publicada no IP do hulk
+    porta_container: 11434    # a do container (a DOCKER-USER vê esta, pós-DNAT)
   whisper:
     image: "ghcr.io/speaches-ai/speaches:0.8.3-cuda"
     porta: 8000
+    porta_container: 8000
