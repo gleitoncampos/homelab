@@ -37,8 +37,8 @@ gpu_dir: "/srv/containers/gpu"
 # Tag fixa de propósito: `latest` muda sob o hulk entre um boot e outro.
 gpu_ferramentas:
   ollama:
-    image: "ollama/ollama:0.0.0"      # tag real definida ao montar as ferramentas
+    image: "ollama/ollama:0.40.16"
     porta: 11434
   whisper:
-    image: "ghcr.io/speaches-ai/speaches:0.0.0-cuda"   # idem
+    image: "ghcr.io/speaches-ai/speaches:0.8.3-cuda"
     porta: 8000

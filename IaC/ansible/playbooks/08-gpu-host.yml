@@ -327,3 +327,38 @@
         enabled: true
         daemon_reload: true
       tags: [idle]
+
+    # -------------------------------------------------------- ferramentas --
+    - name: Criar as pastas das ferramentas
+      ansible.builtin.file:
+        path: "{{ gpu_dir }}/{{ item.0 }}/{{ item.1 }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - [ollama, dados]
+        - [whisper, modelos]
+      tags: [tools]
+
+    - name: Copiar o compose de cada ferramenta para gpu_dir  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/gpu/{{ item }}.compose.yml.j2"
+        dest: "{{ gpu_dir }}/{{ item }}/compose.yml"
+        mode: "0644"
+      loop: [ollama, whisper]
+      tags: [tools]
+
+    - name: Gravar as regras DOCKER-USER das ferramentas
+      ansible.builtin.blockinfile:
+        path: /etc/ufw/after.rules
+        marker: "# {mark} homelab gpu DOCKER-USER (Ansible: 08-gpu-host.yml)"
+        block: "{{ lookup('ansible.builtin.template', playbook_dir ~ '/../templates/gpu/ufw_docker_user.rules.j2') }}"
+        insertafter: EOF
+        backup: true
+      register: _after_gpu
+      tags: [tools]
+
+    - name: Recarregar o UFW para valer a DOCKER-USER  # noqa: no-handler
+      ansible.builtin.command: ufw reload
+      when: _after_gpu is changed
+      changed_when: true
+      tags: [tools]

@@ -150,6 +150,24 @@ checar("Type=oneshot" in svc and "StateDirectory=hulk-idle" in svc, "service one
 checar("OnUnitActiveSec=1min" in tmr and "OnBootSec=1min" in tmr, "timer a cada 1 min, primeira em 1 min do boot")
 checar(any("hulk-idle.timer" in str(t) for t in t1), "playbook habilita o timer")
 
+# --- Ferramentas e portas (Tarefa 5) ---
+for nome in ("ollama", "whisper"):
+    txt = ler(f"templates/gpu/{nome}.compose.yml.j2")
+    c = yaml.safe_load(re.sub(r"\{\{[^}]*\}\}", "x", txt)) if txt else {}
+    svc_c = (c.get("services") or {}).get(nome, {})
+    checar(svc_c.get("restart") in ("no", False), f"{nome}: restart 'no' (sob demanda, nada sobe no boot)")
+    dev = (((svc_c.get("deploy") or {}).get("resources") or {}).get("reservations") or {}).get("devices") or [{}]
+    checar(dev[0].get("driver") == "nvidia" and "gpu" in dev[0].get("capabilities", []), f"{nome}: reserva a GPU")
+    checar("{{ gpu_ip_estatico }}:" in txt, f"{nome}: porta publicada só no IP do hulk, não em 0.0.0.0")
+    checar("latest" not in txt, f"{nome}: sem latest no template")
+checar(any(".compose.yml.j2" in str(t) and "gpu_dir" in str(t) for t in t1), "playbook copia os compose para gpu_dir")
+regras = ler("templates/gpu/ufw_docker_user.rules.j2")
+checar("gpu_clientes_cidrs" in regras and "-j RETURN" in regras and "-j DROP" in regras,
+       "DOCKER-USER: RETURN para clientes, DROP para o resto")
+checar("-j RETURN" in regras and "-j DROP" in regras and regras.index("-j RETURN") < regras.index("-j DROP"),
+       "todo RETURN antes do DROP")
+checar("ufw reload" in pb_txt, "recarrega o UFW para valer a DOCKER-USER")
+
 # --- novos blocos entram aqui (uma tarefa por bloco) ---
 
 if falhas:

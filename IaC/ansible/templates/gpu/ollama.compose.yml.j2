@@ -1,0 +1,16 @@
+# Gerado por Ansible (08-gpu-host.yml). Sobe sob demanda: `docker compose up -d`.
+services:
+  ollama:
+    image: {{ gpu_ferramentas.ollama.image }}
+    restart: "no"
+    ports:
+      - "{{ gpu_ip_estatico }}:{{ gpu_ferramentas.ollama.porta }}:11434"
+    volumes:
+      - {{ gpu_dir }}/ollama/dados:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

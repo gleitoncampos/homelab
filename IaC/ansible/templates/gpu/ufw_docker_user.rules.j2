@@ -1,0 +1,15 @@
+{# Bloco do /etc/ufw/after.rules: só os clientes autorizados falam com as portas
+   das ferramentas. Docker publica por DNAT e fura o UFW; DOCKER-USER é
+   consultada antes. A --dport aqui é a do CONTAINER (pós-DNAT), que nas duas
+   ferramentas coincide com `porta`. Todo RETURN antes de todo DROP. #}
+*filter
+:DOCKER-USER - [0:0]
+{% for faixa in gpu_clientes_cidrs %}
+{% for f in gpu_ferramentas.values() %}
+-A DOCKER-USER -s {{ faixa }} -p tcp -m tcp --dport {{ f.porta }} -m comment --comment "hulk: cliente autorizado {{ f.porta }}/tcp" -j RETURN
+{% endfor %}
+{% endfor %}
+{% for f in gpu_ferramentas.values() %}
+-A DOCKER-USER -p tcp -m tcp --dport {{ f.porta }} -m comment --comment "hulk: fecha {{ f.porta }}/tcp" -j DROP
+{% endfor %}
+COMMIT
