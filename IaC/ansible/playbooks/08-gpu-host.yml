@@ -319,6 +319,8 @@
       ansible.builtin.file:
         path: "{{ gpu_dir }}/{{ item.key }}/{{ item.value.dados }}"
         state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
         mode: "0755"
       loop: "{{ gpu_ferramentas | dict2items }}"
       loop_control:
