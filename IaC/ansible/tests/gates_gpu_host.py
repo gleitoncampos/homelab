@@ -168,6 +168,18 @@ checar("-j RETURN" in regras and "-j DROP" in regras and regras.index("-j RETURN
        "todo RETURN antes do DROP")
 checar("ufw reload" in pb_txt, "recarrega o UFW para valer a DOCKER-USER")
 
+# --- Play 2: hulk-wake no node1 (Tarefa 6) ---
+play2 = pb[1] if len(pb) > 1 else {}
+checar(play2.get("hosts") == "homelab_managers[0]", "play 2 mira só o primeiro manager (mesma VLAN do hulk)")
+wake = ler("templates/gpu/hulk-wake.sh.j2")
+checar("wakeonlan -i" in wake and "{{ hostvars['hulk'].gpu_mac }}" in wake, "envia o pacote mágico ao MAC do hulk")
+checar("HULK_ESPERA:-180" in wake and "exit 3" in wake, "espera 180 s e sai com 3, sem retry infinito")
+checar("nc -z" in wake and "exit 0" in wake, "já ligado: sai 0 sem reenviar")
+t2 = list(achatar(play2.get("tasks")))
+checar(any("hulk-wake" in str(t) for t in t2), "play 2 instala o hulk-wake")
+checar(any("wakeonlan" in str(t.get("ansible.builtin.apt", "")) for t in t2), "play 2 instala o wakeonlan")
+checar("'hulk' in groups['gpu']" in str(play2.get("pre_tasks")), "play 2 aborta se o hulk não está no inventário")
+
 # --- novos blocos entram aqui (uma tarefa por bloco) ---
 
 if falhas:

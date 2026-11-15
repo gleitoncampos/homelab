@@ -362,3 +362,25 @@
       when: _after_gpu is changed
       changed_when: true
       tags: [tools]
+
+- name: "08 - node1: script para acordar o hulk"
+  hosts: homelab_managers[0]
+  become: true
+  pre_tasks:
+    - name: Abortar se o hulk não está no inventário
+      ansible.builtin.assert:
+        that: "'hulk' in groups['gpu']"
+        fail_msg: "hulk fora do grupo gpu: sem MAC e IP não há como acordá-lo."
+        quiet: true
+
+  tasks:
+    - name: Instalar wakeonlan e netcat
+      ansible.builtin.apt:
+        name: [wakeonlan, netcat-openbsd]
+        state: present
+
+    - name: Instalar o hulk-wake  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/gpu/hulk-wake.sh.j2"
+        dest: /usr/local/bin/hulk-wake
+        mode: "0755"

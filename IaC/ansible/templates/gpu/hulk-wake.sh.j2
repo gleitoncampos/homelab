@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Gerado por Ansible (08-gpu-host.yml). Acorda o hulk e espera o SSH.
+# exit 0 = no ar; exit 3 = não acordou no prazo.
+set -euo pipefail
+MAC="{{ hostvars['hulk'].gpu_mac }}"
+IP="{{ hostvars['hulk'].ansible_host }}"
+BCAST="{{ hostvars['hulk'].gpu_wol_broadcast }}"
+LIMITE="${HULK_ESPERA:-180}"
+
+if nc -z -w2 "$IP" 22; then
+  echo "hulk já está no ar"
+  exit 0
+fi
+
+wakeonlan -i "$BCAST" "$MAC" >/dev/null
+fim=$((SECONDS + LIMITE))
+until nc -z -w2 "$IP" 22; do
+  if (( SECONDS >= fim )); then
+    echo "hulk não acordou em ${LIMITE}s" >&2
+    exit 3
+  fi
+  sleep 5
+done
+echo "hulk no ar"
+exit 0
