@@ -68,6 +68,18 @@
         key: "{{ ssh_public_key }}"
       tags: [base]
 
+    # Primeira execução precisa de `-K` (o usuário do instalador ainda pede
+    # senha no sudo); depois deste drop-in, o Ansible não pede mais.
+    - name: Sudo sem senha para o usuário de automação
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/90-ansible
+        content: "{{ ansible_user }} ALL=(ALL) NOPASSWD:ALL\n"
+        owner: root
+        group: root
+        mode: "0440"
+        validate: "visudo -cf %s"
+      tags: [base]
+
     - name: Fechar o SSH para login por senha
       ansible.builtin.copy:
         dest: /etc/ssh/sshd_config.d/10-homelab.conf

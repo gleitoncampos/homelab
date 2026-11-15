@@ -97,6 +97,10 @@ ssh = tarefa("Fechar o SSH para login por senha")
 checar("PasswordAuthentication no" in str(ssh), "SSH sem senha")
 checar(any("sshd -T" in str(t) for t in t1), "confere o sshd efetivo, não só o arquivo")
 checar(any("unattended-upgrades" in str(t) for t in t1), "unattended-upgrades presente")
+sudoers = tarefa("Sudo sem senha para o usuário de automação")
+sc = sudoers.get("ansible.builtin.copy") or {}
+checar("visudo -cf" in str(sc.get("validate")) and sc.get("mode") == "0440",
+       "sudoers validado por visudo e em 0440 (sudoers inválido tranca o sudo)")
 ufw22 = [t for t in t1 if (t.get("community.general.ufw") or {}).get("port") == "22"]
 checar(len(ufw22) == 1 and "src" in ufw22[0]["community.general.ufw"], "SSH liberado só por origem (src)")
 i_ufw_on = next((i for i, t in enumerate(t1)
