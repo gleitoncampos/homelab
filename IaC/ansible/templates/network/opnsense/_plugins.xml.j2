@@ -542,8 +542,9 @@
          certa porque o `defaultgw` e o PRIMEIRO digito da chave e mascarava os
          numeros. Agora 1 = principal e 2 = contingencia: no IPv4 a principal e a
          CLARO (inversao de 14/11/2026, a WAN1 PPPoE oscilava 11-12% de perda
-         e a CLARO nao), e no IPv6 tambem (DECISAO 021: o v6 das VLANs sai
-         pela CLARO com NAT66, ver _nat.xml.j2). A ordem se sustenta sozinha se
+         e a CLARO nao), no IPv6 segue a WAN1 ate o NAT66 estar provado (DECISAO
+         021, etapa (a): a CLARO so recebe o v6 do teste de _filter.xml.j2;
+         etapa (b) inverte). A ordem se sustenta sozinha se
          algum dia o `defaultgw` sair de cena.
 
          O par `monitor_killstates_priority` ("Failback States") fica em 0 nos
@@ -586,7 +587,7 @@
          (anycast público). defaultgw v6 = WAN_PPPOEV6 (a LAN usa o prefixo
          delegado pela WAN1 e a CLARO não delega PD: teste de 14/11/2026,
          NoPrefixAvail). Desde 14/11/2026 CLARO_DHCP é a default v4 e a WAN1
-         (WAN_GW) é a contingência; no v6 tambem (DECISAO 021, NAT66). Prioridades
+         (WAN_GW) é a contingência; no v6 a CLARO segue backup ate a etapa (b) da DECISAO 021. Prioridades
          1 (principal) e 2 (contingencia) escalonam o failover dos gateway_group. #}
       <gateway_item uuid="9eb7dc4b-0a81-491c-bdee-1d9aee206bdb">
         <disabled>0</disabled>
@@ -621,7 +622,7 @@
         <interface>wan</interface>
         <ipprotocol>inet6</ipprotocol>
         <gateway/>
-        <defaultgw>0</defaultgw>
+        <defaultgw>1</defaultgw>
         <fargw>0</fargw>
         <monitor_disable>0</monitor_disable>
         <monitor_noroute>0</monitor_noroute>
@@ -634,7 +635,7 @@
            link-local. Mede o enlace até o provedor, não a internet. #}
         <monitor/>
         <force_down>0</force_down>
-        <priority>2</priority>
+        <priority>1</priority>
         <weight>1</weight>
         <latencylow>200</latencylow>
         <latencyhigh>1000</latencyhigh>
@@ -652,7 +653,7 @@
         <interface>opt1</interface>
         <ipprotocol>inet6</ipprotocol>
         <gateway/>
-        <defaultgw>1</defaultgw>
+        <defaultgw>0</defaultgw>
         <fargw>0</fargw>
         <monitor_disable>0</monitor_disable>
         <monitor_noroute>0</monitor_noroute>
@@ -660,7 +661,7 @@
         <monitor_killstates_priority>0</monitor_killstates_priority>
         <monitor>{{ opnsense_wan2_monitor_ipv6 }}</monitor>
         <force_down>0</force_down>
-        <priority>1</priority>
+        <priority>2</priority>
         <weight>1</weight>
         <latencylow>200</latencylow>
         <latencyhigh>1000</latencyhigh>

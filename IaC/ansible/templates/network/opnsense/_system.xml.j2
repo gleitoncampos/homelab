@@ -105,9 +105,10 @@
    Com o campo presente, o gateway que cai entra em `$skip` e o proximo
    assume: a ordenacao de `newKey()` poe `defaultgw=1` na frente, entao
    o principal volta a ser default sozinho quando o link retorna. Desde
-   14/11/2026 o principal e a CLARO no IPv4 (WAN_GW de contingencia) e, pela
-   DECISAO 021, tambem no IPv6: a CLARO nao delega PD, o prefixo dos clientes
-   vem da WAN1 e o v6 sai pela CLARO com NAT66 (_nat.xml.j2).
+   14/11/2026 o principal e a CLARO no IPv4 (WAN_GW de contingencia) e a WAN1
+   no IPv6 (CLARO_DHCP6 e contingencia: a CLARO nao delega PD e o prefixo dos
+   clientes vem da WAN1). DECISAO 021: etapa (b) inverte o v6, depois de o
+   NAT66 ser provado com o teste de _filter.xml.j2.
 
    ⚠️ O elemento e OMITIDO quando desligado, nunca escrito como 0. Os dois
    leitores discordam sobre o valor: system.inc e gateway_watcher.php usam

@@ -62,7 +62,7 @@
   e NÃO de sorteio: UUID é identidade neste config, e um novo a cada render
   faria o OPNsense ver regra nova toda vez.
 #}
-{% macro regra_politica(chave, seq, acao, iface, destino, porta, descricao, origem=none, limite=none, ipprot='inet', proto=none) %}
+{% macro regra_politica(chave, seq, acao, iface, destino, porta, descricao, origem=none, limite=none, ipprot='inet', proto=none, gateway=none) %}
           <rule uuid="{{ ('politica:' ~ chave) | to_uuid }}">
             <enabled>1</enabled>
             <statetype>keep</statetype>
@@ -84,7 +84,7 @@
             <destination_not>0</destination_not>
             <destination_port>{{ porta }}</destination_port>
             <divert-to/>
-            <gateway/>
+            <gateway>{{ gateway if gateway else '' }}</gateway>
             <replyto/>
             <disablereplyto>0</disablereplyto>
             <log>{{ 1 if acao == 'block' else 0 }}</log>
@@ -204,6 +204,18 @@
      Não cobertos em v6 (existem em v4): cryptomining (Mining_Ports, vale em
      TODAS as VLANs, inclusive a 20), SMTP em IoT/visitantes e anti-portscan
      (55). Quem ligar v6 em IoT ou GUEST precisa das gêmeas antes. #}
+{% if vlan.ipv6_teste_claro is defined %}
+{#   ETAPA (a) da DECISÃO 021: prova do NAT66 sem mexer no default v6. Só o
+     ICMPv6 desta VLAN para UM destino sai pela CLARO (`gateway`; protocolo
+     `icmp` com ipprotocol inet6 vira ipv6-icmp no FilterRule.php); o resto
+     segue pela WAN1. Prova: de um host da VLAN, `ping6 <destino>`, e no
+     firewall `pfctl -ss | grep <destino>` mostra a origem traduzida para o
+     endereço da igc1. Sai na etapa (b). #}
+{{ regra_politica(eu ~ ':v6:teste-nat66-claro', 39, 'pass', eu,
+                  vlan.ipv6_teste_claro, '',
+                  vlan.name ~ ' > IPv6 teste NAT66 pela CLARO', ipprot='inet6',
+                  proto='icmp', gateway='CLARO_DHCP6') }}
+{% endif %}
 {{ regra_politica(eu ~ ':v6:pass-dns-self', 41, 'pass', eu, '(self)', '53',
                   vlan.name ~ ' > IPv6 DNS no firewall', ipprot='inet6',
                   proto='tcp/udp') }}
