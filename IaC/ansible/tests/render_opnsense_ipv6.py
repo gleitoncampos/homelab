@@ -7,9 +7,8 @@ IPv6 é opt-in por VLAN (`ipv6_prefix_id`). O que precisa valer:
     fechado (o redirecionamento forçado é v4) e a gerência do firewall também;
   - o GUA é público: VLAN com v6 bloqueia as outras VLANs com v6 ANTES da saída;
   - NAT66 na CLARO (`opt1`) para a `lan` e para cada VLAN com v6, em `hybrid`;
-  - etapa (a): o v6 default segue a WAN1 e só o teste de NAT66 (ICMPv6 a um
-    destino, `ipv6_teste_claro`) sai pela CLARO por `gateway`; a etapa (b)
-    inverte o default e tira o teste.
+  - etapa (b): o v6 default é a CLARO (WAN_PPPOEV6 é a contingência) e nenhuma
+    regra v6 força gateway: o teste da etapa (a) (`ipv6_teste_claro`) saiu.
 Lê a fixture de testes (VLAN 10 com gerência, VLAN 20 sem).
 """
 import subprocess
@@ -134,27 +133,18 @@ checar(all(campo(x, "interface") == "opt1" and campo(x, "ipprotocol") == "inet6"
            and campo(x, "target") == "" for x in nat6),
        "NAT66 sai pela CLARO (opt1), em inet6, com o endereço da interface (target vazio)")
 
-# Etapa (a): default v6 na WAN1; só o teste usa o gateway da CLARO
+# Etapa (b): default v6 na CLARO; a WAN1 é a contingência; nenhuma regra força gateway
 gw = {g.findtext("name"): g for g in raiz.iter("gateway_item")}
-checar(campo(gw["WAN_PPPOEV6"], "defaultgw") == "1" and campo(gw["WAN_PPPOEV6"], "priority") == "1",
-       "WAN_PPPOEV6 segue a default v6 (defaultgw 1, priority 1)")
-checar(campo(gw["CLARO_DHCP6"], "defaultgw") == "0" and campo(gw["CLARO_DHCP6"], "priority") == "2",
-       "CLARO_DHCP6 segue a contingência (defaultgw 0, priority 2)")
+checar(campo(gw["CLARO_DHCP6"], "defaultgw") == "1" and campo(gw["CLARO_DHCP6"], "priority") == "1",
+       "CLARO_DHCP6 é a default v6 (defaultgw 1, priority 1)")
+checar(campo(gw["WAN_PPPOEV6"], "defaultgw") == "0" and campo(gw["WAN_PPPOEV6"], "priority") == "2",
+       "WAN_PPPOEV6 é a contingência (defaultgw 0, priority 2)")
 comum = yaml.safe_load((RAIZ / "inventories/_common/opnsense.yml").read_text(encoding="utf-8"))
 grupo = next(g for g in comum["opnsense_gateway_groups"] if g["name"] == "WAN_IPV6")
 tiers = {m["gateway"]: m["tier"] for m in grupo["membros"]}
-checar(tiers == {"WAN_PPPOEV6": 1, "CLARO_DHCP6": 2}, "grupo WAN_IPV6: WAN1 tier 1, CLARO tier 2")
+checar(tiers == {"CLARO_DHCP6": 1, "WAN_PPPOEV6": 2}, "grupo WAN_IPV6: CLARO tier 1, WAN1 tier 2")
 com_gw = [x for x in regras if campo(x, "gateway")]
-checar(len(com_gw) == 1, "exatamente UMA regra v6 força gateway (o teste)")
-if com_gw:
-    t = com_gw[0]
-    checar(campo(t, "gateway") == "CLARO_DHCP6" and campo(t, "interface") == "vlan20"
-           and campo(t, "action") == "pass" and campo(t, "protocol") == "icmp"
-           and campo(t, "destination_net") == com_v6[20]["ipv6_teste_claro"]
-           and campo(t, "source_net") == "vlan20" and int(campo(t, "sequence")) == 39,
-           "o teste: ICMPv6 da vlan20 só para o destino de teste, pela CLARO, seq 39")
-    outros_seq = [int(campo(x, "sequence")) for x in v6(20) if x is not t]
-    checar(all(39 < q for q in outros_seq), "o teste vem ANTES das demais regras v6 da vlan20 (quick)")
+checar(len(com_gw) == 0, "nenhuma regra v6 força gateway (o teste da etapa (a) saiu)")
 
 if falhas:
     sys.exit(f"\n✗ render-opnsense-ipv6: {len(falhas)} falha(s)")

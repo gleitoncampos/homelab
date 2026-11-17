@@ -160,7 +160,6 @@ vlans:
     subnet: 24
     # IPv6 piloto (DECISÃO 021): prefixo delegado da WAN1, id = tag.
     ipv6_prefix_id: 20
-    ipv6_teste_claro: "2606:4700::6810:84e5"  # etapa (a): ping6 só dele sai pela CLARO
     dhcp_enabled: false
     # ---- política de passagem ----
     # Servidor RESPONDE, não inicia — para rede de USUÁRIO. Tráfego entre

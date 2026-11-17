@@ -78,7 +78,7 @@
              <source_not>0</source_not>
              <source_port/>
              <destination_net>any</destination_net>
-@@ -1505,6 +1805,1238 @@
+@@ -1505,6 +1805,1182 @@
              <shaper2/>
              <description/>
            </rule>
@@ -921,62 +921,6 @@
 +            <shaper1/>
 +            <shaper2/>
 +            <description>HOMELAB &gt; bloqueia vlan10</description>
-+          </rule>
-+          <rule uuid="c6fe9cb1-8ce1-5972-bfa2-5bdee4bea7c6">
-+            <enabled>1</enabled>
-+            <statetype>keep</statetype>
-+            <state-policy/>
-+            <sequence>39</sequence>
-+            <action>pass</action>
-+            <quick>1</quick>
-+            <interfacenot>0</interfacenot>
-+            <interface>vlan20</interface>
-+            <direction>in</direction>
-+            <ipprotocol>inet6</ipprotocol>
-+            <protocol>icmp</protocol>
-+            <icmptype/>
-+            <icmp6type/>
-+            <source_net>vlan20</source_net>
-+            <source_not>0</source_not>
-+            <source_port/>
-+            <destination_net>2606:4700::6810:84e5</destination_net>
-+            <destination_not>0</destination_not>
-+            <destination_port/>
-+            <divert-to/>
-+            <gateway>CLARO_DHCP6</gateway>
-+            <replyto/>
-+            <disablereplyto>0</disablereplyto>
-+            <log>0</log>
-+            <allowopts>0</allowopts>
-+            <nosync>0</nosync>
-+            <nopfsync>0</nopfsync>
-+            <statetimeout/>
-+            <udp-first/>
-+            <udp-multiple/>
-+            <udp-single/>
-+            <max-src-nodes/>
-+            <max-src-states/>
-+            <max-src-conn/>
-+            <max/>
-+            <max-src-conn-rate/>
-+            <max-src-conn-rates/>
-+            <overload/>
-+            <adaptivestart/>
-+            <adaptiveend/>
-+            <prio/>
-+            <set-prio/>
-+            <set-prio-low/>
-+            <tag/>
-+            <tagged/>
-+            <tcpflags1/>
-+            <tcpflags2/>
-+            <tcpflags_any>0</tcpflags_any>
-+            <categories/>
-+            <sched/>
-+            <tos/>
-+            <shaper1/>
-+            <shaper2/>
-+            <description>HOMELAB &gt; IPv6 teste NAT66 pela CLARO</description>
 +          </rule>
 +          <rule uuid="2480e901-61ac-5295-bafb-55fc1cffdc79">
 +            <enabled>1</enabled>
