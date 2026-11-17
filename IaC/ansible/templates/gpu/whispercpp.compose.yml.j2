@@ -11,6 +11,13 @@ services:
     restart: "no"
     ports:
       - "{{ gpu_ip_estatico }}:{{ gpu_ferramentas.whispercpp.porta }}:{{ gpu_ferramentas.whispercpp.porta_container }}"
+    environment:
+      # O LD_LIBRARY_PATH da imagem põe /usr/local/cuda-13.0/compat na frente: o
+      # processo carrega a libcuda 580 de compatibilidade em vez da do driver do
+      # host (595) e o CUDA falha com "unsupported display driver / cuda driver
+      # combination" (erro 803, GeForce não suporta a libcuda de compat). Sem o
+      # compat, o toolkit injeta a libcuda do host.
+      LD_LIBRARY_PATH: /usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64
     volumes:
       - {{ gpu_dir }}/whispercpp/modelos:/models:ro
     command:
