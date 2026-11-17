@@ -143,6 +143,12 @@ comum = yaml.safe_load((RAIZ / "inventories/_common/opnsense.yml").read_text(enc
 grupo = next(g for g in comum["opnsense_gateway_groups"] if g["name"] == "WAN_IPV6")
 tiers = {m["gateway"]: m["tier"] for m in grupo["membros"]}
 checar(tiers == {"CLARO_DHCP6": 1, "WAN_PPPOEV6": 2}, "grupo WAN_IPV6: CLARO tier 1, WAN1 tier 2")
+checar(campo(gw["CLARO_DHCP6"], "interface") == "opt1" and campo(gw["CLARO_DHCP6"], "ipprotocol") == "inet6",
+       "CLARO_DHCP6: interface opt1 (CLARO), família inet6")
+checar(campo(gw["WAN_PPPOEV6"], "interface") == "wan" and campo(gw["WAN_PPPOEV6"], "ipprotocol") == "inet6",
+       "WAN_PPPOEV6: interface wan (PPPoE), família inet6")
+checar(raiz.find("system/gw_switch_default") is not None and campo(raiz.find("system"), "gw_switch_default") == "1",
+       "gw_switch_default ligado (o failover do default v6 depende dele)")
 com_gw = [x for x in regras if campo(x, "gateway")]
 checar(len(com_gw) == 0, "nenhuma regra v6 força gateway (o teste da etapa (a) saiu)")
 

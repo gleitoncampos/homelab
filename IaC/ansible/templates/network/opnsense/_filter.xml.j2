@@ -62,7 +62,7 @@
   e NÃO de sorteio: UUID é identidade neste config, e um novo a cada render
   faria o OPNsense ver regra nova toda vez.
 #}
-{% macro regra_politica(chave, seq, acao, iface, destino, porta, descricao, origem=none, limite=none, ipprot='inet', proto=none, gateway=none) %}
+{% macro regra_politica(chave, seq, acao, iface, destino, porta, descricao, origem=none, limite=none, ipprot='inet', proto=none) %}
           <rule uuid="{{ ('politica:' ~ chave) | to_uuid }}">
             <enabled>1</enabled>
             <statetype>keep</statetype>
@@ -84,7 +84,7 @@
             <destination_not>0</destination_not>
             <destination_port>{{ porta }}</destination_port>
             <divert-to/>
-            <gateway>{{ gateway if gateway else '' }}</gateway>
+            <gateway/>
             <replyto/>
             <disablereplyto>0</disablereplyto>
             <log>{{ 1 if acao == 'block' else 0 }}</log>

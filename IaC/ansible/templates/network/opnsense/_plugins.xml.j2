@@ -586,7 +586,12 @@
          (anycast público). o prefixo dos clientes vem do PD da WAN1 (a CLARO não
          delega PD: teste de 14/11/2026, NoPrefixAvail) e sai pela CLARO com
          NAT66. CLARO_DHCP e CLARO_DHCP6 são as defaults (v4 desde 14/11/2026,
-         v6 desde a etapa (b) da DECISAO 021); WAN_GW e WAN_PPPOEV6 a contingência. Prioridades
+         v6 desde a etapa (b) da DECISAO 021); WAN_GW e WAN_PPPOEV6 a contingência.
+         ⚠️ No v6 "contingência" NÃO é redundância completa: o GUA de toda VLAN
+         vem do PD da WAN1, então o v6 inteiro depende da WAN1 mesmo com a CLARO
+         de pé (v6 = PD da WAN1 E (CLARO ou WAN1)). Quando o v6 cai com a WAN1
+         fora (na queda do pppoe0 ou só no vencimento do lifetime) NÃO foi
+         medido. Prioridades
          1 (principal) e 2 (contingencia) escalonam o failover dos gateway_group. #}
       <gateway_item uuid="9eb7dc4b-0a81-491c-bdee-1d9aee206bdb">
         <disabled>0</disabled>

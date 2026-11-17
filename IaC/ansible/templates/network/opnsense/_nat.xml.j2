@@ -48,6 +48,10 @@
     sobreviver à renumeração do PD. A `lan` entra enquanto ela tiver track6
     (_interfaces.xml.j2): com o default v6 na CLARO, o único vizinho v6 da
     LAN ficaria sem rota; sai junto com o v6 da LAN (P8).
+    ⚠️ Dependência do PD: o GUA das redes vem da WAN1. Com a WAN1 fora, o v6
+    das VLANs pode cair mesmo com a CLARO de pé (prazo NÃO medido: queda do
+    pppoe0 ou vencimento do lifetime). Failover v6 = trocar o caminho de
+    saída, não o prefixo.
     `target` vazio = endereço da interface. #}
       <mode>hybrid</mode>
 {% set origens_nat66 = ['lan'] %}
