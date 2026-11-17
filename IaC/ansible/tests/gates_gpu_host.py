@@ -101,6 +101,23 @@ checar(any((t.get("ansible.builtin.file") or {}).get("path") == "/run/hulk-keepa
            and (t.get("ansible.builtin.file") or {}).get("state") == "absent" for t in play1.get("post_tasks", [])),
        "post_task libera o lock")
 
+# --- NAS (kamartaj) por CIFS ---
+checar("kamartaj_smb_password" in pre, "exige kamartaj_smb_password do vault")
+cred = tarefa("Gravar a credencial do NAS (root, 0600)")
+checar(cred.get("no_log") is True and cred.get("diff") is False,
+       "a credencial do NAS não aparece na saída nem no --diff (no_log e diff: false)")
+checar((cred.get("ansible.builtin.copy") or {}).get("mode") == "0600"
+       and (cred.get("ansible.builtin.copy") or {}).get("owner") == "root",
+       "credencial do NAS: dono root, modo 0600")
+nas_mount = (tarefa("Montar o NAS (CIFS, leitura e escrita, sem travar o boot)").get("ansible.posix.mount") or {})
+opts_nas = str(nas_mount.get("opts"))
+checar(all(o in opts_nas for o in ("nofail", "x-systemd.automount", "_netdev", "x-systemd.mount-timeout")),
+       "mount do NAS não trava o boot (nofail, automount, _netdev, timeout)")
+checar("password=" not in opts_nas and "credentials=/etc/hulk/kamartaj.cred" in opts_nas,
+       "mount do NAS usa arquivo de credencial, nunca a senha na linha do fstab")
+checar("{{ ansible_user }}" in opts_nas and "user_uid" not in pb_txt.replace("`ansible_facts.user_uid`", ""),
+       "uid/gid do mount por nome (ansible_facts.user_uid daria 0 sob become)")
+
 REDE_GRAVA = ["Gravar o netplan estático do hulk", "Impedir o cloud-init de regenerar a rede",
               "Listar os outros arquivos de netplan (instalador e cloud-init)",
               "Remover os outros netplans (DHCP do instalador somaria ao estático)"]

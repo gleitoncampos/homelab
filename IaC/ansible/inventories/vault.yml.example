@@ -185,6 +185,13 @@ proxmox_backup_share_password: "TROCAR-senha-do-usuario-smb"
 # aparece na UI e nunca monta, e quem acusa é o `06-backup.yml`, dois passos
 # adiante. Cadastre a MESMA senha no usuário SMB do OMV.
 
+# --- hulk (usado por playbooks/08-gpu-host.yml) ----------------------------
+kamartaj_smb_password: "TROCAR-senha-do-usuario-smb-do-nas"
+# Senha do usuário SMB com que o hulk monta o compartilhamento do NAS (leitura e
+# escrita). O usuário e o IP do NAS vão em group_vars/gpu/99-local.yml
+# (`gpu_nas_user`, `gpu_nas_host`), não aqui. O 08 a grava em
+# /etc/hulk/kamartaj.cred (root, 0600); sem ela o play aborta no início.
+
 # Exporter do Proxmox: usuário DEDICADO só leitura (role PVEAuditor), criado nos
 # dois hosts pelo playbooks/00-proxmox-api-token.yml com esta senha. O
 # `make bootstrap` gera os dois. Senha e não token: os hosts não são cluster, e

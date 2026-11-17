@@ -35,6 +35,7 @@
       vars:
         required_secrets:
           - ssh_public_key
+          - kamartaj_smb_password
       tags: [always]
 
     - name: Exigir o MAC real, em minúsculas, da placa que está em uso (rota padrão)
@@ -388,6 +389,58 @@
           bloco homelab gpu no /etc/ufw/after.rules.
         quiet: true
       tags: [tools]
+
+    # ---------------------------------------------------------------- nas --
+    # kamartaj por CIFS, leitura e escrita. O hulk liga e desliga por ociosidade:
+    # `nofail` + automount impedem que um NAS fora do ar trave o boot, e o
+    # `idle-timeout` solta a conexão quando ninguém usa.
+    - name: Instalar o cliente CIFS
+      ansible.builtin.apt:
+        name: cifs-utils
+        state: present
+      tags: [nas]
+
+    - name: Criar a pasta da credencial do NAS
+      ansible.builtin.file:
+        path: /etc/hulk
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+      tags: [nas]
+
+    # `no_log` e `diff: false`: a senha não pode aparecer na saída nem no --diff.
+    - name: Gravar a credencial do NAS (root, 0600)
+      ansible.builtin.copy:
+        dest: /etc/hulk/kamartaj.cred
+        content: |
+          username={{ gpu_nas_user }}
+          password={{ kamartaj_smb_password }}
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+      diff: false
+      tags: [nas]
+
+    - name: Criar o ponto de montagem do NAS
+      ansible.builtin.file:
+        path: "{{ gpu_nas_mountpoint }}"
+        state: directory
+        mode: "0755"
+      tags: [nas]
+
+    # `uid`/`gid` por NOME: o play roda com `become`, então `ansible_facts.user_uid`
+    # seria 0 (root), e os arquivos do NAS ficariam de root no hulk.
+    - name: Montar o NAS (CIFS, leitura e escrita, sem travar o boot)
+      ansible.posix.mount:
+        src: "//{{ gpu_nas_host }}/{{ gpu_nas_share }}"
+        path: "{{ gpu_nas_mountpoint }}"
+        fstype: cifs
+        opts: >-
+          credentials=/etc/hulk/kamartaj.cred,uid={{ ansible_user }},gid={{ ansible_user }},iocharset=utf8,vers=3.0,_netdev,nofail,x-systemd.automount,x-systemd.idle-timeout=120,x-systemd.mount-timeout=30
+        state: mounted
+      tags: [nas]
 
     # --------------------------------------------------------------- rede --
     # ⚠️ Fica DEPOIS do reboot do driver de propósito: gravar o IP da VLAN 20 e

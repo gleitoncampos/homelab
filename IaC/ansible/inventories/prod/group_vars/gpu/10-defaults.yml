@@ -35,6 +35,14 @@ gpu_clientes_cidrs:
 
 gpu_dir: "/srv/containers/gpu"
 
+# NAS (kamartaj), montado por CIFS em leitura e escrita. IP e usuário reais vivem
+# no `99-local.yml` (gitignorado); a senha vive no Vault (`kamartaj_smb_password`).
+# O hulk não resolve `.local` (sem mDNS): a montagem é pelo IP.
+gpu_nas_host: "192.0.2.15"            # fictício (faixa de documentação)
+gpu_nas_share: "NEW"
+gpu_nas_user: "TROCAR"
+gpu_nas_mountpoint: "/mnt/kamartaj"
+
 # Tag fixa de propósito: `latest` muda sob o hulk entre um boot e outro. O
 # whisper.cpp publica a `main-cuda` flutuante e uma tag por commit
 # (`main-cuda-<sha de 40>`), que não muda: é a que vale aqui (a mais recente em
