@@ -361,6 +361,32 @@ checar(rc == 3 and n >= 2, f"não acorda: exit 3 no prazo e WoL REENVIADO (achad
 rc, n = rodar_wake(False, True, {"HULK_ESPERA": "abc"})
 checar(rc == 2 and n == 0, f"espera inválida: exit 2 antes de enviar qualquer WoL (achado: rc={rc}, envios={n})")
 
+# --- Curva da ventoinha: 40 C parte, 60 C a 100 % ---
+fan_script = RAIZ / "files" / "gpu" / "hulk-fan-control.py"
+checar(fan_script.is_file(), "existe files/gpu/hulk-fan-control.py")
+if fan_script.is_file():
+    spec = importlib.util.spec_from_file_location("hulk_fan", fan_script)
+    fan = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fan)
+    checar((fan.LIGA_C, fan.CHEIA_C) == (40.0, 60.0), "curva: parte a 40 C e chega ao máximo a 60 C")
+    checar(fan.alvo_pct(60, 30) == 100 and fan.alvo_pct(75, 30) == 100, "a 60 C e acima: 100 %")
+    checar(fan.alvo_pct(41, 30) > 30 and fan.alvo_pct(40, 30) == 30, "a 40 C o mínimo; acima dele a rampa sobe")
+    checar(fan.alvo_pct(50, 30) == 65, "ponto médio (50 C) a meio caminho entre 30 e 100 % (65 %)")
+    checar(all(fan.alvo_pct(t, 30) <= fan.alvo_pct(t + 1, 30) for t in range(30, 70)), "rampa monótona: nunca cai quando a temperatura sobe")
+    checar(fan.decidir(40, False, 30) is None and fan.decidir(36, False, 30) is None, "<= 40 C sem manual: automático do driver")
+    checar(fan.decidir(41, False, 30) == fan.alvo_pct(41, 30), "acima de 40 C assume o manual")
+    checar(fan.decidir(39, True, 30) == 30, "histerese: depois de assumir, entre 38 e 40 C segura o mínimo")
+    checar(fan.decidir(38, True, 30) is None, "<= 38 C devolve o automático")
+    checar(fan.decidir(None, False, 30) == 100 and fan.decidir(None, True, 30) == 100, "temperatura ilegível: 100 % (fail-safe)")
+fan_svc = ler("templates/gpu/hulk-fan.service.j2")
+checar("ExecStopPost=" in fan_svc and "--restaurar" in fan_svc, "unit devolve a ventoinha ao automático ao parar (ExecStopPost)")
+checar("Restart=always" in fan_svc and "WantedBy=multi-user.target" in fan_svc, "unit reinicia sozinha e sobe no boot")
+fan_hab = tarefa("Habilitar e iniciar a curva da ventoinha").get("ansible.builtin.systemd") or {}
+checar(fan_hab.get("name") == "hulk-fan.service" and fan_hab.get("enabled") is True,
+       "playbook habilita o hulk-fan.service no boot")
+checar("restarted" in str(fan_hab.get("state")) and "_fan_script" in str(fan_hab.get("state")),
+       "script ou unit alterados reiniciam o serviço (senão o código novo não entra em uso)")
+
 # --- novos blocos entram aqui (uma tarefa por bloco) ---
 
 if falhas:

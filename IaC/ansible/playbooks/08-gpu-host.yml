@@ -307,6 +307,33 @@
         daemon_reload: true
       tags: [idle]
 
+    # ----------------------------------------------------------- ventoinha --
+    # Sem X não há nvidia-settings/Coolbits: o controle vai pelo NVML. A 40 °C a
+    # ventoinha parte do mínimo e a 60 °C chega a 100 % (files/gpu/hulk-fan-control.py).
+    - name: Instalar o script da curva de ventoinha  # noqa: no-relative-paths
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../files/gpu/hulk-fan-control.py"
+        dest: /usr/local/sbin/hulk-fan-control
+        mode: "0755"
+      register: _fan_script
+      tags: [fan]
+
+    - name: Instalar a unit da ventoinha  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/gpu/hulk-fan.service.j2"
+        dest: /etc/systemd/system/hulk-fan.service
+        mode: "0644"
+      register: _fan_unit
+      tags: [fan]
+
+    - name: Habilitar e iniciar a curva da ventoinha
+      ansible.builtin.systemd:
+        name: hulk-fan.service
+        state: "{{ 'restarted' if (_fan_script is changed or _fan_unit is changed) else 'started' }}"
+        enabled: true
+        daemon_reload: true
+      tags: [fan]
+
     # -------------------------------------------------------- ferramentas --
     # `whisper` virou `speaches` (15/11/2026): sem isto o compose velho fica no
     # disco apontando para uma chave que não existe mais.
