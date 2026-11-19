@@ -334,6 +334,81 @@
         daemon_reload: true
       tags: [fan]
 
+    # ----------------------------------------------------------- métricas --
+    # CPU, RAM, disco e temperatura de CPU/NVMe saem do node_exporter do apt (o
+    # mesmo dos hipervisores). A GPU entra pelo coletor textfile dele: script
+    # NVML + timer de 15 s. O Prometheus raspa a 9100 (job `node_exporter`).
+    # `apply` leva a tag para dentro do include (sem ele, `--tags metricas` pula
+    # todas as tasks incluídas e o recap sai "ok" sem instalar nada).
+    - name: Instalar e verificar o node_exporter
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../tasks/node_exporter.yml"
+        apply:
+          tags: [metricas]
+      tags: [metricas]
+
+    - name: Liberar a 9100 (node_exporter) só para os clientes autorizados
+      community.general.ufw:
+        rule: allow
+        port: "9100"
+        proto: tcp
+        src: "{{ item }}"
+      loop: "{{ gpu_clientes_cidrs }}"
+      tags: [metricas]
+
+    - name: Instalar o script das métricas da GPU  # noqa: no-relative-paths
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../files/gpu/hulk-gpu-metrics.py"
+        dest: /usr/local/sbin/hulk-gpu-metrics
+        mode: "0755"
+      register: _gm_script
+      tags: [metricas]
+
+    - name: Instalar a unit das métricas da GPU  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/gpu/hulk-gpu-metrics.service.j2"
+        dest: /etc/systemd/system/hulk-gpu-metrics.service
+        mode: "0644"
+      register: _gm_svc
+      tags: [metricas]
+
+    - name: Instalar o timer das métricas da GPU  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/gpu/hulk-gpu-metrics.timer.j2"
+        dest: /etc/systemd/system/hulk-gpu-metrics.timer
+        mode: "0644"
+      register: _gm_timer
+      tags: [metricas]
+
+    # Em --check num host sem as units, a unit não existe e o systemd recusa.
+    - name: Habilitar e iniciar o timer das métricas da GPU
+      ansible.builtin.systemd:
+        name: hulk-gpu-metrics.timer
+        state: started
+        enabled: true
+        daemon_reload: true
+      when: not (ansible_check_mode and (_gm_svc is changed or _gm_timer is changed))
+      tags: [metricas]
+
+    - name: Gerar uma amostra agora (não espera o primeiro tick do timer)  # noqa: command-instead-of-module
+      ansible.builtin.command: systemctl start hulk-gpu-metrics.service
+      changed_when: false
+      when: not ansible_check_mode
+      tags: [metricas]
+
+    # A prova é a série aparecendo no /metrics do exporter: se o diretório do
+    # coletor textfile do pacote não for o que o script usa, falha aqui, alto.
+    - name: Conferir que o /metrics traz a temperatura da GPU
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:9100/metrics"
+        return_content: true
+      register: _metrics
+      retries: 5
+      delay: 3
+      until: _metrics is succeeded and 'gpu_temperature_celsius' in _metrics.content
+      when: not ansible_check_mode
+      tags: [metricas]
+
     # -------------------------------------------------------- ferramentas --
     # `whisper` virou `speaches` (15/11/2026): sem isto o compose velho fica no
     # disco apontando para uma chave que não existe mais.

@@ -16,6 +16,7 @@ intermediário — saiu em 07/09/2026, junto com o próprio coletor: os cinco
 equipamentos passaram a enviar syslog direto para a stack, e um `tcpdump` de
 40 s no CT não viu um pacote sequer.
 """
+import json
 import re
 import sys
 from pathlib import Path
@@ -32,6 +33,7 @@ GRUPOS = {
     "openwrt": ["ap-um", "ap-dois"],
     "opnsense": ["fw-um"],
     "proxmox": ["hv-um", "hv-dois"],
+    "gpu": ["gpu-um"],
 }
 ENDERECOS = {
     "mgr-um": "192.0.2.10", "mgr-dois": "192.0.2.11",
@@ -39,6 +41,7 @@ ENDERECOS = {
     "ap-um": "192.0.2.30", "ap-dois": "192.0.2.31",
     "fw-um": "192.0.2.1",
     "hv-um": "192.0.2.40", "hv-dois": "192.0.2.41",
+    "gpu-um": "192.0.2.50",
 }
 # O AP saiu para a VLAN de gerência e o inventário segue no endereço antigo:
 # o alvo tem de vir de `openwrt_mgmt_ip` (13/10/2026, alvo `down` por timeout).
@@ -150,6 +153,21 @@ if prom:
         esperado = "nas" if host in GRUPOS["omv"] else "hipervisor"
         checar(papel.get(f"{re.escape(ENDERECOS[host])}:9100") == esperado,
                f"{host} sai com role={esperado}")
+    # hulk (grupo gpu, sob demanda): alvo do mesmo job, com role próprio, sem
+    # cair no `nas` (dashboard do NAS) nem no `hipervisor`.
+    checar(f"{ENDERECOS['gpu-um']}:9100" in node_alvos, "gpu-um é alvo do job node_exporter")
+    checar(papel.get(f"{re.escape(ENDERECOS['gpu-um'])}:9100") == "gpu", "gpu-um sai com role=gpu")
+    nome_gpu = {r["regex"]: r["replacement"] for r in node_job["relabel_configs"]
+                if r.get("target_label") == "instance"}
+    checar(nome_gpu.get(f"{re.escape(ENDERECOS['gpu-um'])}:9100") == "GPU-UM", "gpu-um sai com instance em maiúsculas (HULK no real)")
+    hulk_dash = json.loads((SWARM / "dashboards" / "hulk.json").read_text(encoding="utf-8"))
+    exprs = [t["expr"] for pn in hulk_dash["panels"] for t in pn.get("targets", [])]
+    checar(hulk_dash["uid"] == "homelab-hulk" and len(exprs) >= 15, f"dashboard do hulk com uid e painéis ({len(exprs)} queries)")
+    checar(all('instance="HULK"' in e for e in exprs), "toda query do dashboard do hulk filtra instance=HULK")
+    checar(all("192.168" not in e and "192.0.2" not in e for e in exprs), "dashboard do hulk sem IP nas queries")
+    for metrica in ("gpu_temperature_celsius", "gpu_utilization_ratio", "gpu_memory_used_bytes", "gpu_memory_total_bytes",
+                    "node_cpu_seconds_total", "node_memory_MemAvailable_bytes", "node_filesystem_avail_bytes"):
+        checar(any(metrica in e for e in exprs), f"dashboard do hulk consulta {metrica}")
     nas_dash = (SWARM / "dashboards" / "nas.json").read_text(encoding="utf-8")
     checar('label_values(smartmon_device_active{role=\\"nas\\"}, instance)' in nas_dash
            and "label_values(smartmon_device_active, instance)" not in nas_dash,

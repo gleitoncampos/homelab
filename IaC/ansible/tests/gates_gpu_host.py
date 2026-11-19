@@ -387,6 +387,49 @@ checar(fan_hab.get("name") == "hulk-fan.service" and fan_hab.get("enabled") is T
 checar("restarted" in str(fan_hab.get("state")) and "_fan_script" in str(fan_hab.get("state")),
        "script ou unit alterados reiniciam o serviço (senão o código novo não entra em uso)")
 
+# --- Métricas: node_exporter do apt + coletor textfile da GPU ---
+gm_script = RAIZ / "files" / "gpu" / "hulk-gpu-metrics.py"
+checar(gm_script.is_file(), "existe files/gpu/hulk-gpu-metrics.py")
+if gm_script.is_file():
+    import tempfile
+    spec = importlib.util.spec_from_file_location("hulk_gm", gm_script)
+    gm = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gm)
+    txt = gm.formatar(0, 50, 4566024192, 17103323136, 39, 30)
+    linhas_gm = [l for l in txt.splitlines() if not l.startswith("#")]
+    checar('gpu_memory_used_bytes{gpu="0"} 4566024192' in linhas_gm
+           and 'gpu_memory_total_bytes{gpu="0"} 17103323136' in linhas_gm,
+           "bytes de VRAM sem perda de precisão (nada de notação científica arredondada)")
+    checar('gpu_utilization_ratio{gpu="0"} 0.5' in linhas_gm and 'gpu_fan_speed_ratio{gpu="0"} 0.3' in linhas_gm
+           and 'gpu_temperature_celsius{gpu="0"} 39' in linhas_gm, "uso e ventoinha em razão 0 a 1; temperatura em °C")
+    checar(txt.count("# TYPE") == 5 and txt.endswith("\n"), "5 gauges com TYPE e newline final")
+    with tempfile.TemporaryDirectory() as tmp:
+        gm.DIR = Path(tmp)
+        gm.ler = lambda: txt
+        checar(gm.main() == 0 and (Path(tmp) / "hulk_gpu.prom").read_text() == txt, "grava o arquivo .prom")
+        checar([p.name for p in Path(tmp).iterdir()] == ["hulk_gpu.prom"], "escrita atômica: nenhum tmp sobra")
+        def _falha():
+            raise OSError("NVML sumiu")
+        gm.ler = _falha
+        checar(gm.main() == 1 and not (Path(tmp) / "hulk_gpu.prom").exists(),
+               "NVML falhou: sai 1 e REMOVE o arquivo (série ausente, nunca valor velho)")
+gm_svc = ler("templates/gpu/hulk-gpu-metrics.service.j2")
+gm_tmr = ler("templates/gpu/hulk-gpu-metrics.timer.j2")
+checar("Type=oneshot" in gm_svc and "OnUnitActiveSec=15s" in gm_tmr, "service oneshot, timer a cada 15 s")
+inc = tarefa("Instalar e verificar o node_exporter")
+checar("node_exporter.yml" in str(inc) and "metricas" in str((inc.get("ansible.builtin.include_tasks") or {}).get("apply")),
+       "node_exporter pela task reutilizável, com `apply` da tag (senão --tags pula o include inteiro)")
+ufw9100 = tarefa("Liberar a 9100 (node_exporter) só para os clientes autorizados")
+checar((ufw9100.get("community.general.ufw") or {}).get("port") == "9100" and "gpu_clientes_cidrs" in str(ufw9100.get("loop")),
+       "9100 liberada só para gpu_clientes_cidrs")
+prova_m = tarefa("Conferir que o /metrics traz a temperatura da GPU")
+checar("gpu_temperature_celsius" in str(prova_m.get("until")), "apply prova a série da GPU no /metrics (falha alto se o diretório textfile estiver errado)")
+for nome_m in ("Instalar e verificar o node_exporter", "Liberar a 9100 (node_exporter) só para os clientes autorizados",
+               "Instalar o script das métricas da GPU", "Instalar a unit das métricas da GPU",
+               "Instalar o timer das métricas da GPU", "Habilitar e iniciar o timer das métricas da GPU",
+               "Gerar uma amostra agora (não espera o primeiro tick do timer)", "Conferir que o /metrics traz a temperatura da GPU"):
+    checar("metricas" in (tarefa(nome_m).get("tags") or []), f"'{nome_m[:50]}' com a tag metricas")
+
 # --- novos blocos entram aqui (uma tarefa por bloco) ---
 
 if falhas:
