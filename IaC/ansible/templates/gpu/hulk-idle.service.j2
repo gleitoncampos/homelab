@@ -1,0 +1,7 @@
+[Unit]
+Description=hulk: desliga após 30 min ocioso (GPU e CPU)
+
+[Service]
+Type=oneshot
+StateDirectory=hulk-idle
+ExecStart=/usr/bin/python3 /usr/local/sbin/hulk-idle-check

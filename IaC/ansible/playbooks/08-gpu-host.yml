@@ -1,0 +1,649 @@
+---
+# =============================================================================
+# 08 - hulk: servidor de GPU sob demanda
+# =============================================================================
+# Spec: Frentes/homelab/spec-2026-11-15-hulk-gpu-sob-demanda.md (fora do repo).
+#
+# FORA do site.yml DE PROPÓSITO: host sob demanda, aplicado explicitamente.
+#   ansible-playbook playbooks/08-gpu-host.yml --limit gpu,homelab_managers
+#
+# FASES:
+#   A (hulk ainda na VLAN 30, IP do DHCP): tudo, com gpu_rede_estatica=false.
+#   B (migração para a VLAN 20): gpu_rede_estatica=true grava o netplan SEM
+#     aplicar; o reboot é manual e a VLAN 20 no switch (porta híbrida: 30
+#     untagged para o Windows do mesmo PC, 20 tagged para o Ubuntu) também.
+#   ⚠️ O Ansible nunca roda `netplan apply`: o IP novo cortaria a própria
+#   conexão e, com a porta ainda na VLAN 30, deixaria o hulk inalcançável.
+#
+# ⚠️ O MAC (`gpu_mac`) vive só no 99-local.yml: o hook de commit barra MAC em
+# arquivo versionado. Sem ele este play aborta.
+# =============================================================================
+
+- name: "08 - hulk: base, GPU, Docker, ferramentas e monitor de ociosidade"
+  hosts: gpu
+  become: true
+  vars:
+    gpu_netplan_arquivo: /etc/netplan/60-hulk.yaml
+    gpu_netplan_teste: /tmp/hulk-netplan-root
+  pre_tasks:
+    # `always` nas tasks deste play: sem a tag, `--tags rede` (a rodada que
+    # grava o netplan) pulava o assert do MAC. A tag NÃO desce para as tasks do
+    # `include_tasks` do vault: com `--tags rede` o vault é pulado, e tudo bem,
+    # porque o bloco de rede não usa segredo.
+    - name: Validar segredos do Vault exigidos por este play
+      ansible.builtin.include_tasks: "../tasks/validate_vault.yml"
+      vars:
+        required_secrets:
+          - ssh_public_key
+          - kamartaj_smb_password
+      tags: [always]
+
+    - name: Exigir o MAC real, em minúsculas, da placa que está em uso (rota padrão)
+      ansible.builtin.assert:
+        that:
+          - gpu_mac is defined
+          - gpu_mac | lower == gpu_mac
+          - gpu_mac is match('^([0-9a-f]{2}:){5}[0-9a-f]{2}$')
+          - gpu_mac == ansible_facts.default_ipv4.macaddress
+        fail_msg: >-
+          gpu_mac ausente, fora do formato ou diferente da placa da rota padrão
+          (uma placa Wi-Fi ou uma segunda placa também casariam, e o netplan
+          casaria a errada). A vlan20 herda o MAC da placa, então vale nas duas fases.
+          Defina o MAC real, em minúsculas, em group_vars/gpu/99-local.yml.
+          WoL para MAC errado não dá erro: só nunca acorda nada, e um MAC
+          errado no netplan deixa o hulk sem interface casada no reboot.
+        quiet: true
+      tags: [always]
+
+    # O monitor de ociosidade desligaria o hulk no meio de um dpkg ou de um
+    # `docker pull`. O lock do PLAYBOOK é `.ansible`, distinto do lock do
+    # chamador (`/run/hulk-keepalive`): rodar o playbook durante a sessão de
+    # alguém não libera o desligamento dele. O monitor honra os dois (glob).
+    # /run é tmpfs: o reboot do driver o apaga, então ele é recriado logo após.
+    # Se a execução falhar, fica até o próximo boot (falha fechada) e expira
+    # em 4 h (TTL).
+    - name: Segurar o desligamento por ociosidade durante a execução
+      ansible.builtin.file:
+        path: /run/hulk-keepalive.ansible
+        state: touch
+        mode: "0644"
+      changed_when: false
+      tags: [always]
+
+  tasks:
+    # --------------------------------------------------------------- base --
+    - name: Atualizar o cache do APT
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      tags: [base]
+
+    - name: Instalar pacotes base
+      ansible.builtin.apt:
+        name: [ca-certificates, curl, gnupg, ufw, unattended-upgrades, python3]
+        state: present
+      tags: [base]
+
+    - name: Definir o hostname
+      ansible.builtin.hostname:
+        name: hulk
+      tags: [base]
+
+    - name: Instalar a chave pública do administrador
+      ansible.posix.authorized_key:
+        user: "{{ ansible_user }}"
+        key: "{{ ssh_public_key }}"
+      tags: [base]
+
+    # Primeira execução precisa de `-K` (o usuário do instalador ainda pede
+    # senha no sudo); depois deste drop-in, o Ansible não pede mais.
+    - name: Sudo sem senha para o usuário de automação
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/90-ansible
+        content: "{{ ansible_user }} ALL=(ALL) NOPASSWD:ALL\n"
+        owner: root
+        group: root
+        mode: "0440"
+        validate: "visudo -cf %s"
+      tags: [base]
+
+    - name: Fechar o SSH para login por senha
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/10-homelab.conf
+        content: |
+          PasswordAuthentication no
+          PermitRootLogin no
+          KbdInteractiveAuthentication no
+        owner: root
+        group: root
+        mode: "0644"
+      register: _sshd_conf
+      tags: [base]
+
+    - name: Recarregar o sshd  # noqa: no-handler
+      ansible.builtin.systemd:
+        name: ssh
+        state: reloaded
+      when: _sshd_conf is changed
+      tags: [base]
+
+    - name: Conferir no sshd efetivo que a senha está fechada
+      ansible.builtin.command: sshd -T
+      register: _sshd_t
+      changed_when: false
+      failed_when: "'passwordauthentication no' not in _sshd_t.stdout"
+      tags: [base]
+
+    - name: Atualizações de segurança automáticas
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        content: |
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Unattended-Upgrade "1";
+        mode: "0644"
+      tags: [base]
+
+    # ----------------------------------------------------------- firewall --
+    - name: Liberar o SSH só para os clientes autorizados
+      community.general.ufw:
+        rule: allow
+        port: "22"
+        proto: tcp
+        src: "{{ item }}"
+      loop: "{{ gpu_clientes_cidrs }}"
+      tags: [base]
+
+    - name: Ativar o UFW negando entrada por padrão
+      community.general.ufw:
+        state: enabled
+        policy: deny
+        direction: incoming
+      tags: [base]
+
+    # ---------------------------------------------------------------- GPU --
+    - name: Instalar o driver NVIDIA open
+      ansible.builtin.apt:
+        name: "{{ gpu_driver_pkg }}"
+        state: present
+      register: _driver
+      tags: [gpu]
+
+    - name: Reiniciar para carregar o driver  # noqa: no-handler
+      ansible.builtin.reboot:
+        reboot_timeout: 600
+      when: _driver is changed
+      tags: [gpu]
+
+    # /run é tmpfs: o reboot acima apagou o lock do pre_task, e daqui em diante
+    # vêm o timer de ociosidade e o `docker pull` de GBs.
+    - name: Recriar o lock depois do reboot do driver
+      ansible.builtin.file:
+        path: /run/hulk-keepalive.ansible
+        state: touch
+        mode: "0644"
+      changed_when: false
+      tags: [gpu]
+
+    - name: Conferir que o nvidia-smi enxerga a GPU
+      ansible.builtin.command: nvidia-smi --query-gpu=name --format=csv,noheader
+      register: _smi
+      changed_when: false
+      failed_when: "'5060' not in _smi.stdout"
+      tags: [gpu]
+
+    # ------------------------------------------------------------- Docker --
+    - name: Instalar Docker e Compose do Ubuntu
+      ansible.builtin.apt:
+        name: [docker.io, docker-compose-v2]
+        state: present
+      tags: [docker]
+
+    - name: Colocar o usuário no grupo docker
+      ansible.builtin.user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: true
+      tags: [docker]
+
+    - name: Garantir o diretório de chaves do APT
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+      tags: [docker]
+
+    - name: Baixar a chave do repositório do nvidia-container-toolkit
+      ansible.builtin.get_url:
+        url: https://nvidia.github.io/libnvidia-container/gpgkey
+        dest: /etc/apt/keyrings/nvidia-container-toolkit.asc
+        mode: "0644"
+      tags: [docker]
+
+    - name: Declarar o repositório do nvidia-container-toolkit
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/nvidia-container-toolkit.sources
+        content: |
+          Types: deb
+          URIs: https://nvidia.github.io/libnvidia-container/stable/deb/amd64
+          Suites: /
+          Signed-By: /etc/apt/keyrings/nvidia-container-toolkit.asc
+        mode: "0644"
+      register: _repo_nv
+      tags: [docker]
+
+    - name: Atualizar o cache depois do repositório novo  # noqa: no-handler
+      ansible.builtin.apt:
+        update_cache: true
+      when: _repo_nv is changed
+      tags: [docker]
+
+    - name: Instalar o nvidia-container-toolkit
+      ansible.builtin.apt:
+        name: nvidia-container-toolkit
+        state: present
+      tags: [docker]
+
+    - name: Registrar o runtime nvidia no Docker
+      ansible.builtin.shell: |
+        set -e
+        grep -q '"nvidia"' /etc/docker/daemon.json 2>/dev/null && exit 0
+        nvidia-ctk runtime configure --runtime=docker
+        echo MUDOU
+      args:
+        executable: /bin/bash
+      register: _nvctk
+      changed_when: "'MUDOU' in _nvctk.stdout"
+      tags: [docker]
+
+    - name: Reiniciar o Docker  # noqa: no-handler
+      ansible.builtin.systemd:
+        name: docker
+        state: restarted
+      when: _nvctk is changed
+      tags: [docker]
+
+    - name: Garantir o Docker ativo (o daemon sobe no boot; as stacks não, são restart "no")
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+      tags: [docker]
+
+    - name: Provar a GPU dentro de um container
+      ansible.builtin.command: >-
+        docker run --rm --gpus all ubuntu:24.04 nvidia-smi --query-gpu=name --format=csv,noheader
+      register: _smi_ct
+      changed_when: false
+      failed_when: "'5060' not in _smi_ct.stdout"
+      tags: [docker]
+
+    # ----------------------------------------------------------- ociosidade --
+    - name: Instalar o script do monitor de ociosidade  # noqa: no-relative-paths
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../files/gpu/hulk-idle-check.py"
+        dest: /usr/local/sbin/hulk-idle-check
+        mode: "0755"
+      tags: [idle]
+
+    - name: Instalar a unit do monitor  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/gpu/hulk-idle.service.j2"
+        dest: /etc/systemd/system/hulk-idle.service
+        mode: "0644"
+      tags: [idle]
+
+    - name: Instalar o timer do monitor  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/gpu/hulk-idle.timer.j2"
+        dest: /etc/systemd/system/hulk-idle.timer
+        mode: "0644"
+      tags: [idle]
+
+    - name: Habilitar e iniciar o timer de ociosidade
+      ansible.builtin.systemd:
+        name: hulk-idle.timer
+        state: started
+        enabled: true
+        daemon_reload: true
+      tags: [idle]
+
+    # ----------------------------------------------------------- ventoinha --
+    # Sem X não há nvidia-settings/Coolbits: o controle vai pelo NVML. A 40 °C a
+    # ventoinha parte do mínimo e a 60 °C chega a 100 % (files/gpu/hulk-fan-control.py).
+    - name: Instalar o script da curva de ventoinha  # noqa: no-relative-paths
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../files/gpu/hulk-fan-control.py"
+        dest: /usr/local/sbin/hulk-fan-control
+        mode: "0755"
+      register: _fan_script
+      tags: [fan]
+
+    - name: Instalar a unit da ventoinha  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/gpu/hulk-fan.service.j2"
+        dest: /etc/systemd/system/hulk-fan.service
+        mode: "0644"
+      register: _fan_unit
+      tags: [fan]
+
+    - name: Habilitar e iniciar a curva da ventoinha
+      ansible.builtin.systemd:
+        name: hulk-fan.service
+        state: "{{ 'restarted' if (_fan_script is changed or _fan_unit is changed) else 'started' }}"
+        enabled: true
+        daemon_reload: true
+      tags: [fan]
+
+    # ----------------------------------------------------------- métricas --
+    # CPU, RAM, disco e temperatura de CPU/NVMe saem do node_exporter do apt (o
+    # mesmo dos hipervisores). A GPU entra pelo coletor textfile dele: script
+    # NVML + timer de 15 s. O Prometheus raspa a 9100 (job `node_exporter`).
+    # `apply` leva a tag para dentro do include (sem ele, `--tags metricas` pula
+    # todas as tasks incluídas e o recap sai "ok" sem instalar nada).
+    - name: Instalar e verificar o node_exporter
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../tasks/node_exporter.yml"
+        apply:
+          tags: [metricas]
+      tags: [metricas]
+
+    - name: Liberar a 9100 (node_exporter) só para os clientes autorizados
+      community.general.ufw:
+        rule: allow
+        port: "9100"
+        proto: tcp
+        src: "{{ item }}"
+      loop: "{{ gpu_clientes_cidrs }}"
+      tags: [metricas]
+
+    - name: Instalar o script das métricas da GPU  # noqa: no-relative-paths
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../files/gpu/hulk-gpu-metrics.py"
+        dest: /usr/local/sbin/hulk-gpu-metrics
+        mode: "0755"
+      register: _gm_script
+      tags: [metricas]
+
+    - name: Instalar a unit das métricas da GPU  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/gpu/hulk-gpu-metrics.service.j2"
+        dest: /etc/systemd/system/hulk-gpu-metrics.service
+        mode: "0644"
+      register: _gm_svc
+      tags: [metricas]
+
+    - name: Instalar o timer das métricas da GPU  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/gpu/hulk-gpu-metrics.timer.j2"
+        dest: /etc/systemd/system/hulk-gpu-metrics.timer
+        mode: "0644"
+      register: _gm_timer
+      tags: [metricas]
+
+    # Em --check num host sem as units, a unit não existe e o systemd recusa.
+    - name: Habilitar e iniciar o timer das métricas da GPU
+      ansible.builtin.systemd:
+        name: hulk-gpu-metrics.timer
+        state: started
+        enabled: true
+        daemon_reload: true
+      when: not (ansible_check_mode and (_gm_svc is changed or _gm_timer is changed))
+      tags: [metricas]
+
+    - name: Gerar uma amostra agora (não espera o primeiro tick do timer)  # noqa: command-instead-of-module
+      ansible.builtin.command: systemctl start hulk-gpu-metrics.service
+      changed_when: false
+      when: not ansible_check_mode
+      tags: [metricas]
+
+    # A prova é a série aparecendo no /metrics do exporter: se o diretório do
+    # coletor textfile do pacote não for o que o script usa, falha aqui, alto.
+    - name: Conferir que o /metrics traz a temperatura da GPU
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:9100/metrics"
+        return_content: true
+      register: _metrics
+      retries: 5
+      delay: 3
+      until: _metrics is succeeded and 'gpu_temperature_celsius' in _metrics.content
+      when: not ansible_check_mode
+      tags: [metricas]
+
+    # -------------------------------------------------------- ferramentas --
+    # `whisper` virou `speaches` (15/11/2026): sem isto o compose velho fica no
+    # disco apontando para uma chave que não existe mais.
+    - name: Remover a pasta da ferramenta antiga (whisper, hoje speaches)
+      ansible.builtin.file:
+        path: "{{ gpu_dir }}/whisper"
+        state: absent
+      tags: [tools]
+
+    - name: Criar as pastas das ferramentas
+      ansible.builtin.file:
+        path: "{{ gpu_dir }}/{{ item.key }}/{{ item.value.dados }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0755"
+      loop: "{{ gpu_ferramentas | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      tags: [tools]
+
+    - name: Copiar o compose de cada ferramenta para gpu_dir  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/gpu/{{ item }}.compose.yml.j2"
+        dest: "{{ gpu_dir }}/{{ item }}/compose.yml"
+        mode: "0644"
+      loop: "{{ gpu_ferramentas | list }}"
+      tags: [tools]
+
+    - name: Gravar as regras DOCKER-USER das ferramentas
+      ansible.builtin.blockinfile:
+        path: /etc/ufw/after.rules
+        marker: "# {mark} homelab gpu DOCKER-USER (Ansible: 08-gpu-host.yml)"
+        block: "{{ lookup('ansible.builtin.template', playbook_dir ~ '/../templates/gpu/ufw_docker_user.rules.j2') }}"
+        insertafter: EOF
+        backup: true
+      register: _after_gpu
+      tags: [tools]
+
+    - name: Recarregar o UFW para valer a DOCKER-USER  # noqa: no-handler
+      ansible.builtin.command: ufw reload
+      when: _after_gpu is changed
+      changed_when: true
+      tags: [tools]
+
+    # Sem pré-pull o primeiro `docker compose up` baixa GBs com CPU e GPU
+    # ociosas, e o monitor desligaria o hulk no meio. Só as ferramentas com
+    # `pre_pull: true`: o disco do hulk (~38 GB) não comporta todas as imagens.
+    - name: Baixar as imagens das ferramentas
+      ansible.builtin.command: docker pull {{ item.value.image }}
+      loop: "{{ gpu_ferramentas | dict2items | selectattr('value.pre_pull') | list }}"
+      loop_control:
+        label: "{{ item.key }}"
+      register: _pull
+      changed_when: "'Downloaded newer image' in _pull.stdout"
+      tags: [tools]
+
+    # `ufw reload` sai 0 mesmo quando o after.rules tem linha que o
+    # iptables-restore recusa: o bloco some calado e as portas, sem
+    # autenticação, ficam abertas. A conferência é na chain carregada.
+    - name: Ler a chain DOCKER-USER carregada
+      ansible.builtin.command: iptables -S DOCKER-USER
+      register: _docker_user
+      changed_when: false
+      tags: [tools]
+
+    - name: Conferir a DOCKER-USER carregada (RETURN dos clientes antes de todo DROP)
+      vars:
+        _linhas: "{{ _docker_user.stdout_lines | select('match', '^-A DOCKER-USER') | list }}"
+        _drops: "{{ _linhas | select('search', '-j DROP$') | list }}"
+        _rets: "{{ _linhas | select('search', '-j RETURN$') | list }}"
+      ansible.builtin.assert:
+        that:
+          - _drops | length == gpu_ferramentas | length
+          - _rets | length == (gpu_clientes_cidrs | length) * (gpu_ferramentas | length)
+          - _linhas.index(_drops[0]) > _linhas.index(_rets[-1])
+        fail_msg: >-
+          DOCKER-USER carregada fora do esperado ({{ _rets | length }} RETURN,
+          {{ _drops | length }} DROP). Confira `iptables -S DOCKER-USER` e o
+          bloco homelab gpu no /etc/ufw/after.rules.
+        quiet: true
+      tags: [tools]
+
+    # ---------------------------------------------------------------- nas --
+    # kamartaj por CIFS, leitura e escrita. O hulk liga e desliga por ociosidade:
+    # `nofail` + automount impedem que um NAS fora do ar trave o boot, e o
+    # `idle-timeout` solta a conexão quando ninguém usa.
+    - name: Instalar o cliente CIFS
+      ansible.builtin.apt:
+        name: cifs-utils
+        state: present
+      tags: [nas]
+
+    - name: Criar a pasta da credencial do NAS
+      ansible.builtin.file:
+        path: /etc/hulk
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+      tags: [nas]
+
+    # `no_log` e `diff: false`: a senha não pode aparecer na saída nem no --diff.
+    - name: Gravar a credencial do NAS (root, 0600)
+      ansible.builtin.copy:
+        dest: /etc/hulk/kamartaj.cred
+        content: |
+          username={{ gpu_nas_user }}
+          password={{ kamartaj_smb_password }}
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+      diff: false
+      tags: [nas]
+
+    - name: Criar o ponto de montagem do NAS
+      ansible.builtin.file:
+        path: "{{ gpu_nas_mountpoint }}"
+        state: directory
+        mode: "0755"
+      tags: [nas]
+
+    # `uid`/`gid` por NOME: o play roda com `become`, então `ansible_facts.user_uid`
+    # seria 0 (root), e os arquivos do NAS ficariam de root no hulk.
+    - name: Montar o NAS (CIFS, leitura e escrita, sem travar o boot)
+      ansible.posix.mount:
+        src: "//{{ gpu_nas_host }}/{{ gpu_nas_share }}"
+        path: "{{ gpu_nas_mountpoint }}"
+        fstype: cifs
+        opts: >-
+          credentials=/etc/hulk/kamartaj.cred,uid={{ ansible_user }},gid={{ ansible_user }},iocharset=utf8,vers=3.0,_netdev,nofail,x-systemd.automount,x-systemd.idle-timeout=120,x-systemd.mount-timeout=30
+        state: mounted
+      tags: [nas]
+
+    # --------------------------------------------------------------- rede --
+    # ⚠️ Fica DEPOIS do reboot do driver de propósito: gravar o IP da VLAN 20 e
+    # reiniciar com a porta ainda na VLAN 30 deixa o hulk sem rede (só console).
+    # Valida num diretório de teste ANTES de gravar em /etc/netplan: netplan
+    # inválido gravado só estoura no próximo boot, com o hulk já sem rede.
+    - name: Criar a árvore de teste do netplan
+      ansible.builtin.file:
+        path: "{{ gpu_netplan_teste }}/etc/netplan"
+        state: directory
+        mode: "0700"
+      changed_when: false
+      tags: [rede]
+
+    - name: Renderizar o netplan estático na árvore de teste  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/gpu/netplan.yaml.j2"
+        dest: "{{ gpu_netplan_teste }}/etc/netplan/60-hulk.yaml"
+        mode: "0600"
+      changed_when: false
+      tags: [rede]
+
+    - name: Validar o netplan com netplan generate (sem aplicar)
+      ansible.builtin.command: netplan generate --root-dir {{ gpu_netplan_teste }}
+      changed_when: false
+      tags: [rede]
+
+    - name: Gravar o netplan estático do hulk  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/gpu/netplan.yaml.j2"
+        dest: "{{ gpu_netplan_arquivo }}"
+        owner: root
+        group: root
+        mode: "0600"
+      when: gpu_rede_estatica | bool
+      register: _netplan
+      tags: [rede]
+
+    - name: Impedir o cloud-init de regenerar a rede
+      ansible.builtin.copy:
+        dest: /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+        content: "network: {config: disabled}\n"
+        mode: "0644"
+      when: gpu_rede_estatica | bool
+      tags: [rede]
+
+    - name: Listar os outros arquivos de netplan (instalador e cloud-init)
+      ansible.builtin.find:
+        paths: /etc/netplan
+        patterns: "*.yaml"
+        excludes: ["60-hulk.yaml"]
+      register: _netplan_outros
+      when: gpu_rede_estatica | bool
+      tags: [rede]
+
+    - name: Remover os outros netplans (DHCP do instalador somaria ao estático)
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ _netplan_outros.files | default([]) }}"
+      loop_control:
+        label: "{{ item.path }}"
+      when: gpu_rede_estatica | bool
+      tags: [rede]
+
+    - name: Avisar que a rede foi gravada e NÃO aplicada  # noqa: no-handler
+      ansible.builtin.debug:
+        msg: >-
+          Netplan gravado em {{ gpu_netplan_arquivo }} e NÃO aplicado. Antes do
+          reboot, a VLAN {{ gpu_vlan_id }} tem de existir no switch com as portas do
+          uplink do hipervisor e a do hulk TAGGED (a porta do hulk continua untagged na
+          VLAN 30, por causa do Windows). Sem isso o hulk sobe sem rede.
+      when: _netplan is changed
+      tags: [rede]
+
+  post_tasks:
+    - name: Liberar o desligamento por ociosidade
+      ansible.builtin.file:
+        path: /run/hulk-keepalive.ansible
+        state: absent
+      changed_when: false
+      tags: [always]
+
+- name: "08 - node1: script para acordar o hulk"
+  hosts: homelab_managers[0]
+  become: true
+  pre_tasks:
+    - name: Abortar se o hulk não está no inventário
+      ansible.builtin.assert:
+        that: "'hulk' in groups['gpu']"
+        fail_msg: "hulk fora do grupo gpu: sem MAC e IP não há como acordá-lo."
+        quiet: true
+
+  tasks:
+    - name: Instalar wakeonlan e netcat
+      ansible.builtin.apt:
+        name: [wakeonlan, netcat-openbsd]
+        state: present
+
+    - name: Instalar o hulk-wake  # noqa: no-relative-paths
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/gpu/hulk-wake.sh.j2"
+        dest: /usr/local/bin/hulk-wake
+        mode: "0755"

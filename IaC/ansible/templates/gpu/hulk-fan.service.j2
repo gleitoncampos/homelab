@@ -1,0 +1,15 @@
+[Unit]
+Description=hulk: curva da ventoinha da GPU (40 C parte, 60 C a 100%)
+After=nvidia-persistenced.service
+Wants=nvidia-persistenced.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/sbin/hulk-fan-control
+# Ao parar por qualquer motivo, a ventoinha volta ao automático do driver.
+ExecStopPost=/usr/bin/python3 /usr/local/sbin/hulk-fan-control --restaurar
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

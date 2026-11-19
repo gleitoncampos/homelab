@@ -1,0 +1,21 @@
+# Gerado por Ansible (08-gpu-host.yml). Sobe sob demanda: `docker compose up -d`.
+# Whisper "tradicional" (faster-whisper) com API própria: POST /asr (audio_file).
+# Não é a API da OpenAI. O modelo baixa no 1º uso e fica em {{ gpu_dir }}/whisperasr/cache.
+services:
+  whisperasr:
+    image: {{ gpu_ferramentas.whisperasr.image }}
+    restart: "no"
+    ports:
+      - "{{ gpu_ip_estatico }}:{{ gpu_ferramentas.whisperasr.porta }}:{{ gpu_ferramentas.whisperasr.porta_container }}"
+    environment:
+      ASR_ENGINE: faster_whisper
+      ASR_MODEL: large-v3-turbo
+    volumes:
+      - {{ gpu_dir }}/whisperasr/cache:/root/.cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

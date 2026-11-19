@@ -46,12 +46,14 @@ scrape_configs:
    mesma porta, e separá-los duplicaria o bloco de relabel sem ganho nenhum.
    Os hipervisores entraram em 26/08/2026 — antes disso o job cobria só o NAS,
    e o `pve` ao lado cobre convidado e storage pela API, não o sistema
-   operacional do host. Os dois hipervisores eram ponto cego. #}
-{% for host in (groups['omv'] | default([])) + (groups['proxmox'] | default([])) %}
+   operacional do host. Os dois hipervisores eram ponto cego. O hulk (grupo
+   `gpu`, sob demanda: desligado = alvo `down`, sem alerta) entrou em
+   18/11/2026 com `role="gpu"`; a GPU vem pelo coletor textfile. #}
+{% for host in (groups['omv'] | default([])) + (groups['proxmox'] | default([])) + (groups['gpu'] | default([])) %}
           - "{{ hostvars[host].ansible_host }}:9100"
 {% endfor %}
     relabel_configs:
-{% for host in (groups['omv'] | default([])) + (groups['proxmox'] | default([])) %}
+{% for host in (groups['omv'] | default([])) + (groups['proxmox'] | default([])) + (groups['gpu'] | default([])) %}
       - source_labels: [__address__]
         regex: {{ hostvars[host].ansible_host | regex_escape }}:9100
         target_label: instance
@@ -62,7 +64,7 @@ scrape_configs:
       - source_labels: [__address__]
         regex: {{ hostvars[host].ansible_host | regex_escape }}:9100
         target_label: role
-        replacement: "{{ 'nas' if host in (groups['omv'] | default([])) else 'hipervisor' }}"
+        replacement: "{{ 'nas' if host in (groups['omv'] | default([])) else ('gpu' if host in (groups['gpu'] | default([])) else 'hipervisor') }}"
 {% endfor %}
 
   # OpenWrt: pacote prometheus-node-exporter-lua, mesma porta 9100. Escuta só

@@ -1,0 +1,7 @@
+[Unit]
+Description=hulk: métricas da GPU para o node_exporter (textfile)
+After=nvidia-persistenced.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/sbin/hulk-gpu-metrics

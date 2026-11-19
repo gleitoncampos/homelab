@@ -1,0 +1,32 @@
+# Gerado por Ansible (playbooks/08-gpu-host.yml). Edição manual é perdida.
+# Placa casada por MAC: o nome da interface muda entre kernel e placa.
+#
+# A porta do switch é HÍBRIDA: VLAN 30 untagged (o Windows do mesmo PC) e VLAN
+# {{ gpu_vlan_id }} tagged (o Ubuntu). Por isso a placa não leva IP: o endereço
+# vive na subinterface de VLAN. Sem IP no untagged, o Ubuntu não aparece na MAIN.
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    lan0:
+      match:
+        macaddress: {{ gpu_mac }}
+      wakeonlan: true
+      dhcp4: false
+      dhcp6: false
+      accept-ra: false
+      link-local: []
+  vlans:
+    vlan{{ gpu_vlan_id }}:
+      id: {{ gpu_vlan_id }}
+      link: lan0
+      dhcp4: false
+      dhcp6: false
+      accept-ra: false
+      addresses:
+        - {{ gpu_ip_estatico }}/{{ gpu_prefixo }}
+      routes:
+        - to: default
+          via: {{ gpu_gateway }}
+      nameservers:
+        addresses: {{ gpu_dns | to_json }}

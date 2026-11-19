@@ -1,0 +1,85 @@
+---
+# hulk — servidor de GPU sob demanda. CAMADA VERSIONADA.
+#
+# ⚠️ IP e driver deste arquivo são FICTÍCIOS de propósito, e o MAC NÃO TEM
+# valor aqui (o hook de commit barra MAC em arquivo versionado). Os reais vivem
+# no `99-local.yml` ao lado (gitignorado), que carrega depois e sobrescreve.
+# O playbook 08 aborta se `gpu_mac` faltar: um WoL para o MAC errado não dá
+# erro, só nunca acorda nada.
+#
+# O hulk fica FORA do grupo `homelab` de propósito: o 01-bootstrap-os (UFW do
+# Swarm, Syncthing, pastas das stacks) e o 02 (cluster) não se aplicam a ele.
+
+# gpu_mac: definir em 99-local.yml, em minúsculas, seis pares separados por dois-pontos
+gpu_ip_estatico: "192.0.2.12"         # fictício (faixa de documentação)
+gpu_prefixo: 24
+gpu_vlan_id: 20                       # VLAN do Ubuntu; a porta do switch é híbrida (30 untagged + esta tagged)
+gpu_gateway: "192.0.2.1"
+gpu_dns: ["192.0.2.1"]
+gpu_wol_broadcast: "192.0.2.255"
+
+# ⚠️ false = o netplan estático não é gravado. Vira true na fase B (migração
+# VLAN 30 → 20), com o cabo já pronto para a VLAN 20: gravar o IP novo enquanto
+# a porta ainda está na VLAN 30 deixa o hulk inalcançável no próximo boot.
+gpu_rede_estatica: false
+
+# Blackwell (RTX 5060 Ti) exige o módulo open, versão 570 ou superior. O valor
+# real sai de `ubuntu-drivers list` no hulk.
+gpu_driver_pkg: "nvidia-driver-570-open"
+
+# Quem pode falar com o SSH e com as portas das ferramentas: o Swarm (VLAN 20)
+# e a estação de administração na MAIN. Docker publica porta por DNAT e fura o
+# UFW — por isso há também regras na DOCKER-USER.
+gpu_clientes_cidrs:
+  - "192.0.2.0/24"
+
+gpu_dir: "/srv/containers/gpu"
+
+# NAS (kamartaj), montado por CIFS em leitura e escrita. IP e usuário reais vivem
+# no `99-local.yml` (gitignorado); a senha vive no Vault (`kamartaj_smb_password`).
+# O hulk não resolve `.local` (sem mDNS): a montagem é pelo IP.
+gpu_nas_host: "192.0.2.15"            # fictício (faixa de documentação)
+gpu_nas_share: "NEW"
+gpu_nas_user: "TROCAR"
+gpu_nas_mountpoint: "/mnt/kamartaj"
+
+# Tag fixa de propósito: `latest` muda sob o hulk entre um boot e outro. O
+# whisper.cpp publica a `main-cuda` flutuante e uma tag por commit
+# (`main-cuda-<sha de 40>`), que não muda: é a que vale aqui (a mais recente em
+# 15/11/2026, imagem de 14/08/2026, CUDA 13.0.0). Digest não entra: o hook de
+# commit barra hex de 64 caracteres.
+#
+# ⚠️ DISCO: o Ubuntu do hulk vive numa partição de ~38 GB (o resto do PC é
+# Windows e discos NTFS). `ollama` (8,5 GB) e `speaches` (11 GB) já ocupam ~20 GB;
+# o `whisperasr` tem 12,4 GB COMPACTADOS. As quatro NÃO cabem juntas. Por isso só
+# `pre_pull: true` é baixada no apply; as demais baixam no primeiro `compose up`
+# e se removem com `docker compose down --rmi all` depois do teste.
+gpu_ferramentas:
+  ollama:
+    image: "ollama/ollama:0.40.16"
+    porta: 11434              # publicada no IP do hulk
+    porta_container: 11434    # a do container (a DOCKER-USER vê esta, pós-DNAT)
+    dados: dados
+    pre_pull: true
+  # whisper.cpp oficial: o MESMO motor e o MESMO ggml-large-v3-turbo.bin do Vibe.
+  # (CUDA 13: exige driver >= 580; o hulk tem o 595.)
+  whispercpp:
+    image: "ghcr.io/ggml-org/whisper.cpp:main-cuda-592feef04a1802b18cbeffd0fd0eb5d02570c2ec"
+    porta: 8080
+    porta_container: 8080
+    dados: modelos            # ggml-large-v3-turbo.bin e ggml-silero-v5.1.2.bin (cópia, não IaC)
+    pre_pull: false
+  # API compatível com a da OpenAI; faster-whisper (CTranslate2), não ggml.
+  speaches:
+    image: "ghcr.io/speaches-ai/speaches:0.8.3-cuda"
+    porta: 8000
+    porta_container: 8000
+    dados: modelos
+    pre_pull: false
+  # Whisper "tradicional" via faster-whisper; API própria (`/asr`), não a da OpenAI.
+  whisperasr:
+    image: "onerahmet/openai-whisper-asr-webservice:v1.10.0-gpu"
+    porta: 9000
+    porta_container: 9000
+    dados: cache
+    pre_pull: false

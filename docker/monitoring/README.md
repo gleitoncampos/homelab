@@ -101,7 +101,7 @@ coleta, guarda ou desenha.
 
 | job | equipamento | quem serve a porta | vem do IaC? |
 |---|---|---|---|
-| `node_exporter` | hipervisores e NAS | pacote Debian `prometheus-node-exporter` | ✅ `tasks/node_exporter.yml` |
+| `node_exporter` | hipervisores, NAS e hulk (GPU por coletor textfile, `08-gpu-host.yml --tags metricas`) | pacote Debian `prometheus-node-exporter` | ✅ `tasks/node_exporter.yml` |
 | — | idem | pacote `prometheus-node-exporter-collectors` (SMART, NVMe, apt) | ✅ mesma task |
 | `opnsense` | firewall | plugin `os-node_exporter` (FreeBSD, roda como `nobody`) | ✅ `opnsense_plugins` |
 | — | firewall | `gateway-metrics` + drop-in de cron, para o dpinger | ✅ `01-opnsense-setup.yml --tags metricas` |

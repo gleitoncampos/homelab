@@ -1,0 +1,38 @@
+# Gerado por Ansible (08-gpu-host.yml). Sobe sob demanda: `docker compose up -d`.
+# whisper.cpp oficial (CUDA 13): o mesmo motor e o mesmo modelo do Vibe.
+# O ENTRYPOINT da imagem é `bash -c`: o comando tem de ser UMA string só (em
+# lista de um item). Escrito como string, o Compose a quebra em palavras e o
+# bash executa apenas `whisper-server`, com o resto virando $0, $1…
+# Os modelos NÃO são IaC (dado): copie ggml-large-v3-turbo.bin e
+# ggml-silero-v5.1.2.bin para {{ gpu_dir }}/whispercpp/modelos/.
+services:
+  whispercpp:
+    image: {{ gpu_ferramentas.whispercpp.image }}
+    restart: "no"
+    ports:
+      - "{{ gpu_ip_estatico }}:{{ gpu_ferramentas.whispercpp.porta }}:{{ gpu_ferramentas.whispercpp.porta_container }}"
+    environment:
+      # O LD_LIBRARY_PATH da imagem põe /usr/local/cuda-13.0/compat na frente: o
+      # processo carrega a libcuda 580 de compatibilidade em vez da do driver do
+      # host (595) e o CUDA falha com "unsupported display driver / cuda driver
+      # combination" (erro 803, GeForce não suporta a libcuda de compat). Sem o
+      # compat, o toolkit injeta a libcuda do host.
+      LD_LIBRARY_PATH: /usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64
+    volumes:
+      - {{ gpu_dir }}/whispercpp/modelos:/models:ro
+    command:
+      - >-
+        whisper-server
+        --host 0.0.0.0 --port {{ gpu_ferramentas.whispercpp.porta_container }}
+        --model /models/ggml-large-v3-turbo.bin
+        --inference-path /v1/audio/transcriptions
+        --beam-size 5 --best-of 5 --threads 4
+        --convert
+        --vad --vad-model /models/ggml-silero-v5.1.2.bin
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
