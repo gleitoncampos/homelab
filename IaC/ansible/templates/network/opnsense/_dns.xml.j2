@@ -174,9 +174,16 @@
         <default_action>allow</default_action>
       </acls>
       <dnsbl>
+{#
+  `type` são CÓDIGOS do catálogo do OPNsense (Unbound.xml / blocklists.conf), não URLs:
+  o IaC não escolhe a URL, só o código. `atf` (ThreatFox) saiu em 20/11/2026: a URL do
+  catálogo dá HTTP 410 toda noite desde pelo menos 22/10 e a lista contribuía com 0
+  registros. `hgz012` (Hagezi Threat Intelligence Feeds - Medium) entrou no lugar da
+  cobertura de malware/C2. Antes de acrescentar lista, medir a RSS do Unbound no firewall.
+#}
         <blocklist uuid="f9b80504-6ec8-4b90-95ff-84c3af6d01ea">
           <enabled>1</enabled>
-          <type>atf,ag,sb,hgz003,oisd0,oisd1,hgz009,hgz010,hgz014,hgz016</type>
+          <type>ag,sb,hgz003,oisd0,oisd1,hgz009,hgz010,hgz014,hgz016,hgz012</type>
           <lists/>
           <allowlists>{{ opnsense_dnsbl_allowlists | default('') | e }}</allowlists>
           <blocklists>{{ opnsense_dnsbl_blocklists | default('') | e }}</blocklists>
