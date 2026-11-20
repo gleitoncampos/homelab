@@ -2270,7 +2270,7 @@ https://raw.githubusercontent.com/hagezi/dns-blocklists/main/ips/doh.txt</conten
         <host uuid="generated-host-override-2">
           <enabled>1</enabled>
           <hostname>nas</hostname>
-          <domain>lab.example</domain>
+          <domain>home.arpa</domain>
           <rr>A</rr>
           <mxprio/>
           <mx/>

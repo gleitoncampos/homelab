@@ -87,6 +87,12 @@ checar(rc == 0, "host específico sem curinga no domínio: passa")
 rc, _ = roda(task, [])
 checar(rc == 0, "lista vazia: passa")
 
+# A fixture do render não pode reproduzir o padrão proibido (20/11/2026): ela
+# é o exemplo que o próximo override copia.
+fixture = yaml.safe_load((RAIZ / "tests/fixtures/opnsense.yml").read_text(encoding="utf-8"))
+rc, saida = roda(task, fixture["unbound_host_overrides"])
+checar(rc == 0, "a fixture do OPNsense não tem host no domínio do curinga")
+
 if falhas:
     sys.exit(f"✗ {len(falhas)} checagem(ns) falharam")
 print("✓ gates-unbound-overrides")
