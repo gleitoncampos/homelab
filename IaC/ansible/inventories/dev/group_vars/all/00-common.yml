@@ -143,12 +143,21 @@ fqdn_ittools: "tools.{{ homelab_domain }}"
 # não "mantém o que já existe", ela APAGA. A produção tem exatamente este curinga, e perdê-lo
 # derruba o acesso interno a todos os serviços de uma vez.
 #
-# Para acrescentar overrides pontuais sem perder este, defina
+# `smb.<homelab_domain>` aponta direto para o NAS (IP do inventário): o SMB
+# (445) não passa pelo Traefik, e o `*` acima levaria o nome ao manager. Nome
+# distinto do `kamartaj.<homelab_domain>`, que é a rota HTTPS da GUI do OMV.
+# Existe para quem está fora da VLAN 30 (ex.: Tailscale com o firewall como
+# exit node), onde o mDNS do NAS (`kamartaj.local`) não chega.
+#
+# Para acrescentar overrides pontuais sem perder estes, defina
 # `unbound_host_overrides_extra` no vault do ambiente.
 unbound_host_overrides: >-
   {{ [{'hostname': '*',
        'domain': homelab_domain,
        'server': hostvars[groups['homelab_managers'][0]].ansible_host}]
+     + [{'hostname': 'smb',
+         'domain': homelab_domain,
+         'server': hostvars[groups['omv'][0]].ansible_host}]
      + (unbound_host_overrides_extra | default([])) }}
 
 # IPs de destino de syslog/netflow derivados do inventário (e não mais um
