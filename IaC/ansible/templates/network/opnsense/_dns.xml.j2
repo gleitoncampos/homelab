@@ -180,10 +180,16 @@
   catálogo dá HTTP 410 toda noite desde pelo menos 22/10 e a lista contribuía com 0
   registros. `hgz012` (Hagezi Threat Intelligence Feeds - Medium) entrou no lugar da
   cobertura de malware/C2. Antes de acrescentar lista, medir a RSS do Unbound no firewall.
+  `oisd0`, `hgz009` e `hgz010` saíram em 20/11/2026 por redundância medida (listas
+  baixadas e comparadas por nome, com pai wildcard): `oisd0` está 100% dentro da `oisd1`;
+  `hgz009` e `hgz010` perdem 1 e 5 domínios (cobertas por `hgz003` e `hgz012`). Isso só vale
+  com `oisd1`, `hgz003` e `hgz012` ativas: tirar uma delas exige refazer a conta.
+  `hgz014` (DoH/VPN bypass) e `hgz016` (DNS dinâmico) são lista de POLÍTICA, não duplicam
+  nada: não entram numa limpeza por sobreposição.
 #}
         <blocklist uuid="f9b80504-6ec8-4b90-95ff-84c3af6d01ea">
           <enabled>1</enabled>
-          <type>ag,sb,hgz003,oisd0,oisd1,hgz009,hgz010,hgz014,hgz016,hgz012</type>
+          <type>ag,sb,hgz003,oisd1,hgz014,hgz016,hgz012</type>
           <lists/>
           <allowlists>{{ opnsense_dnsbl_allowlists | default('') | e }}</allowlists>
           <blocklists>{{ opnsense_dnsbl_blocklists | default('') | e }}</blocklists>
