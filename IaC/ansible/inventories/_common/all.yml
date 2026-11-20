@@ -143,11 +143,18 @@ fqdn_ittools: "tools.{{ homelab_domain }}"
 # não "mantém o que já existe", ela APAGA. A produção tem exatamente este curinga, e perdê-lo
 # derruba o acesso interno a todos os serviços de uma vez.
 #
-# `smb.<homelab_domain>` aponta direto para o NAS (IP do inventário): o SMB
-# (445) não passa pelo Traefik, e o `*` acima levaria o nome ao manager. Nome
-# distinto do `kamartaj.<homelab_domain>`, que é a rota HTTPS da GUI do OMV.
-# Existe para quem está fora da VLAN 30 (ex.: Tailscale com o firewall como
-# exit node), onde o mDNS do NAS (`kamartaj.local`) não chega.
+# `kamartaj.home.arpa` aponta direto para o NAS (IP do inventário), para o
+# SMB (445), que não passa pelo Traefik. Existe para quem está fora da VLAN 30
+# (ex.: Tailscale com o firewall como exit node), onde o mDNS do NAS
+# (`kamartaj.local`) não chega.
+#
+# ⚠️ NUNCA no domínio do curinga acima. O `*` vira uma local-zone `redirect`, e
+# o Unbound só aceita local-data no topo dela: qualquer outro host em
+# `<homelab_domain>` derruba o daemon no start ("local-data in redirect zone
+# must reside at top of zone" → "Could not set up local zones"), e o DNS da
+# casa inteira cai (20/11/2026, `smb.<homelab_domain>`). Por isso `home.arpa`,
+# o domínio do sistema do firewall (`rogers.home.arpa`). O playbook
+# 01-opnsense-setup.yml recusa essa colisão antes de escrever.
 #
 # Para acrescentar overrides pontuais sem perder estes, defina
 # `unbound_host_overrides_extra` no vault do ambiente.
@@ -155,8 +162,8 @@ unbound_host_overrides: >-
   {{ [{'hostname': '*',
        'domain': homelab_domain,
        'server': hostvars[groups['homelab_managers'][0]].ansible_host}]
-     + [{'hostname': 'smb',
-         'domain': homelab_domain,
+     + [{'hostname': 'kamartaj',
+         'domain': 'home.arpa',
          'server': hostvars[groups['omv'][0]].ansible_host}]
      + (unbound_host_overrides_extra | default([])) }}
 

@@ -318,6 +318,36 @@
           IP e MAC bem formados, e MAC e IP não se repetem
           (dhcp_static_maps em group_vars/network/).
         success_msg: "Toda reserva de DHCP cabe na rede declarada."
+
+    # O override `*` vira local-zone `redirect`; o Unbound só aceita local-data
+    # no topo dela e, com outro host no mesmo domínio, NÃO sobe: "fatal error:
+    # Could not set up local zones". O reload do apply reinicia o daemon e o
+    # DNS da casa cai (20/11/2026, `smb.<homelab_domain>`). O `--check` não
+    # pega isso, por isso a recusa fica aqui, antes de qualquer escrita.
+    # Sem `hostname` o template assume `*` (`override.hostname | default('*')`).
+    - name: Abortar se um override do Unbound cair no domínio de um curinga
+      vars:
+        _dominios_curinga: >-
+          {{ (unbound_host_overrides | selectattr('hostname', 'undefined')
+                                      | map(attribute='domain') | list)
+             + (unbound_host_overrides | selectattr('hostname', 'defined')
+                                       | selectattr('hostname', 'equalto', '*')
+                                       | map(attribute='domain') | list) }}
+        _colisoes: >-
+          {{ unbound_host_overrides | selectattr('hostname', 'defined')
+                                    | rejectattr('hostname', 'equalto', '*')
+                                    | selectattr('domain', 'in', _dominios_curinga)
+                                    | map(attribute='hostname') | list }}
+      ansible.builtin.assert:
+        that:
+          - _colisoes | length == 0
+        fail_msg: >-
+          Override do Unbound no domínio de um curinga: {{ _colisoes | join(', ') }}.
+          O curinga `*` vira local-zone `redirect` e o Unbound não sobe com
+          outro host no mesmo domínio ("Could not set up local zones"), o que
+          derruba o DNS da casa. Use outro domínio (ex.: `home.arpa`) em
+          `unbound_host_overrides`.
+        success_msg: "Nenhum override do Unbound colide com um curinga."
   tasks:
     # Sem ignore_errors: se o backup falhar, ABORTA. A task seguinte sobrescreve
     # o /conf/config.xml inteiro — seguir sem cópia de segurança deixaria o

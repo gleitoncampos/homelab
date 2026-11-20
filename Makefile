@@ -25,7 +25,7 @@ PLAYBOOKS   := $(wildcard $(ANSIBLE_DIR)/playbooks/*.yml $(ANSIBLE_DIR)/playbook
 .PHONY: help hooks check lint lint-yaml lint-ansible lint-shell lint-tf ssh-keys \
         validate-compose validate-ansible validate-patterns check-common-copies \
         secrets links snapshot omv-fs discover clean render-opnsense render-monitoring \
-        render-proxmox-ifaces render-openwrt-led render-openwrt-network render-openwrt-wifi-neighbors render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass render-opnsense-antiportscan render-opnsense-ipv6 render-opnsense-ssh gates-node-bootstrap gates-swarm-ct gates-pve-exporter gates-monitoring gates-statuspage-promql gates-nut gates-openwrt-nfc gates-openwrt-upgrade \
+        render-proxmox-ifaces render-openwrt-led render-openwrt-network render-openwrt-wifi-neighbors render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass gates-unbound-overrides render-opnsense-antiportscan render-opnsense-ipv6 render-opnsense-ssh gates-node-bootstrap gates-swarm-ct gates-pve-exporter gates-monitoring gates-statuspage-promql gates-nut gates-openwrt-nfc gates-openwrt-upgrade \
         gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade \
         gates-tailscale gates-vault-local gates-cpu-pinning validate-alloy render-traefik \
         gates-repositorios gates-proxmox-hardening gates-omv-spindown gates-openipmi gates-gpu-host
@@ -62,7 +62,7 @@ ssh-keys: ## Instala a chave gerada pelo bootstrap em todo host do inventário (
 test-bootstrap: ## Testa os renderizadores do bootstrap contra os consumidores reais
 	@python3 IaC/bootstrap/test_render.py
 
-check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network render-openwrt-wifi-neighbors render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass render-opnsense-antiportscan render-opnsense-ipv6 render-opnsense-ssh gates-node-bootstrap gates-swarm-ct gates-pve-exporter gates-monitoring gates-statuspage-promql gates-nut gates-openwrt-nfc gates-openwrt-upgrade gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade gates-tailscale gates-vault-local gates-cpu-pinning validate-alloy render-traefik gates-repositorios gates-proxmox-hardening gates-omv-spindown gates-openipmi gates-gpu-host ## Tudo que a CI roda
+check: lint validate-compose validate-ansible validate-patterns check-common-copies links test-bootstrap render-opnsense render-monitoring render-proxmox-ifaces render-openwrt-led render-openwrt-network render-openwrt-wifi-neighbors render-opnsense-kea render-opnsense-wan6 render-opnsense-dnsbl render-opnsense-pf-estados render-opnsense-dns-bypass gates-unbound-overrides render-opnsense-antiportscan render-opnsense-ipv6 render-opnsense-ssh gates-node-bootstrap gates-swarm-ct gates-pve-exporter gates-monitoring gates-statuspage-promql gates-nut gates-openwrt-nfc gates-openwrt-upgrade gates-ordem-vlan gateway-metrics inventario-diretorio gates-identidade gates-tailscale gates-vault-local gates-cpu-pinning validate-alloy render-traefik gates-repositorios gates-proxmox-hardening gates-omv-spindown gates-openipmi gates-gpu-host ## Tudo que a CI roda
 	@echo
 	@echo "✓ check completo"
 
@@ -179,6 +179,9 @@ render-opnsense-pf-estados: ## Confere que o timeout adaptativo do pf não derru
 
 render-opnsense-dns-bypass: ## Confere que os managers do Swarm escapam do DNS forçado (DNS-01 do Traefik)
 	@python3 $(ANSIBLE_DIR)/tests/render_opnsense_dns_bypass.py
+
+gates-unbound-overrides: ## Confere que o playbook do OPNsense recusa override do Unbound que derruba o daemon (curinga redirect)
+	@python3 $(ANSIBLE_DIR)/tests/gates_unbound_overrides.py
 
 render-opnsense-ipv6: ## Confere o IPv6 das VLANs (opt-in, DNS externo fechado, NAT66 na CLARO, v6 default na CLARO)
 	@python3 $(ANSIBLE_DIR)/tests/render_opnsense_ipv6.py
